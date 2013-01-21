@@ -1516,6 +1516,15 @@ UC15 = ${UC15D}/pdp11_cis.c ${UC15D}/pdp11_cpu.c \
 UC15_OPT = -DVM_PDP11 -DUC15 -I ${UC15D} -I ${PDP18BD}
 
 
+HSCD = ${SIMHD}/HSC
+HSC70 = ${PDP11D}/pdp11_fp.c ${PDP11D}/pdp11_cpu.c ${PDP11D}/pdp11_dz.c \
+	${PDP11D}/pdp11_cis.c ${PDP11D}/pdp11_stddev.c ${PDP11D}/pdp11_sys.c \
+	${PDP11D}/pdp11_io.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_pclk.c \
+	${PDP11D}/pdp11_cpumod.c ${PDP11D}/pdp11_dc.c \
+	${PDP11D}/pdp11_io_lib.c ${HSCD}/hsc70_syslist.c
+HSC70_OPT = -DVM_PDP11 -I ${HSCD} -I ${PDP11D} ${NETWORK_OPT}
+
+
 VAXD = ${SIMHD}/VAX
 VAX = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c ${VAXD}/vax_io.c \
 	${VAXD}/vax_cis.c ${VAXD}/vax_octa.c  ${VAXD}/vax_cmode.c \
@@ -2354,6 +2363,15 @@ ${BIN}uc15${EXE} : ${UC15} ${SIM}
 	${CC} ${UC15} ${SIM} ${UC15_OPT} ${CC_OUTSPEC} ${LDFLAGS}
 ifneq (,$(call find_test,${PDP11D},uc15))
 	$@ $(call find_test,${PDP11D},uc15) ${TEST_ARG}
+endif
+
+hsc70 : ${BIN}hsc70${EXE}
+
+${BIN}hsc70${EXE} : ${HSC70} ${SIM}
+	${MKDIRBIN}
+	${CC} ${HSC70} ${SIM} ${HSC70_OPT} $(CC_OUTSPEC) ${LDFLAGS}
+ifneq (,$(call find_test,${PDP11D},hsc70))
+	$@ $(call find_test,${PDP11D},hsc70) ${TEST_ARG}
 endif
 
 microvax3900 : vax
