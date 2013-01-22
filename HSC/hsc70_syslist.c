@@ -38,8 +38,6 @@ extern DEVICE clk_dev;
 extern DEVICE pclk_dev;
 extern DEVICE dli_dev;
 extern DEVICE dlo_dev;
-extern DEVICE dci_dev;
-extern DEVICE dco_dev;
 extern DEVICE rq_dev, rqb_dev, rqc_dev, rqd_dev;
 
 DEVICE *sim_devices[] = {
@@ -49,14 +47,20 @@ DEVICE *sim_devices[] = {
     &pclk_dev,
     &tti_dev,
     &tto_dev,
-    &cr_dev,
     &dli_dev,
     &dlo_dev,
-    &dci_dev,
-    &dco_dev,
     &rq_dev,
     &rqb_dev,
     &rqc_dev,
     &rqd_dev,
     NULL
     };
+
+void init_mbus_tab (void)
+{
+}
+
+t_stat build_mbus_tab (DEVICE *dptr, DIB *dibp)
+{
+return SCPE_OK;
+}
