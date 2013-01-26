@@ -121,31 +121,13 @@ const char *sim_stop_messages[SCPE_BASE] = {
     "DECtape off reel"
     };
 
-/* Binary loader.
-
-   Loader format consists of blocks, optionally preceded, separated, and
-   followed by zeroes.  Each block consists of:
-
-        001             ---
-        xxx              |
-        lo_count         |
-        hi_count         |
-        lo_origin        > count bytes
-        hi_origin        |
-        data byte        |
-        :                |
-        data byte       ---
-        checksum
-
-   If the byte count is exactly six, the block is the last on the tape, and
-   there is no checksum.  If the origin is not 000001, then the origin is
-   the PC at which to start the program.
-*/
+/* Binary loader */
 
 t_stat sim_load (FILE *fileref, CONST char *cptr, CONST char *fnam, int flag)
 {
-int32 c[6], d, i, cnt, csum;
+int32 d;
 uint32 org;
+t_stat r;
 
 if (*cptr != 0)
     return SCPE_ARG;

@@ -76,6 +76,10 @@ int32 JASR = 0;                                         /* J11 addtl status */
 int32 UDCR = 0;                                         /* UBA diag ctrl */
 int32 UDDR = 0;                                         /* UBA diag data */
 int32 UCSR = 0;                                         /* UBA control */
+int32 WADR[128][8];
+int32 WIDX = 0;
+int32 WBUS = 0;
+int32 LOCADR = 0;
 int32 uba_last = 0;                                     /* UBA last mapped */
 int32 ub_map[UBM_LNT_LW] = { 0 };                       /* UBA map array */
 int32 toy_state = 0;
@@ -118,8 +122,11 @@ t_stat UBA24_rd (int32 *data, int32 addr, int32 access);
 t_stat UBA24_wr (int32 data, int32 addr, int32 access);
 t_stat UBAJ_rd (int32 *data, int32 addr, int32 access);
 t_stat UBAJ_wr (int32 data, int32 addr, int32 access);
-t_stat ioctl_rd (int32 *data, int32 addr, int32 access);
-t_stat ioctl_wr (int32 data, int32 addr, int32 access);
+t_stat ioctl_rd (int32 *data, int32 pa, int32 access);
+t_stat ioctl_wr (int32 data, int32 pa, int32 access);
+t_stat ctlmem_rd (int32 *data, int32 pa, int32 access);
+t_stat ctlmem_wr (int32 data, int32 pa, int32 access);
+t_stat rom_rd (int32 *data, int32 pa, int32 access);
 t_stat sys_reset (DEVICE *dptr);
 int32 toy_read (void);
 void toy_write (int32 bit);
@@ -138,6 +145,9 @@ extern t_stat MMR3_wr (int32 data, int32 addr, int32 access);
 extern t_stat ubm_rd (int32 *data, int32 addr, int32 access);
 extern t_stat ubm_wr (int32 data, int32 addr, int32 access);
 extern void put_PIRQ (int32 val);
+extern void WriteB (int32 data, int32 addr);
+extern void WriteW (int32 data, int32 addr);
+extern int32 ReadW (int32 addr);
 
 /* Fixed I/O address table entries */
 
@@ -170,6 +180,8 @@ DIB mmr012_dib = { IOBA_MMR012, IOLN_MMR012, &MMR012_rd, &MMR012_wr, 0 };
 DIB mmr3_dib = { IOBA_MMR3, IOLN_MMR3, &MMR3_rd, &MMR3_wr, 0 };
 DIB ubm_dib = { IOBA_UBM, IOLN_UBM, &ubm_rd, &ubm_wr, 0 };
 DIB ioctl_dib = { (IOPAGEBASE + 010000), 060, &ioctl_rd, &ioctl_wr, 0 };
+DIB ctlmem_dib = { IOPAGEBASE, 010000, &ctlmem_rd, &ctlmem_wr, 0 };
+DIB rom_dib = { (IOPAGEBASE + 013000), 04000, &rom_rd, NULL, 0 };
 
 CPUTAB cpu_tab[MOD_MAX] = {
     { "11/03", SOP_1103, OPT_1103, MEMSIZE64K, PSW_1103,
@@ -223,6 +235,8 @@ CNFTAB cnf_tab[] = {
     { CPUT_60,  0, &cpu60_dib },
     { CPUT_70,  0, &cpu70_dib },
     { CPUT_70,  0, &ioctl_dib },
+    { CPUT_70,  0, &ctlmem_dib },
+    { CPUT_70,  0, &rom_dib },
     { HAS_IOSR, 0, &reg_dib },
     { CPUT_23P, 0, &ctlfb_dib },                        /* board ctls */
     { CPUT_JB,  0, &ctljb_dib },
@@ -242,8 +256,8 @@ CNFTAB cnf_tab[] = {
     { HAS_SID,  0, &supv_dib },
     { HAS_SID,  0, &udpdr_dib },
     { HAS_SID,  0, &udpar_dib },
-    { HAS_SR,   0, &sr_dib },                           /* SR */
-    { HAS_DR,   0, &dr_dib },                           /* DR */
+//    { HAS_SR,   0, &sr_dib },                           /* SR */
+//    { HAS_DR,   0, &dr_dib },                           /* DR */
     { 0, 0,        NULL }
     };
 
@@ -564,14 +578,6 @@ t_stat CPU70_rd (int32 *data, int32 pa, int32 access)
 {
 switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
 
-    case 000:                                           /* low error */
-        *data = 0;
-        return SCPE_OK;
-
-    case 001:                                           /* high error */
-        *data = 0;
-        return SCPE_OK;
-
     case 002:                                           /* MEMERR */
         *data = MEMERR;
         return SCPE_OK;
@@ -588,32 +594,12 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
         *data = HITMISS;
         return SCPE_OK;
 
-    case 010:                                           /* low size */
-        *data = (MEMSIZE >> 6) - 1;
-        return SCPE_OK;
-
-    case 011:                                           /* high size */
-        *data = 0;
-        return SCPE_OK;
-
-    case 012:                                           /* system ID */
-        *data = SYSID;
-        return SCPE_OK;
-
     case 013:                                           /* CPUERR */
         *data = CPUERR & CPUE_IMP;
         return SCPE_OK;
 
-    case 014:                                           /* MBRK */
-        *data = MBRK;
-        return SCPE_OK;
-
     case 015:                                           /* PIRQ */
         *data = PIRQ;
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        *data = STKLIM & STKLIM_RW;
         return SCPE_OK;
         }                                               /* end switch PA */
 
@@ -641,29 +627,13 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
     case 005:                                           /* Hit/miss */
         return SCPE_OK;
 
-    case 010:                                           /* low size */
-        return SCPE_OK;
-
-    case 011:                                           /* high size */
-        return SCPE_OK;
-
     case 013:                                           /* CPUERR */
         CPUERR = 0;
-        return SCPE_OK;
-
-    case 014:                                           /* MBRK */
-        ODD_IGN (data);
-        MBRK = data & MBRK70_WR;
         return SCPE_OK;
 
     case 015:                                           /* PIRQ */
         ODD_WO (data);
         put_PIRQ (data);
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        ODD_WO (data);
-        STKLIM = data & STKLIM_RW;
         return SCPE_OK;
         }                                               /* end switch pa */
 
@@ -1023,14 +993,196 @@ switch ((pa >> 1) & 03) {                               /* decode pa<2:1> */
 return SCPE_NXM;
 }
 
-t_stat ioctl_rd (int32 *data, int32 addr, int32 access)
+t_stat ioctl_rd (int32 *data, int32 pa, int32 access)
 {
+int32 rg = (pa >> 1) & 037;
+switch (rg) {                                           /* decode pa<2:1> */
+
+    case 000:                                           /* WADR0 */
+    case 001:                                           /* WADR1 */
+    case 002:                                           /* WADR2 */
+    case 003:                                           /* WADR3 */
+    case 004:                                           /* WADR4 */
+    case 005:                                           /* WADR5 */
+    case 006:                                           /* WADR6 */
+    case 007:                                           /* WADR7 */
+        *data = WADR[WIDX][rg];
+        *data = (*data & 0177) << 2;
+        *data = *data | (rg << 9) | (016 << 12);
+        printf ("WADR%d rd %o\n", rg, *data);
+        return SCPE_OK;
+
+    case 010:                                           /* WIDX - NI */
+        printf ("WIDX rd\n");
+        *data = WIDX;
+        return SCPE_OK;
+
+    case 011:                                           /* WBUS - NI */
+        printf ("WBUS rd\n");
+        *data = WBUS;
+        return SCPE_OK;
+
+    case 012:                                           /* low error */
+        *data = 0;
+        return SCPE_OK;
+
+    case 013:                                           /* high error */
+        *data = 0;
+        return SCPE_OK;
+
+    case 020:                                           /* Pio CSR - NI */
+        printf ("Pio CSR rd\n");
+        *data = 0;
+        return SCPE_OK;
+
+    case 021:                                           /* switch/display reg */
+        printf ("SR rd\n");
+        *data = SR;
+        return SCPE_OK;
+
+    case 022:                                           /* K init reg - NI */
+        printf ("K init rd\n");
+        *data = 0;
+        return SCPE_OK;
+
+    case 023:                                           /* K status reg - NI */
+        printf ("K status rd\n");
+        *data = 0;
+        return SCPE_OK;
+
+    case 024:                                           /* data mem low addr - NI */
+        printf ("data mem low rd\n");
+        *data = 0;
+        return SCPE_OK;
+
+    case 025:                                           /* data mem high addr - NI */
+        printf ("data mem high rd\n");
+        *data = 0;
+        return SCPE_OK;
+
+    case 026:                                           /* ctrl mem low addr - NI */
+        printf ("ctrl mem low rd\n");
+        *data = LOCADR;
+        return SCPE_OK;
+
+    case 027:                                           /* serial number reg - NI */
+        printf ("serial num rd\n");
+        *data = 0;
+        return SCPE_OK;
+        }
+        
 *data = 0;
+return SCPE_NXM;
+}
+
+t_stat ioctl_wr (int32 data, int32 pa, int32 access)
+{
+int32 rg = (pa >> 1) & 037;
+switch (rg) {                                           /* decode pa<2:1> */
+
+    case 000:                                           /* WADR0 */
+    case 001:                                           /* WADR1 */
+    case 002:                                           /* WADR2 */
+    case 003:                                           /* WADR3 */
+    case 004:                                           /* WADR4 */
+    case 005:                                           /* WADR5 */
+    case 006:                                           /* WADR6 */
+    case 007:                                           /* WADR7 */
+        printf ("WADR%d wr: %o\n", rg, data);
+        WADR[WIDX][rg] = data;
+        return SCPE_OK;
+
+    case 010:                                           /* WIDX - NI */
+        printf ("WIDX wr: %o\n", data);
+        WIDX = data & 07;
+        return SCPE_OK;
+
+    case 011:                                           /* WBUS - NI */
+        printf ("WBUS wr: %o\n", data);
+        return SCPE_OK;
+
+    case 012:                                           /* low error */
+        return SCPE_OK;
+
+    case 013:                                           /* high error */
+        return SCPE_OK;
+
+    case 020:                                           /* Pio CSR - NI */
+        printf ("Pio CSR wr: %o\n", data);
+        return SCPE_OK;
+
+    case 021:                                           /* switch/display reg */
+        printf ("DR wr: %o\n", data);
+        DR = data;
+        return SCPE_OK;
+
+    case 022:                                           /* K init reg - NI */
+        printf ("K init wr: %o\n", data);
+        return SCPE_OK;
+
+    case 023:                                           /* K status reg - NI */
+        printf ("K status wr: %o\n", data);
+        return SCPE_OK;
+
+    case 024:                                           /* data mem low addr - NI */
+        printf ("data mem low wr: %o\n", data);
+        return SCPE_OK;
+
+    case 025:                                           /* data mem high addr - NI */
+        printf ("data mem high wr: %o\n", data);
+        return SCPE_OK;
+
+    case 026:                                           /* ctrl mem low addr - NI */
+        printf ("ctrl mem low wr: %o\n", data);
+        return SCPE_OK;
+
+    case 027:                                           /* serial number reg - NI */
+        printf ("serial num wr: %o\n", data);
+        return SCPE_OK;
+        }
+        
+return SCPE_NXM;
+}
+
+t_stat ctlmem_rd (int32 *data, int32 pa, int32 access)
+{
+int32 va;
+int32 rg;
+
+rg = (pa >> 9) & 07;
+va = (WADR[WIDX][rg] & 0177600) << 2;
+va = va | (pa & 0777);
+WBUS = (va >> 1);
+LOCADR = va & 1;
+va = va | (016 << 18);
+printf ("ctlmem_rd: %o = %o\n", pa, va);
+*data = ReadW (va);
 return SCPE_OK;
 }
 
-t_stat ioctl_wr (int32 data, int32 addr, int32 access)
+t_stat ctlmem_wr (int32 data, int32 pa, int32 access)
 {
+int32 va;
+int32 rg;
+
+rg = (pa >> 9) & 07;
+va = (WADR[WIDX][rg] & 0177600) << 2;
+va = va | (pa & 0777);
+WBUS = (va >> 1);
+LOCADR = va & 1;
+va = va | (016 << 18);
+printf ("ctlmem_wr: %o = %o => %o\n", pa, va, data);
+if (access == WRITEB)
+    WriteB (va, data);
+else
+    WriteW (va, data);
+return SCPE_OK;
+}
+
+t_stat rom_rd (int32 *data, int32 pa, int32 access)
+{
+printf ("rom_rd: %o\n", pa);
+*data = 0;
 return SCPE_OK;
 }
 
