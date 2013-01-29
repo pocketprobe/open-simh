@@ -306,6 +306,7 @@ int32 MMR0 = 0;                                         /* MMR0 - status */
 int32 MMR1 = 0;                                         /* MMR1 - R+/-R */
 int32 MMR2 = 0;                                         /* MMR2 - saved PC */
 int32 MMR3 = 0;                                         /* MMR3 - 22b status */
+int32 EADR = 0;                                         /* error address */
 int32 cpu_bme = 0;                                      /* bus map enable */
 int32 cpu_astop = 0;                                    /* address stop */
 int32 isenable = 0, dsenable = 0;                       /* i, d space flags */
@@ -641,6 +642,7 @@ MTAB cpu_mod[] = {
     { MTAB_XTD|MTAB_VDV, MOD_1184, NULL, "URH11", &cpu_set_model, NULL, NULL, "deprecated: same as 11/84" },
     { MTAB_XTD|MTAB_VDV, MOD_1170, NULL, "URH70", &cpu_set_model, NULL, NULL, "deprecated: same as 11/70" },
     { MTAB_XTD|MTAB_VDV, MOD_1145, NULL, "U18", &cpu_set_model, NULL, NULL, "deprecated: same as 11/45" },
+    { MTAB_XTD|MTAB_VDV, MOD_HSC70, NULL, "HSC70", &cpu_set_model, NULL, NULL, "Set CPU type to HSC70" },
     { MTAB_XTD|MTAB_VDV, OPT_EIS, NULL, "EIS", &cpu_set_opt, NULL, NULL, "enable EIS instructions" },
     { MTAB_XTD|MTAB_VDV, OPT_EIS, NULL, "NOEIS", &cpu_clr_opt, NULL, NULL, "disable EIS instructions" },
     { MTAB_XTD|MTAB_VDV, OPT_FIS, NULL, "FIS", &cpu_set_opt, NULL, NULL, "enable FIS instructions" },
@@ -783,7 +785,7 @@ abortval = setjmp (save_env);                           /* set abort hdlr */
 if (abortval == ABRT_BKPT) {
     /* Breakpoint encountered.  */
     reason = STOP_IBKPT;
-    /* Print a message reporting the type and address if it is not a 
+    /* Print a message reporting the type and address if it is not a
        plain virtual PC (instruction execution) breakpoint.  */
     if (sim_brk_match_type != BPT_PCVIR)
         sim_messagef (reason, "\r\n%s", sim_brk_message());
@@ -832,7 +834,7 @@ else {
 
    Check for traps or interrupts.  If trap, locate the vector and check
    for stop condition.  If interrupt, locate the vector.
-*/ 
+*/
 
 while (reason == 0)  {
 
@@ -1169,7 +1171,7 @@ while (reason == 0)  {
         case 010: case 011:                             /* BNE */
             if (Z == 0) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 012: case 013:                             /* BNE */
@@ -1181,7 +1183,7 @@ while (reason == 0)  {
         case 014: case 015:                             /* BEQ */
             if (Z) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 016: case 017:                             /* BEQ */
@@ -1193,7 +1195,7 @@ while (reason == 0)  {
         case 020: case 021:                             /* BGE */
             if ((N ^ V) == 0) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 022: case 023:                             /* BGE */
@@ -1217,7 +1219,7 @@ while (reason == 0)  {
         case 030: case 031:                             /* BGT */
             if ((Z | (N ^ V)) == 0) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 032: case 033:                             /* BGT */
@@ -1227,7 +1229,7 @@ while (reason == 0)  {
         case 034: case 035:                             /* BLE */
             if (Z | (N ^ V)) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 036: case 037:                             /* BLE */
@@ -1914,7 +1916,7 @@ while (reason == 0)  {
         case 000: case 001:                             /* BPL */
             if (N == 0) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 002: case 003:                             /* BPL */
@@ -1926,7 +1928,7 @@ while (reason == 0)  {
         case 004: case 005:                             /* BMI */
             if (N) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 006: case 007:                             /* BMI */
@@ -1938,7 +1940,7 @@ while (reason == 0)  {
         case 010: case 011:                             /* BHI */
             if ((C | Z) == 0) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 012: case 013:                             /* BHI */
@@ -1950,7 +1952,7 @@ while (reason == 0)  {
         case 014: case 015:                             /* BLOS */
             if (C | Z) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 016: case 017:                             /* BLOS */
@@ -1962,7 +1964,7 @@ while (reason == 0)  {
         case 020: case 021:                             /* BVC */
             if (V == 0) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 022: case 023:                             /* BVC */
@@ -1974,7 +1976,7 @@ while (reason == 0)  {
         case 024: case 025:                             /* BVS */
             if (V) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 026: case 027:                             /* BVS */
@@ -1986,7 +1988,7 @@ while (reason == 0)  {
         case 030: case 031:                             /* BCC */
             if (C == 0) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 032: case 033:                             /* BCC */
@@ -1998,7 +2000,7 @@ while (reason == 0)  {
         case 034: case 035:                             /* BCS */
             if (C) {
                 BRANCH_F (IR);
-                } 
+                }
             break;
 
         case 036: case 037:                             /* BCS */
@@ -2642,10 +2644,12 @@ if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemW (pa);
 if ((pa < IOPAGEBASE) ||                                /* not I/O address */
     (CPUT (CPUT_J) && (pa >= IOBA_CPU))) {              /* or J11 int reg? */
+        EADR = pa;
         setCPUERR (CPUE_NXM);
         ABORT (TRAP_NXM);
         }
 if (iopageR (&data, pa, READ) != SCPE_OK) {             /* invalid I/O addr? */
+    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2730,10 +2734,12 @@ int32 data;
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemW (pa);
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
+    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageR (&data, pa, READ) != SCPE_OK) {             /* invalid I/O addr? */
+    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2747,10 +2753,12 @@ int32 data;
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemB (pa);
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
+    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageR (&data, pa, READ) != SCPE_OK) {             /* invalid I/O addr? */
+    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2820,10 +2828,12 @@ if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     return;
     }
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
+    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageW (data, pa, WRITE) != SCPE_OK) {             /* invalid I/O addr? */
+    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2835,12 +2845,14 @@ void PWriteB (int32 data, int32 pa)
 if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     WrMemB (pa, data);
     return;
-    }             
+    }
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
+    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageW (data, pa, WRITEB) != SCPE_OK) {            /* invalid I/O addr? */
+    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -3112,17 +3124,21 @@ t_stat MMR012_rd (int32 *data, int32 pa, int32 access)
 switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
 
     case 0:                                             /* SR */
+        printf ("SR rd\n");
         return SCPE_NXM;
 
     case 1:                                             /* MMR0 */
         *data = MMR0 & cpu_tab[cpu_model].mm0;
+        printf ("MMR0 rd: %o at %o\n", *data, PC);
         break;
 
     case 2:                                             /* MMR1 */
+        printf ("MMR1 rd\n");
         *data = MMR1;
         break;
 
     case 3:                                             /* MMR2 */
+        printf ("MMR2 rd\n");
         *data = MMR2;
         break;
         }                                               /* end switch pa */
@@ -3135,9 +3151,11 @@ t_stat MMR012_wr (int32 data, int32 pa, int32 access)
 switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
 
     case 0:                                             /* DR */
+        printf ("DR wr\n");
         return SCPE_NXM;
 
     case 1:                                             /* MMR0 */
+        printf ("MMR0 wr %o at %o\n", data, PC);
         if (access == WRITEB)
             data = (pa & 1)? (MMR0 & 0377) | (data << 8): (MMR0 & ~0377) | data;
         data = data & cpu_tab[cpu_model].mm0;
@@ -3145,6 +3163,7 @@ switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
         return SCPE_OK;
 
     default:                                            /* MMR1, MMR2 */
+        printf ("MMR1/2 wr\n");
         return SCPE_OK;
         }                                               /* end switch pa */
 }
@@ -3413,7 +3432,7 @@ t_stat cpu_boot (int32 unitno, DEVICE *dptr)
 {
 DEVICE *rom = find_dev ("ROM");
 
-if ((rom == NULL) || 
+if ((rom == NULL) ||
     ((rom->flags & DEV_DIS) != 0) ||
     (SCPE_NOFNC == rom->boot (unitno, rom)))
     return SCPE_2FARG;
@@ -3705,8 +3724,8 @@ fprintf (st, "    ==============================================================
 for (i = 0; i < MOD_MAX; i++) {
     CPUTAB *cpu = &cpu_tab[i];
 
-    fprintf (st, "    %-6s  %s   %-7s %-3s   %-3s    %-3s   %-3s   %-3s   %-3s   %-3s\n", 
-                     cpu->name, 
+    fprintf (st, "    %-6s  %s   %-7s %-3s   %-3s    %-3s   %-3s   %-3s   %-3s   %-3s\n",
+                     cpu->name,
                      (cpu->std & BUS_U) ? "U" : "Q",
                      (cpu->maxm == MEMSIZE64K) ? "64K" : ((cpu->maxm == MAXMEMSIZE) ? "4M" : ((cpu->maxm == UNIMEMSIZE) ? "256K" : "UNK")),
                      _OPT(OPT_MMU), _OPT(OPT_UBM), _OPT(OPT_EIS), _OPT(OPT_FIS),

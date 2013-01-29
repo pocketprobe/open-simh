@@ -1519,8 +1519,7 @@ UC15_OPT = -DVM_PDP11 -DUC15 -I ${UC15D} -I ${PDP18BD}
 HSCD = ${SIMHD}/HSC
 HSC70 = ${PDP11D}/pdp11_fp.c ${PDP11D}/pdp11_cpu.c ${PDP11D}/pdp11_dz.c \
 	${PDP11D}/pdp11_cis.c ${PDP11D}/pdp11_stddev.c ${PDP11D}/pdp11_sys.c \
-	${PDP11D}/pdp11_io.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_pclk.c \
-	${HSCD}/pdp11_cpumod.c ${PDP11D}/pdp11_dl.c \
+	${PDP11D}/pdp11_io.c ${PDP11D}/pdp11_cpumod.c ${PDP11D}/pdp11_dl.c \
 	${PDP11D}/pdp11_io_lib.c ${HSCD}/hsc70_syslist.c
 HSC70_OPT = -DVM_PDP11 -I ${HSCD} -I ${PDP11D} ${NETWORK_OPT}
 

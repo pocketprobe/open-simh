@@ -132,7 +132,10 @@
 #define SOP_1194        (BUS_U|OPT_EIS|OPT_FPP|OPT_MMU|OPT_UBM|OPT_RH11)
 #define OPT_1194        (OPT_CIS)
 
-#define MOD_MAX         20
+#define SOP_HSC70       (BUS_Q|OPT_EIS|OPT_FPP|OPT_MMU)
+#define OPT_HSC70       (OPT_CIS)
+
+#define MOD_MAX         21
 
 /* MFPT codes */
 
@@ -198,6 +201,7 @@
 #define MAINT_KDJB      (2 << MAINT_V_TYP)              /* KDJ11B */
 #define MAINT_KDJD      (4 << MAINT_V_TYP)              /* KDJ11D */
 #define MAINT_KDJE      (5 << MAINT_V_TYP)              /* KDJ11E */
+#define MAINT_KPIO      (15 << MAINT_V_TYP)             /* K.Pio - HSC70 */
 #define MAINT_V_HTRAP   3                               /* trap 4 on HALT */
 #define MAINT_HTRAP     (1 << MAINT_V_HTRAP)
 #define MAINT_V_POM     1                               /* power on option */

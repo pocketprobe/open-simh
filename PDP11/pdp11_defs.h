@@ -134,7 +134,8 @@
 #define MOD_1184        17
 #define MOD_1193        18
 #define MOD_1194        19
-#define MOD_T           20
+#define MOD_HSC70       20
+#define MOD_T           21
 
 #define CPUT_03         (1u << MOD_1103)                /* LSI-11 */
 #define CPUT_04         (1u << MOD_1104)                /* 11/04 */
@@ -156,11 +157,13 @@
 #define CPUT_84         (1u << MOD_1184)                /* 11/84 */
 #define CPUT_93         (1u << MOD_1193)                /* 11/93 */
 #define CPUT_94         (1u << MOD_1194)                /* 11/94 */
+#define CPUT_HSC70      (1u << MOD_HSC70)               /* HSC70 */
 #define CPUT_T          (1u << MOD_T)                   /* T-11 */
 
 #define CPUT_F          (CPUT_23|CPUT_23P|CPUT_24)      /* all F11's */
 #define CPUT_J          (CPUT_53|CPUT_73|CPUT_73B| \
-                         CPUT_83|CPUT_84|CPUT_93|CPUT_94)
+                         CPUT_83|CPUT_84|CPUT_93| \
+                         CPUT_94|CPUT_HSC70)
 #define CPUT_JB         (CPUT_73B|CPUT_83|CPUT_84)      /* KDJ11B */
 #define CPUT_JE         (CPUT_93|CPUT_94)               /* KDJ11E */
 #define CPUT_JU         (CPUT_84|CPUT_94)               /* KTJ11B UBA */
@@ -490,7 +493,7 @@ typedef struct {
 
 #define DZ_MUXES        4                               /* default # of DZ muxes */
 #define VH_MUXES        4                               /* max # of VH muxes */
-#define DLX_LINES       16                              /* max # of KL11/DL11's */
+#define DLX_LINES       2                               /* max # of KL11/DL11's */
 #define DCX_LINES       16                              /* max # of DC11's */
 #define DUP_LINES       8                               /* max # of DUP11/DPV11's */
 #define KMC_UNITS       2                               /* max # of KMC11s */

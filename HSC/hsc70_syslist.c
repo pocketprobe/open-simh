@@ -35,24 +35,19 @@ extern DEVICE sys_dev;
 extern DEVICE tti_dev;
 extern DEVICE tto_dev;
 extern DEVICE clk_dev;
-extern DEVICE pclk_dev;
 extern DEVICE dli_dev;
 extern DEVICE dlo_dev;
-extern DEVICE rq_dev, rqb_dev, rqc_dev, rqd_dev;
+extern DEVICE fl_dev;
 
 DEVICE *sim_devices[] = {
     &cpu_dev,
     &sys_dev,
     &clk_dev,
-    &pclk_dev,
     &tti_dev,
     &tto_dev,
     &dli_dev,
     &dlo_dev,
-    &rq_dev,
-    &rqb_dev,
-    &rqc_dev,
-    &rqd_dev,
+    &fl_dev,
     NULL
     };
 
