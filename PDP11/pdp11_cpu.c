@@ -307,6 +307,7 @@ int32 MMR1 = 0;                                         /* MMR1 - R+/-R */
 int32 MMR2 = 0;                                         /* MMR2 - saved PC */
 int32 MMR3 = 0;                                         /* MMR3 - 22b status */
 int32 EADR = 0;                                         /* error address */
+int32 DADR = 0;                                         /* data memory address */
 int32 cpu_bme = 0;                                      /* bus map enable */
 int32 cpu_astop = 0;                                    /* address stop */
 int32 isenable = 0, dsenable = 0;                       /* i, d space flags */
@@ -334,6 +335,7 @@ t_stat reason;                                          /* stop reason */
 
 extern int32 CPUERR, MAINT;
 extern CPUTAB cpu_tab[];
+extern int32 PCSR;
 
 /* Function declarations */
 
@@ -2640,6 +2642,38 @@ if (BPT_SUMM_RD &&
     (sim_brk_test (va & 0177777, BPT_RDVIR) ||
      sim_brk_test (pa, BPT_RDPHY)))                     /* read breakpoint? */
     ABORT (ABRT_BKPT);                                  /* stop simulation */
+if (ADDR_IS_DMEM (pa)) {
+    DADR = pa;
+    PCSR = PCSR & ~07;
+//    printf ("DMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
+    }
+if (ADDR_IS_CMEM (pa)) {
+//    if (PCSR & 04)                                      /* non-memory access */
+//        data = 0;
+//    else
+        data = RdMemW (pa);
+    if (PCSR & 02) {
+        if (data & 010)
+            SET_INT (CB7);
+        if (data & 04)
+            SET_INT (CB6);
+        if (data & 02)
+            SET_INT (CB5);
+        if (data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    if (PCSR & 01) {
+        WrMemW (pa, 0100000);
+        }
+    PCSR = PCSR & ~07;
+//    printf ("CMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
+    return data;
+    }
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemW (pa);
 if ((pa < IOPAGEBASE) ||                                /* not I/O address */
@@ -2731,6 +2765,38 @@ int32 PReadW (int32 pa)
 {
 int32 data;
 
+if (ADDR_IS_DMEM (pa)) {
+    DADR = pa;
+    PCSR = PCSR & ~07;
+//    printf ("DMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
+    }
+if (ADDR_IS_CMEM (pa)) {
+//    if (PCSR & 04)                                      /* non-memory access */
+//        data = 0;
+//    else
+        data = RdMemW (pa);
+    if (PCSR & 02) {
+        if (data & 010)
+            SET_INT (CB7);
+        if (data & 04)
+            SET_INT (CB6);
+        if (data & 02)
+            SET_INT (CB5);
+        if (data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    if (PCSR & 01) {
+        WrMemW (pa, 0100000);
+        }
+    PCSR = PCSR & ~07;
+//    printf ("CMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
+    return data;
+    }
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemW (pa);
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
@@ -2750,6 +2816,38 @@ int32 PReadB (int32 pa)
 {
 int32 data;
 
+if (ADDR_IS_DMEM (pa)) {
+    DADR = pa;
+    PCSR = PCSR & ~07;
+//    printf ("DMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
+    }
+if (ADDR_IS_CMEM (pa)) {
+//    if (PCSR & 04)                                      /* non-memory access */
+//        data = 0;
+//    else
+        data = RdMemB (pa);
+    if (PCSR & 02) {
+        if (data & 010)
+            SET_INT (CB7);
+        if (data & 04)
+            SET_INT (CB6);
+        if (data & 02)
+            SET_INT (CB5);
+        if (data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    if (PCSR & 01) {
+        WrMemW (pa, 0100000);
+        }
+    PCSR = PCSR & ~07;
+//    printf ("CMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
+    return data;
+    }
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemB (pa);
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
@@ -2823,6 +2921,34 @@ PWriteW (data, pa);
 
 void PWriteW (int32 data, int32 pa)
 {
+if (ADDR_IS_DMEM (pa)) {
+    DADR = pa;
+    PCSR = PCSR & ~07;
+//    printf ("DMEM wr: %o = %o\n", pa, data);
+    if (sim_log)
+        fprintf (sim_log, "DMEM wr: %o = %o at %o\n", pa, data, PC);
+    }
+if (ADDR_IS_CMEM (pa)) {
+//    if (PCSR & 04) {                                    /* non-memory access */
+//        PCSR = PCSR & ~07;
+//        return;
+//        }
+    if (PCSR & 02) {
+        if (data & 010)
+            SET_INT (CB7);
+        if (data & 04)
+            SET_INT (CB6);
+        if (data & 02)
+            SET_INT (CB5);
+        if (data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    PCSR = PCSR & ~07;
+//    printf ("CMEM wr: %o = %o\n", pa, data);
+    if (sim_log)
+        fprintf (sim_log, "CMEM wr: %o = %o at %o\n", pa, data, PC);
+    }
 if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     WrMemW (pa, data);
     return;
@@ -2842,6 +2968,34 @@ return;
 
 void PWriteB (int32 data, int32 pa)
 {
+if (ADDR_IS_DMEM (pa)) {
+    DADR = pa;
+    PCSR = PCSR & ~07;
+//    printf ("DMEM wr: %o = %o\n", pa, data);
+    if (sim_log)
+        fprintf (sim_log, "DMEM wr: %o = %o at %o\n", pa, data, PC);
+    }
+if (ADDR_IS_CMEM (pa)) {
+//    if (PCSR & 04) {                                    /* non-memory access */
+//        PCSR = PCSR & ~07;
+//        return;
+//        }
+    if (PCSR & 02) {
+        if (data & 010)
+            SET_INT (CB7);
+        if (data & 04)
+            SET_INT (CB6);
+        if (data & 02)
+            SET_INT (CB5);
+        if (data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    PCSR = PCSR & ~07;
+//    printf ("CMEM wr: %o = %o\n", pa, data);
+    if (sim_log)
+        fprintf (sim_log, "CMEM wr: %o = %o at %o\n", pa, data, PC);
+    }
 if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     WrMemB (pa, data);
     return;

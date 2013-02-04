@@ -259,6 +259,11 @@
 #define HAS_LTCM        (CPUT_04|CPUT_05|CPUT_20|CPUT_24|CPUT_34| \
                          CPUT_40|CPUT_44|CPUT_45|CPUT_60|CPUT_70|CPUT_J)
 
+/* Other memory spaces */
+
+#define ADDR_IS_CMEM(x) ((((t_addr) (x)) < 017000000) && (((t_addr) (x)) >= 016000000))
+#define ADDR_IS_DMEM(x) ((((t_addr) (x)) < 016000000) && (((t_addr) (x)) >= 014000000))
+
 /* Protection modes */
 
 #define MD_KER          0
@@ -595,6 +600,8 @@ typedef struct pdp_dib DIB;
 #define IOLN_KIPAR      020
 #define IOBA_KDPAR      (IOPAGEBASE + 012360)
 #define IOLN_KDPAR      020
+#define IOBA_FL         (IOPAGEBASE + 017400)
+#define IOLN_FL         010
 
 /* Interrupt assignments; within each level, priority is right to left
    PIRQn has the highest priority with a level and is always bit <0>
@@ -605,6 +612,7 @@ typedef struct pdp_dib DIB;
 
 #define INT_V_PIR7      0                               /* BR7 */
 #define INT_V_UCA       1
+#define INT_V_CB7       2
 
 #define INT_V_PIR6      0                               /* BR6 */
 #define INT_V_CLK       1
@@ -612,6 +620,7 @@ typedef struct pdp_dib DIB;
 #define INT_V_DTA       3
 #define INT_V_TA        4
 #define INT_V_CR        5                               /* CR11 */
+#define INT_V_CB6       6
 
 #define INT_V_PIR5      0                               /* BR5 */
 #define INT_V_RK        1
@@ -644,6 +653,7 @@ typedef struct pdp_dib DIB;
 #define INT_V_DHRX      28
 #define INT_V_DHTX      29
 #define INT_V_RR        30
+#define INT_V_CB5       31
 
 #define INT_V_PIR4      0                               /* BR4 */
 #define INT_V_TTI       1
@@ -652,7 +662,7 @@ typedef struct pdp_dib DIB;
 #define INT_V_PTP       4
 #define INT_V_LPT       5
 #define INT_V_VHRX      6
-#define INT_V_VHTX      7  
+#define INT_V_VHTX      7
 #define INT_V_CD        8                               /* CD11 */
 #define INT_V_DLI       9
 #define INT_V_DLO       10
@@ -667,6 +677,8 @@ typedef struct pdp_dib DIB;
 #define INT_V_LK        17
 #define INT_V_TDRX      18
 #define INT_V_TDTX      19
+#define INT_V_FL        20
+#define INT_V_CB4       21
 
 #define INT_V_PIR3      0                               /* BR3 */
 #define INT_V_PIR2      0                               /* BR2 */
@@ -734,6 +746,11 @@ typedef struct pdp_dib DIB;
 #define INT_NG          (1u << INT_V_NG)
 #define INT_DHRX        (1u << INT_V_DHRX)
 #define INT_DHTX        (1u << INT_V_DHTX)
+#define INT_FL          (1u << INT_V_FL)
+#define INT_CB7         (1u << INT_V_CB7)
+#define INT_CB6         (1u << INT_V_CB6)
+#define INT_CB5         (1u << INT_V_CB5)
+#define INT_CB4         (1u << INT_V_CB4)
 
 #define INT_INTERNAL7   (INT_PIR7)
 #define INT_INTERNAL6   (INT_PIR6 | INT_CLK)
@@ -745,11 +762,13 @@ typedef struct pdp_dib DIB;
 
 #define IPL_UCB         7                               /* int pri levels */
 #define IPL_MB          7
+#define IPL_CB7         7
 #define IPL_CLK         6
 #define IPL_PCLK        6
 #define IPL_DTA         6
 #define IPL_TA          6
 #define IPL_CR          6
+#define IPL_CB6         6
 #define IPL_RK          5
 #define IPL_RL          5
 #define IPL_RX          5
@@ -780,6 +799,7 @@ typedef struct pdp_dib DIB;
 #define IPL_NG          5
 #define IPL_DHRX        5
 #define IPL_DHTX        5
+#define IPL_CB5         5
 #define IPL_PTR         4
 #define IPL_PTP         4
 #define IPL_TTI         4
@@ -799,6 +819,8 @@ typedef struct pdp_dib DIB;
 #define IPL_LK          4           /* XXX just a guess */
 #define IPL_TDRX        4
 #define IPL_TDTX        4
+#define IPL_CB4         4
+#define IPL_FL          4
 
 #define IPL_PIR7        7
 #define IPL_PIR6        6
@@ -819,6 +841,11 @@ typedef struct pdp_dib DIB;
 #define VEC_TTO         0064
 #define VEC_UCA         0300
 #define VEC_UCB         0310
+#define VEC_FL          0230
+#define VEC_CB7         0134
+#define VEC_CB6         0130
+#define VEC_CB5         0124
+#define VEC_CB4         0120
 
 /* Interrupt macros */
 

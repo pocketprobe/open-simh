@@ -119,10 +119,12 @@ const char *dlx_description (DEVICE *dptr);
    dli_reg      DLI register list
 */
 
+#define IOBA_DL         (IOPAGEBASE + 017520)
 #define IOLN_DL         010
+#define VEC_DL          0300
 
 DIB dli_dib = {
-    IOBA_AUTO, IOLN_DL * DLX_LINES, &dlx_rd, &dlx_wr,
+    IOBA_DL, IOLN_DL * DLX_LINES, &dlx_rd, &dlx_wr,
     2, IVCL (DLI), VEC_AUTO, { &dli_iack, &dlo_iack }, IOLN_DL,
     };
 
@@ -263,6 +265,7 @@ if (ln > DLX_MAXMUX)                                    /* validate line number 
 switch ((PA >> 1) & 03) {                               /* decode PA<2:1> */
 
     case 00:                                            /* tti csr */
+        printf ("dli_csr rd: %o\n", PA);
         *data = dli_csr[ln] &
             ((dlo_unit[ln].flags & DLX_MDM)? DLICSR_RD_M: DLICSR_RD);
         dli_csr[ln] &= ~DLICSR_DSI;                     /* clr DSI flag */
@@ -270,6 +273,7 @@ switch ((PA >> 1) & 03) {                               /* decode PA<2:1> */
         break;
 
     case 01:                                            /* tti buf */
+        printf ("dli_buf rd: %o\n", PA);
         *data = dli_buf[ln] & DLIBUF_RD;
         dli_csr[ln] &= ~CSR_DONE;                       /* clr rcv done */
         dli_clr_int (ln, DLI_RCI);                      /* clr rcv int req */
@@ -279,10 +283,12 @@ switch ((PA >> 1) & 03) {                               /* decode PA<2:1> */
         break;
 
     case 02:                                            /* tto csr */
+        printf ("dlo_csr rd: %o\n", PA);
         *data = dlo_csr[ln] & DLOCSR_RD;
         break;
 
     case 03:                                            /* tto buf */
+        printf ("dlo_buf rd: %o\n", PA);
         *data = dlo_buf[ln];
         break;
 
@@ -308,6 +314,7 @@ sim_debug(DBG_REG, &dli_dev, "dlx_wr(PA=0x%08X [%s], access=%d, data=0x%X)\n", P
 switch ((PA >> 1) & 03) {                               /* decode PA<2:1> */
 
     case 00:                                            /* tti csr */
+        printf ("dli_csr wr: %o = %o\n", PA, data);
         if (PA & 1)                                     /* odd byte RO */
             return SCPE_OK;
         if ((data & CSR_IE) == 0)
@@ -346,9 +353,11 @@ switch ((PA >> 1) & 03) {                               /* decode PA<2:1> */
         return SCPE_OK;
 
     case 01:                                            /* tti buf */
+        printf ("dli_buf wr: %o = %o\n", PA, data);
         return SCPE_OK;
 
     case 02:                                            /* tto csr */
+        printf ("dlo_csr wr: %o = %o\n", PA, data);
         if (PA & 1)
             return SCPE_OK;
         if ((data & CSR_IE) == 0)
@@ -359,6 +368,7 @@ switch ((PA >> 1) & 03) {                               /* decode PA<2:1> */
         return SCPE_OK;
 
     case 03:                                            /* tto buf */
+        printf ("dlo_buf wr: %o = %o\n", PA, data);
         if ((PA & 1) == 0)
             dlo_buf[ln] = data & 0377;
         dlo_csr[ln] &= ~CSR_DONE;
@@ -517,7 +527,7 @@ int32 ln;
 for (ln = 0; ln < DLX_LINES; ln++) {                    /* find 1st line */
     if (dlo_ireq & (1 << ln)) {
         dlo_clr_int (ln);                               /* clear intr */
-        sim_debug(DBG_INT, &dlo_dev, "dlo_iack(ln=%d)\n", ln);
+        printf ("dlo_iack: %o\n", (dli_dib.vec + (ln * 010) + 4));
         return (dli_dib.vec + (ln * 010) + 4);          /* return vector */
         }
     }

@@ -429,6 +429,10 @@ init_ubus_tab ();                                       /* init Unibus tables */
 init_mbus_tab ();                                       /* init Massbus tables */
 for (i = 0; i < 7; i++)                                 /* seed PIRQ intr */
     int_vec[i + 1][pirq_bit[i]] = VEC_PIRQ;
+int_vec[IPL_CB7][INT_V_CB7] = VEC_CB7;
+int_vec[IPL_CB6][INT_V_CB6] = VEC_CB6;
+int_vec[IPL_CB5][INT_V_CB5] = VEC_CB5;
+int_vec[IPL_CB4][INT_V_CB4] = VEC_CB4;
 if ((r = cpu_build_dib ()))                             /* build CPU entries */
     return r;
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* loop thru dev */
