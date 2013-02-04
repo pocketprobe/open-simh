@@ -140,7 +140,7 @@ int32 WADR[128][8];
 int32 WIDX = 0;
 int32 WBUS = 0;
 int32 KINI = 0;                                         /* K init reg */
-int32 KSTS[10] = { 0000, 0001, 0002, 0002, 0377, 0377, 0377, 0377, 0377, 0377 };
+int32 KSTS[10] = { 0000, 0004, 0002, 0002, 0377, 0377, 0377, 0377, 0377, 0377 };
 int32 fl_csr = 0;
 int32 fl_madr0 = 0;
 int32 fl_madr1 = 0;
@@ -375,6 +375,8 @@ REG sys_reg[] = {
                            "1123+, 11/24, 11/34, "
                            "11/70, 11/73B, 11/83, "
                            "11/84, 11/93, 11/94)") },
+    { ORDATA (SDR, SDR, 16, "switch/display register ("
+                           "HSC)") },
     { ORDATAD (MEMERR, MEMERR, 16, "memory error register ("
                            "11/44, 11/60, 11/70, "
                            "11/53, 11/73, 11/73B, "
@@ -1240,17 +1242,17 @@ switch (rg) {                                           /* decode pa<2:1> */
         *data = WADR[WIDX][rg];
         *data = (*data & 0177) << 2;
         *data = *data | (rg << 9) | (016 << 12);
-        //printf ("WADR%d rd %o\n", rg, *data);
+        printf ("WADR%d rd %o\n", rg, *data);
         return SCPE_OK;
 
     case 010:                                           /* WIDX */
         *data = WIDX;
-        //printf ("WIDX rd: %o\n", *data);
+        printf ("WIDX rd: %o\n", *data);
         return SCPE_OK;
 
     case 011:                                           /* WBUS */
         *data = WBUS;
-        //printf ("WBUS rd: %o\n", *data);
+        printf ("WBUS rd: %o\n", *data);
         return SCPE_OK;
 
     case 012:                                           /* low error */
@@ -1264,8 +1266,8 @@ switch (rg) {                                           /* decode pa<2:1> */
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR - NI */
-        *data = PCSR;
-//        printf ("Pio CSR rd: %o\n", *data);
+        *data = PCSR | 010000;
+        printf ("Pio CSR rd: %o\n", *data);
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
@@ -1321,17 +1323,17 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 005:                                           /* WADR5 */
     case 006:                                           /* WADR6 */
     case 007:                                           /* WADR7 */
-        //printf ("WADR%d wr: %o\n", rg, data);
+        printf ("WADR%d wr: %o\n", rg, data);
         WADR[WIDX][rg] = data;
         return SCPE_OK;
 
     case 010:                                           /* WIDX */
-        //printf ("WIDX wr: %o\n", data);
+        printf ("WIDX wr: %o\n", data);
         WIDX = data & 0177;
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
-//        printf ("Pio CSR wr: %o\n", data);
+        printf ("Pio CSR wr: %o\n", data);
         PCSR = data;
         return SCPE_OK;
 
@@ -1367,7 +1369,7 @@ va = va | (pa & 0777);
 WBUS = (va >> 2);
 LOCADR = va & 1;
 va = va | (016 << 18);
-//printf ("CMEM rd: %o (%o)\n", va, pa);
+printf ("CMEM rd: %o (%o)\n", va, pa);
 //if (PCSR & 04) {                                        /* non-memory access */
 //    *data = 0;
 //    return SCPE_OK;
@@ -1407,7 +1409,7 @@ va = va | (pa & 0777);
 WBUS = (va >> 2);
 LOCADR = va & 1;
 va = va | (016 << 18);
-//printf ("CMEM wr: %o = %o (%o)\n", va, data, pa);
+printf ("CMEM wr: %o = %o (%o)\n", va, data, pa);
 //if (PCSR & 04)                                          /* non-memory access */
 //    return SCPE_OK;
 if (PCSR & 02) {
