@@ -140,7 +140,8 @@ int32 WADR[128][8];
 int32 WIDX = 0;
 int32 WBUS = 0;
 int32 KINI = 0;                                         /* K init reg */
-int32 KSTS[10] = { 0000, 0004, 0002, 0002, 0377, 0377, 0377, 0377, 0377, 0377 };
+int32 KSTS[10] = { 0000, 0004, 0002, 0377, 0377, 0377, 0377, 0377, 0377, 0377 };
+int32 CDATA = 0;
 int32 fl_csr = 0;
 int32 fl_madr0 = 0;
 int32 fl_madr1 = 0;
@@ -162,6 +163,7 @@ extern t_addr cpu_memsize;
 extern int32 trap_req;
 extern int32 ipl;
 extern int32 int_req[IPL_HLVL];
+extern FILE *sim_log;
 
 t_stat CPU24_rd (int32 *data, int32 addr, int32 access);
 t_stat CPU24_wr (int32 data, int32 addr, int32 access);
@@ -193,8 +195,8 @@ t_stat UBAJ_rd (int32 *data, int32 addr, int32 access);
 t_stat UBAJ_wr (int32 data, int32 addr, int32 access);
 t_stat ioctl_rd (int32 *data, int32 pa, int32 access);
 t_stat ioctl_wr (int32 data, int32 pa, int32 access);
-t_stat ctlmem_rd (int32 *data, int32 pa, int32 access);
-t_stat ctlmem_wr (int32 data, int32 pa, int32 access);
+t_stat ctlwin_rd (int32 *data, int32 pa, int32 access);
+t_stat ctlwin_wr (int32 data, int32 pa, int32 access);
 t_stat rom_rd (int32 *data, int32 pa, int32 access);
 t_stat fl_rd (int32 *data, int32 pa, int32 access);
 t_stat fl_wr (int32 data, int32 pa, int32 access);
@@ -258,7 +260,7 @@ DIB mmr012_dib = { IOBA_MMR012, IOLN_MMR012, &MMR012_rd, &MMR012_wr, 0 };
 DIB mmr3_dib = { IOBA_MMR3, IOLN_MMR3, &MMR3_rd, &MMR3_wr, 0 };
 DIB ubm_dib = { IOBA_UBM, IOLN_UBM, &ubm_rd, &ubm_wr, 0 };
 DIB ioctl_dib = { (IOPAGEBASE + 010000), 060, &ioctl_rd, &ioctl_wr, 0 };
-DIB ctlmem_dib = { IOPAGEBASE, 010000, &ctlmem_rd, &ctlmem_wr, 0 };
+DIB ctlwin_dib = { IOPAGEBASE, 010000, &ctlwin_rd, &ctlwin_wr, 0 };
 DIB rom_dib = { (IOPAGEBASE + 013000), 04000, &rom_rd, NULL, 0 };
 
 CPUTAB cpu_tab[MOD_MAX] = {
@@ -315,7 +317,7 @@ CNFTAB cnf_tab[] = {
     { CPUT_60,  0, &cpu60_dib },
     { CPUT_70,  0, &cpu70_dib },
     { CPUT_HSC70,  0, &ioctl_dib },
-    { CPUT_HSC70,  0, &ctlmem_dib },
+    { CPUT_HSC70,  0, &ctlwin_dib },
     { CPUT_HSC70,  0, &rom_dib },
     { CPUT_HSC70,  0, &dli_dib },
     { CPUT_HSC70,  0, &fl_dib },
@@ -1242,12 +1244,12 @@ switch (rg) {                                           /* decode pa<2:1> */
         *data = WADR[WIDX][rg];
         *data = (*data & 0177) << 2;
         *data = *data | (rg << 9) | (016 << 12);
-        printf ("WADR%d rd %o\n", rg, *data);
+//        printf ("WADR%d rd %o\n", rg, *data);
         return SCPE_OK;
 
     case 010:                                           /* WIDX */
         *data = WIDX;
-        printf ("WIDX rd: %o\n", *data);
+//        printf ("WIDX rd: %o\n", *data);
         return SCPE_OK;
 
     case 011:                                           /* WBUS */
@@ -1266,23 +1268,27 @@ switch (rg) {                                           /* decode pa<2:1> */
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR - NI */
-        *data = PCSR | 010000;
-        printf ("Pio CSR rd: %o\n", *data);
+        *data = PCSR | 0100000;
+//        printf ("Pio CSR rd: %o\n", *data);
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
         *data = SDR & 07777;
-        printf ("SDR rd: %o\n", *data);
+//        printf ("SDR rd: %o\n", *data);
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
-        printf ("K init rd\n");
         *data = KINI;
+        printf ("K init rd\n", *data);
+        if (sim_log)
+            fprintf (sim_log, "K init rd\n", *data);
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
-        printf ("K status rd\n");
         *data = KSTS[(KINI & 017)];
+        printf ("K status rd\n", *data);
+        if (sim_log)
+            fprintf (sim_log, "K status rd\n", *data);
         return SCPE_OK;
 
     case 024:                                           /* data mem low addr */
@@ -1323,34 +1329,36 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 005:                                           /* WADR5 */
     case 006:                                           /* WADR6 */
     case 007:                                           /* WADR7 */
-        printf ("WADR%d wr: %o\n", rg, data);
+//        printf ("WADR%d wr: %o\n", rg, data);
         WADR[WIDX][rg] = data;
         return SCPE_OK;
 
     case 010:                                           /* WIDX */
-        printf ("WIDX wr: %o\n", data);
+//        printf ("WIDX wr: %o\n", data);
         WIDX = data & 0177;
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
-        printf ("Pio CSR wr: %o\n", data);
+//        printf ("Pio CSR wr: %o\n", data);
         PCSR = data;
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
-        printf ("SDR wr: %o\n", data);
+//        printf ("SDR wr: %o\n", data);
         SDR = data & 07777;
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
         printf ("K init wr: %o\n", data);
-//        if (((data ^ KINI) == 01000) && (data & 01000)) /* init K.pli? */
-//            ci_int = 7;
+        if (sim_log)
+            fprintf (sim_log, "K init wr: %o\n", data);
         KINI = data;
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
         printf ("K status wr: %o\n", data);
+        if (sim_log)
+            fprintf (sim_log, "K status wr: %o\n", data);
         KSTS[0] = data | (parity (data, 1) << 7);       /* can only write to req 0 */
         return SCPE_OK;
         }
@@ -1358,47 +1366,55 @@ switch (rg) {                                           /* decode pa<2:1> */
 return SCPE_NXM;
 }
 
-t_stat ctlmem_rd (int32 *data, int32 pa, int32 access)
+t_stat ctlwin_rd (int32 *data, int32 pa, int32 access)
 {
 int32 va;
 int32 rg;
 
-rg = (pa >> 9) & 07;
+rg = (pa >> 9) & 07;                                    /* get window reg for this addr */
 va = (WADR[WIDX][rg] & 0177600) << 2;
 va = va | (pa & 0777);
-WBUS = (va >> 2);
-LOCADR = va & 1;
+WBUS = (va >> 2);                                       /* save history */
+LOCADR = (va >> 1) & 1;
 va = va | (016 << 18);
-printf ("CMEM rd: %o (%o)\n", va, pa);
-//if (PCSR & 04) {                                        /* non-memory access */
-//    *data = 0;
-//    return SCPE_OK;
-//    }
-if (ADDR_IS_MEM (va))                                   /* memory address? */
-    *data = (M[va >> 1]);
+if (PCSR & 04) {                                        /* non-memory access cycle */
+    LOCADR = LOCADR | 016;
+    *data = CDATA;
+    }
 else {
-    printf ("Error: %o is not mem addr\n", va);
-    return SCPE_NXM;
+    if (ADDR_IS_MEM (va))                               /* memory address? */
+        *data = (M[va >> 1]);
+    else {
+        printf ("Error: %o is not mem addr\n", va);
+        return SCPE_NXM;
+        }
+    if (PCSR & 02) {                                    /* interrupt cycle */
+        LOCADR = (LOCADR & ~016) | 04;
+        if (*data & 010)
+            SET_INT (CB7);
+        if (*data & 04)
+            SET_INT (CB6);
+        if (*data & 02)
+            SET_INT (CB5);
+        if (*data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    else if (PCSR & 01) {                               /* lock cycle */
+        LOCADR = (LOCADR & ~016) | 010;
+        M[va >> 1] = 0100000;
+        }
+    else LOCADR = (LOCADR & ~016) | 02;                 /* read/write cycle */
+    CDATA = *data;
     }
-if (PCSR & 02) {
-    if (*data & 010)
-        SET_INT (CB7);
-    if (*data & 04)
-        SET_INT (CB6);
-    if (*data & 02)
-        SET_INT (CB5);
-    if (*data & 01)
-        SET_INT (CB4);
-    trap_req = calc_ints (ipl, trap_req);               /* recalc int req */
-    }
-if (PCSR & 01) {
-    M[va >> 1] = 0100000;
-    }
-PCSR = PCSR & ~07;
+printf ("CMEM rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, PC);
+if (sim_log)
+    fprintf (sim_log, "CMEM rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, PC);
+PCSR = PCSR & ~07;                                      /* reset special cycle */
 return SCPE_OK;
 }
 
-t_stat ctlmem_wr (int32 data, int32 pa, int32 access)
+t_stat ctlwin_wr (int32 data, int32 pa, int32 access)
 {
 int32 va;
 int32 rg;
@@ -1407,12 +1423,18 @@ rg = (pa >> 9) & 07;
 va = (WADR[WIDX][rg] & 0177600) << 2;
 va = va | (pa & 0777);
 WBUS = (va >> 2);
-LOCADR = va & 1;
+LOCADR = (va >> 1) & 1;
+printf ("CMEM wr: %06o = %06o (%o) at %o\n", va, data, pa, PC);
+if (sim_log)
+    fprintf (sim_log, "CMEM wr: %06o = %06o (%o) at %o\n", va, data, pa, PC);
 va = va | (016 << 18);
-printf ("CMEM wr: %o = %o (%o)\n", va, data, pa);
-//if (PCSR & 04)                                          /* non-memory access */
-//    return SCPE_OK;
-if (PCSR & 02) {
+CDATA = data;
+if (PCSR & 04) {                                        /* non-memory access cycle */
+    LOCADR = LOCADR | 016;
+    return SCPE_OK;
+    }
+if (PCSR & 02) {                                        /* interrupt cycle */
+    LOCADR = (LOCADR & ~016) | 04;
     if (data & 010)
         SET_INT (CB7);
     if (data & 04)
@@ -1423,9 +1445,11 @@ if (PCSR & 02) {
         SET_INT (CB4);
     trap_req = calc_ints (ipl, trap_req);               /* recalc int req */
     }
-if (PCSR & 01) {
+else if (PCSR & 01) {                                   /* lock cycle */
+    LOCADR = (LOCADR & ~016) | 010;
     M[va >> 1] = 0100000;
     }
+else LOCADR = (LOCADR & ~016) | 02;                     /* read/write cycle */
 PCSR = PCSR & ~07;
 if (ADDR_IS_MEM (va)) {                                 /* memory address? */
     if (access == WRITEB) {
@@ -1446,42 +1470,22 @@ return SCPE_OK;
 void fl_read (int32 blk, int32 sz, int32 ma, t_bool mapen)
 {
 int32 da = blk * 512;
-//int32 lim = ma + (sz * 512);
 int32 ln = sz * 512;
 int32 i;
 uint8 *fbuf = fl_unit.filebuf;
 
-//buf = buf + da;
 printf ("Boot device read, %X, %d -> %o\n", da, sz, ma);
-//for ( ; ma < lim; ma++) {                               /* by bytes */
-//    if (ma & 1)
-//        M[ma >> 1] = (M[ma >> 1] & 0377) | ((uint16) *buf++ << 8);
-//    else M[ma >> 1] = (M[ma >> 1] & ~0377) | *buf++;
-//    }
-if (mapen) {
+if (sim_log)
+    fprintf (sim_log, "Boot device read, %X, %d -> %o\n", da, sz, ma);
+if (mapen) {                                            /* use reloc? */
     for (i = 0; i < ln; i++) {
-        //printf ("writing: %o to %o\n", fbuf[(da + i)], (ma + i));
         WriteB (fbuf[(da + i)], (ma + i));
         }
     }
 else {
     for (i = 0; i < ln; i++) {
-        //printf ("writing: %o to %o\n", fbuf[(da + i)], (ma + i));
         PWriteB (fbuf[(da + i)], (ma + i));
         }
-    }
-}
-
-void fl_cmd (int32 cmd)
-{
-if ((cmd >> 4) == 13) {                                 /* force interrupt? */
-    sim_cancel (&fl_unit);
-    fl_csr = fl_csr & ~1;                               /* set not busy */
-    }
-if ((fl_csr & 1) == 0) {                                /* not busy? */
-    fl_unit.CMD = cmd;
-    fl_csr = fl_csr | 1;                                /* set busy */
-    sim_activate (&fl_unit, FL_WAIT);
     }
 }
 
@@ -1492,22 +1496,22 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
         *data = fl_csr;
-        printf ("fl_csr rd: %o at %o\n", *data, PC);
+//        printf ("fl_csr rd: %o at %o\n", *data, PC);
         return SCPE_OK;
 
     case 001:                                           /* MADR0 */
         *data = fl_madr0 | fl_unit.TRK;
-        printf ("fl_madr0 rd: %o\n", *data);
+//        printf ("fl_madr0 rd: %o\n", *data);
         return SCPE_OK;
 
     case 002:                                           /* MADR1 */
         *data = fl_madr1;
-        printf ("fl_madr1 rd: %o\n", *data);
+//        printf ("fl_madr1 rd: %o\n", *data);
         return SCPE_OK;
 
     case 003:                                           /* MADR2 */
         *data = fl_madr2;
-        printf ("fl_madr2 rd: %o\n", *data);
+//        printf ("fl_madr2 rd: %o\n", *data);
         return SCPE_OK;
         }
 return SCPE_NXM;
@@ -1520,24 +1524,36 @@ int32 rg = (pa >> 1) & 03;
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
-        printf ("fl_csr wr: %o at %o\n", data, PC);
+//        printf ("fl_csr wr: %o at %o\n", data, PC);
         fl_csr = data & FLCSR_RW;
-        if (fl_csr & FLCSR_ME)
-            fl_cmd (data & FLCSR_CS);
+        cmd = data & FLCSR_CS;
+        if (fl_csr & FLCSR_ME) {                        /* motor enabled */
+            if ((cmd >> 4) == 015) {                    /* force interrupt? */
+                sim_cancel (&fl_unit);
+                fl_csr = fl_csr & ~1;                   /* set not busy */
+    //            fl_madr2 = fl_madr2 | 0377;             /* indicate no M.cache2 module? */
+//                printf ("force_interrupt: fl_madr2 = %o\n", fl_madr2);
+                }
+            else if ((fl_csr & 1) == 0) {               /* not busy? */
+                fl_unit.CMD = cmd;
+                fl_csr = fl_csr | 1;                    /* set busy */
+                sim_activate (&fl_unit, FL_WAIT);
+                }
+            }
         return SCPE_OK;
 
     case 001:                                           /* MADR0 */
-        printf ("fl_madr0 wr: %o\n", data);
+//        printf ("fl_madr0 wr: %o\n", data);
         fl_madr0 = data & FLMA0_RW;
         return SCPE_OK;
 
     case 002:                                           /* MADR1 */
-        printf ("fl_madr1 wr: %o\n", data);
+//        printf ("fl_madr1 wr: %o\n", data);
         fl_madr1 = data;
         return SCPE_OK;
 
     case 003:                                           /* MADR2 */
-        printf ("fl_madr2 wr: %o\n", data);
+//        printf ("fl_madr2 wr: %o\n", data);
         fl_madr2 = data;
         return SCPE_OK;
         }
@@ -1602,12 +1618,10 @@ switch (uptr->CMD >> 5) {
         break;
 
     case 4:                                             /* read sector */
-        printf ("fl: read sector: %o\n", uptr->CMD);
         ma = ((fl_madr2 & FLMA2_A16) << 8) | \
             (fl_madr1 & FLMA1_A8) | \
             ((fl_madr0 & FLMA0_A0) >> 8);
         sec = fl_madr1 & FLMA1_DS;
-        printf ("sec = %o\n", sec);
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
         if (uptr->CMD & 020) {
             printf ("fl: read multi sector\n");
