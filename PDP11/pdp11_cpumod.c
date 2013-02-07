@@ -202,6 +202,7 @@ t_stat fl_rd (int32 *data, int32 pa, int32 access);
 t_stat fl_wr (int32 data, int32 pa, int32 access);
 t_stat fl_svc (UNIT *uptr);
 t_stat fl_reset (DEVICE *dptr);
+t_stat fl_boot (int32 unitno, DEVICE *dptr);
 t_stat sys_reset (DEVICE *dptr);
 int32 toy_read (void);
 void toy_write (int32 bit);
@@ -474,7 +475,7 @@ DEVICE fl_dev = {
     "RX", &fl_unit, fl_reg, fl_mod,
     1, DEV_RDX, 20, 1, DEV_RDX, 8,
     NULL, NULL, &fl_reset,
-    NULL, NULL, NULL,
+    &fl_boot, NULL, NULL,
     &fl_dib, 0
     };
 
@@ -1682,6 +1683,20 @@ fl_csr = 0;
 fl_madr0 = 0;
 fl_madr1 = 0;
 fl_madr2 = 0;
+return SCPE_OK;
+}
+
+t_stat fl_boot (int32 unitno, DEVICE *dptr)
+{
+extern int32 REGFILE[6][2];
+extern int32 rs;
+extern int32 saved_PC;
+
+fl_read (0, 1, 06000, FALSE);                           /* read first 8 blocks */
+fl_read (2, 7, 07000, FALSE);
+REGFILE[1][rs] = 0177400;                               /* boot device CSR */
+REGFILE[2][rs] = 06000;                                 /* boot base */
+saved_PC = 06000;
 return SCPE_OK;
 }
 
