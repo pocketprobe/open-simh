@@ -79,7 +79,8 @@
 #define FLCSR_PT        0004000                         /* parity test */
 #define FLCSR_BSY       0002000                         /* busy LED */
 #define FLCSR_ME        0001000                         /* motor enable */
-#define FLCSR_SEL       0000400                         /* drive select */
+#define FLCSR_V_SEL     8                               /* drive select */
+#define FLCSR_SEL       0000400
 #define FLCSR_CS        0000377                         /* command/status */
 #define FLCSR_RW        0037400
 
@@ -224,6 +225,8 @@ extern t_stat MMR3_wr (int32 data, int32 addr, int32 access);
 extern t_stat ubm_rd (int32 *data, int32 addr, int32 access);
 extern t_stat ubm_wr (int32 data, int32 addr, int32 access);
 extern void put_PIRQ (int32 val);
+extern int32 PReadB (int32 pa);
+extern int32 ReadB (int32 va);
 extern void PWriteB (int32 data, int32 addr);
 extern void WriteB (int32 data, int32 addr);
 extern void WriteW (int32 data, int32 addr);
@@ -454,8 +457,12 @@ DIB fl_dib = {
     1, IVCL (FL), VEC_FL, { NULL }
     };
 
-UNIT fl_unit = { UDATA (&fl_svc,
-      UNIT_FIX+UNIT_ATTABLE+UNIT_BUFABLE+UNIT_MUSTBUF, FL_SIZE) };
+UNIT fl_unit[] = {
+    { UDATA (&fl_svc,
+             UNIT_FIX+UNIT_ATTABLE+UNIT_BUFABLE+UNIT_MUSTBUF, FL_SIZE) },
+    { UDATA (&fl_svc,
+             UNIT_FIX+UNIT_ATTABLE+UNIT_BUFABLE+UNIT_MUSTBUF, FL_SIZE) }
+    };
 
 REG fl_reg[] = {
     { NULL }
@@ -472,8 +479,8 @@ MTAB fl_mod[] = {
     };
 
 DEVICE fl_dev = {
-    "RX", &fl_unit, fl_reg, fl_mod,
-    1, DEV_RDX, 20, 1, DEV_RDX, 8,
+    "RX", fl_unit, fl_reg, fl_mod,
+    2, DEV_RDX, 20, 1, DEV_RDX, 8,
     NULL, NULL, &fl_reset,
     &fl_boot, NULL, NULL,
     &fl_dib, 0
@@ -1255,17 +1262,17 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 011:                                           /* WBUS */
         *data = WBUS;
-        printf ("WBUS rd: %o\n", *data);
+//        printf ("WBUS rd: %o\n", *data);
         return SCPE_OK;
 
     case 012:                                           /* low error */
         *data = EADR & 0177777;
-        printf ("low error rd: %o\n", *data);
+//        printf ("low error rd: %o\n", *data);
         return SCPE_OK;
 
     case 013:                                           /* high error */
         *data = (EADR >> 16) & 077;
-        printf ("high error rd: %o\n", *data);
+//        printf ("high error rd: %o\n", *data);
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR - NI */
@@ -1294,17 +1301,17 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 024:                                           /* data mem low addr */
         *data = DADR & 0177777;
-        printf ("data mem low rd: %o\n", *data);
+//        printf ("data mem low rd: %o\n", *data);
         return SCPE_OK;
 
     case 025:                                           /* data mem high addr */
         *data = (DADR >> 16) & 07;
-        printf ("data mem high rd: %o\n", *data);
+//        printf ("data mem high rd: %o\n", *data);
         return SCPE_OK;
 
     case 026:                                           /* ctrl mem low addr - NI */
         *data = LOCADR;
-        printf ("ctrl mem low rd: %o\n", *data);
+//        printf ("ctrl mem low rd: %o\n", *data);
         return SCPE_OK;
 
     case 027:                                           /* serial number reg - NI */
@@ -1408,7 +1415,7 @@ else {
     else LOCADR = (LOCADR & ~016) | 02;                 /* read/write cycle */
     CDATA = *data;
     }
-printf ("CMEM rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, PC);
+//printf ("CMEM rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, PC);
 if (sim_log)
     fprintf (sim_log, "CMEM rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, PC);
 PCSR = PCSR & ~07;                                      /* reset special cycle */
@@ -1425,7 +1432,7 @@ va = (WADR[WIDX][rg] & 0177600) << 2;
 va = va | (pa & 0777);
 WBUS = (va >> 2);
 LOCADR = (va >> 1) & 1;
-printf ("CMEM wr: %06o = %06o (%o) at %o\n", va, data, pa, PC);
+//printf ("CMEM wr: %06o = %06o (%o) at %o\n", va, data, pa, PC);
 if (sim_log)
     fprintf (sim_log, "CMEM wr: %06o = %06o (%o) at %o\n", va, data, pa, PC);
 va = va | (016 << 18);
@@ -1468,12 +1475,38 @@ else {
 return SCPE_OK;
 }
 
-void fl_read (int32 blk, int32 sz, int32 ma, t_bool mapen)
+void fl_write (UNIT *uptr, int32 blk, int32 sz, int32 ma, t_bool mapen)
 {
 int32 da = blk * 512;
 int32 ln = sz * 512;
 int32 i;
-uint8 *fbuf = fl_unit.filebuf;
+uint8 *fbuf = uptr->filebuf;
+
+printf ("Boot device write, %o -> %X, %d\n", ma, da, sz);
+if (sim_log)
+    fprintf (sim_log, "Boot device write, %o -> %X, %d\n", ma, da, sz);
+if (mapen) {                                            /* use reloc? */
+    for (i = 0; i < ln; i++) {
+        fbuf[(da + i)] = ReadB ((ma + i));
+        if (sim_log)
+            fprintf (sim_log, "fbuf[%X] = %o\n", (da + i), fbuf[(da + i)]);
+        }
+    }
+else {
+    for (i = 0; i < ln; i++) {
+        fbuf[(da + i)] = PReadB ((ma + i));
+        if (sim_log)
+            fprintf (sim_log, "fbuf[%X] = %o\n", (da + i), fbuf[(da + i)]);
+        }
+    }
+}
+
+void fl_read (UNIT *uptr, int32 blk, int32 sz, int32 ma, t_bool mapen)
+{
+int32 da = blk * 512;
+int32 ln = sz * 512;
+int32 i;
+uint8 *fbuf = uptr->filebuf;
 
 printf ("Boot device read, %X, %d -> %o\n", da, sz, ma);
 if (sim_log)
@@ -1493,26 +1526,27 @@ else {
 t_stat fl_rd (int32 *data, int32 pa, int32 access)
 {
 int32 rg = (pa >> 1) & 03;
+int32 unitno = (fl_csr >> FLCSR_V_SEL) & 1;
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
         *data = fl_csr;
-//        printf ("fl_csr rd: %o at %o\n", *data, PC);
+        printf ("fl_csr rd: %o at %o\n", *data, PC);
         return SCPE_OK;
 
     case 001:                                           /* MADR0 */
-        *data = fl_madr0 | fl_unit.TRK;
-//        printf ("fl_madr0 rd: %o\n", *data);
+        *data = fl_madr0 | fl_unit[unitno].TRK;
+        printf ("fl_madr0 rd: %o\n", *data);
         return SCPE_OK;
 
     case 002:                                           /* MADR1 */
         *data = fl_madr1;
-//        printf ("fl_madr1 rd: %o\n", *data);
+        printf ("fl_madr1 rd: %o\n", *data);
         return SCPE_OK;
 
     case 003:                                           /* MADR2 */
         *data = fl_madr2;
-//        printf ("fl_madr2 rd: %o\n", *data);
+        printf ("fl_madr2 rd: %o\n", *data);
         return SCPE_OK;
         }
 return SCPE_NXM;
@@ -1522,39 +1556,46 @@ t_stat fl_wr (int32 data, int32 pa, int32 access)
 {
 int32 cmd;
 int32 rg = (pa >> 1) & 03;
+int32 unitno;
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
-//        printf ("fl_csr wr: %o at %o\n", data, PC);
+        printf ("fl_csr wr: %o at %o\n", data, PC);
+        unitno = (data >> FLCSR_V_SEL) & 1;            /* get drive select */
         fl_csr = data & FLCSR_RW;
         cmd = data & FLCSR_CS;
         if (fl_csr & FLCSR_ME) {                        /* motor enabled */
             if ((cmd >> 4) == 015) {                    /* force interrupt? */
-                sim_cancel (&fl_unit);
+                sim_cancel (&fl_unit[unitno]);
                 fl_csr = fl_csr & ~1;                   /* set not busy */
-    //            fl_madr2 = fl_madr2 | 0377;             /* indicate no M.cache2 module? */
+                if (cmd & 05) {
+                    fl_unit[unitno].CMD = cmd;
+                    fl_csr = fl_csr | 1;                /* set busy */
+                    sim_activate (&fl_unit[unitno], FL_WAIT);
+                    }
+//                fl_madr2 = fl_madr2 | 0377;             /* indicate no M.cache2 module? */
 //                printf ("force_interrupt: fl_madr2 = %o\n", fl_madr2);
                 }
             else if ((fl_csr & 1) == 0) {               /* not busy? */
-                fl_unit.CMD = cmd;
+                fl_unit[unitno].CMD = cmd;
                 fl_csr = fl_csr | 1;                    /* set busy */
-                sim_activate (&fl_unit, FL_WAIT);
+                sim_activate (&fl_unit[unitno], FL_WAIT);
                 }
             }
         return SCPE_OK;
 
     case 001:                                           /* MADR0 */
-//        printf ("fl_madr0 wr: %o\n", data);
+        printf ("fl_madr0 wr: %o\n", data);
         fl_madr0 = data & FLMA0_RW;
         return SCPE_OK;
 
     case 002:                                           /* MADR1 */
-//        printf ("fl_madr1 wr: %o\n", data);
+        printf ("fl_madr1 wr: %o\n", data);
         fl_madr1 = data;
         return SCPE_OK;
 
     case 003:                                           /* MADR2 */
-//        printf ("fl_madr2 wr: %o\n", data);
+        printf ("fl_madr2 wr: %o\n", data);
         fl_madr2 = data;
         return SCPE_OK;
         }
@@ -1571,6 +1612,11 @@ t_stat fl_svc (UNIT *uptr)
 {
 int32 ma, da, sec;
 
+if ((uptr->flags & UNIT_ATT) == 0) {
+    fl_csr = fl_csr | 0200;                             /* not ready */
+    fl_setint ();
+    return SCPE_OK;
+    }
 switch (uptr->CMD >> 5) {
     case 0:
         if (uptr->CMD & 020) {                          /* seek */
@@ -1626,13 +1672,13 @@ switch (uptr->CMD >> 5) {
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
         if (uptr->CMD & 020) {
             printf ("fl: read multi sector\n");
-            fl_read (da, (FL_NUMSC - sec), ma, FALSE);
+            fl_read (uptr, da, (FL_NUMSC - sec), ma, FALSE);
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
             //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | 020;
             }
         else {
             printf ("fl: read single sector\n");
-            fl_read (da, 1, ma, FALSE);
+            fl_read (uptr, da, 1, ma, FALSE);
             ma = ma + 512;
             //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (sec + 1);
             }
@@ -1647,7 +1693,33 @@ switch (uptr->CMD >> 5) {
         break;
 
     case 5:                                             /* write sector */
-        printf ("fl: write sector\n");
+        ma = ((fl_madr2 & FLMA2_A16) << 8) | \
+            (fl_madr1 & FLMA1_A8) | \
+            ((fl_madr0 & FLMA0_A0) >> 8);
+        sec = fl_madr1 & FLMA1_DS;
+        da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
+        if ((da * 512) > uptr->hwmark)                  /* update hwmark */
+            uptr->hwmark = (da * 512);
+        if (uptr->CMD & 020) {
+            printf ("fl: write multi sector\n");
+            fl_write (uptr, da, (FL_NUMSC - sec), ma, FALSE);
+            ma = ma + ((FL_NUMSC - sec + 1) * 512);
+            //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | 020;
+            }
+        else {
+            printf ("fl: write single sector\n");
+            fl_write (uptr, da, 1, ma, FALSE);
+            ma = ma + 512;
+            //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (sec + 1);
+            }
+        fl_madr0 = fl_madr0 & ~FLMA0_A0;
+        fl_madr0 = fl_madr0 | ((ma << 8) & FLMA0_A0);
+        fl_madr1 = fl_madr1 & ~FLMA1_A8;
+        fl_madr1 = fl_madr1 | (ma & FLMA1_A8);
+        fl_madr2 = fl_madr2 & ~FLMA2_A16;
+        fl_madr2 = fl_madr2 | ((ma >> 8) & FLMA2_A16);
+        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_setint ();
         break;
 
     case 6:
@@ -1659,16 +1731,34 @@ switch (uptr->CMD >> 5) {
             }
         else {                                          /* read address */
             printf ("fl: read address\n");
+            fl_setint ();
             }
         break;
 
     case 7:
+        ma = ((fl_madr2 & FLMA2_A16) << 8) | \
+            (fl_madr1 & FLMA1_A8) | \
+            ((fl_madr0 & FLMA0_A0) >> 8);
+        da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), 1);
         if (uptr->CMD & 020) {                          /* write track */
             printf ("fl: write track\n");
+            if ((da * 512) > uptr->hwmark)              /* update hwmark */
+                uptr->hwmark = (da * 512);
+            fl_write (uptr, da, FL_NUMSC, ma, FALSE);
             }
         else {                                          /* read track */
             printf ("fl: read track\n");
+            fl_read (uptr, da, FL_NUMSC, ma, FALSE);
             }
+        ma = ma + (FL_NUMSC * 512);
+        fl_madr0 = fl_madr0 & ~FLMA0_A0;
+        fl_madr0 = fl_madr0 | ((ma << 8) & FLMA0_A0);
+        fl_madr1 = fl_madr1 & ~FLMA1_A8;
+        fl_madr1 = fl_madr1 | (ma & FLMA1_A8);
+        fl_madr2 = fl_madr2 & ~FLMA2_A16;
+        fl_madr2 = fl_madr2 | ((ma >> 8) & FLMA2_A16);
+        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_setint ();
         break;
         }
 return SCPE_OK;
@@ -1676,9 +1766,12 @@ return SCPE_OK;
 
 t_stat fl_reset (DEVICE *dptr)
 {
-fl_unit.TRK = 0;
-fl_unit.CMD = 0;
-fl_unit.DIR = 1;
+fl_unit[0].TRK = 0;
+fl_unit[0].CMD = 0;
+fl_unit[0].DIR = 1;
+fl_unit[1].TRK = 0;
+fl_unit[1].CMD = 0;
+fl_unit[1].DIR = 1;
 fl_csr = 0;
 fl_madr0 = 0;
 fl_madr1 = 0;
@@ -1692,8 +1785,12 @@ extern int32 REGFILE[6][2];
 extern int32 rs;
 extern int32 saved_PC;
 
-fl_read (0, 1, 06000, FALSE);                           /* read first 8 blocks */
-fl_read (2, 7, 07000, FALSE);
+if (unitno != 0) {
+    printf ("Boot only supported from unit 0\n");
+    return SCPE_NOFNC;
+    }
+fl_read (&fl_unit[unitno], 0, 1, 06000, FALSE);                           /* read first 8 blocks */
+fl_read (&fl_unit[unitno], 2, 7, 07000, FALSE);
 REGFILE[1][rs] = 0177400;                               /* boot device CSR */
 REGFILE[2][rs] = 06000;                                 /* boot base */
 saved_PC = 06000;
@@ -1722,7 +1819,7 @@ switch (rg) {                                           /* decode pa<2:1> */
         break;
 
     case 014:                                           /* boot device read */
-        fl_read (R[5], R[4], R[2], TRUE);
+        fl_read (&fl_unit[0], R[5], R[4], R[2], TRUE);
         *data = 0241;                                   /* CLC */
         break;
 
