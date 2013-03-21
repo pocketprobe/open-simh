@@ -50,12 +50,3 @@ DEVICE *sim_devices[] = {
     &fl_dev,
     NULL
     };
-
-void init_mbus_tab (void)
-{
-}
-
-t_stat build_mbus_tab (DEVICE *dptr, DIB *dibp)
-{
-return SCPE_OK;
-}

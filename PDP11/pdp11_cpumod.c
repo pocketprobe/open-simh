@@ -122,9 +122,6 @@ int32 SR = 0;                                           /* switch register */
 int32 DR = 0;                                           /* display register */
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
-int32 MBRK = 0;                                         /* 11/70 microbreak */
-int32 SYSID = 0x1234;                                   /* 11/70 system ID */
-int32 WCS = 0;                                          /* 11/60 WCS control */
 int32 CPUERR = 0;                                       /* CPU error reg */
 int32 MEMERR = 0;                                       /* memory error reg */
 int32 CCR = 0;                                          /* cache control reg */
@@ -134,9 +131,6 @@ int32 JCSR = 0;                                         /* J11 control */
 int32 JCSR_dflt = 0;                                    /* J11 boot ctl def */
 int32 JPCR = 0;                                         /* J11 page ctrl */
 int32 JASR = 0;                                         /* J11 addtl status */
-int32 UDCR = 0;                                         /* UBA diag ctrl */
-int32 UDDR = 0;                                         /* UBA diag data */
-int32 UCSR = 0;                                         /* UBA control */
 int32 WADR[128][8];
 int32 WIDX = 0;
 int32 WBUS = 0;
@@ -148,8 +142,6 @@ int32 fl_madr0 = 0;
 int32 fl_madr1 = 0;
 int32 fl_madr2 = 0;
 int32 LOCADR = 0;
-int32 uba_last = 0;                                     /* UBA last mapped */
-int32 ub_map[UBM_LNT_LW] = { 0 };                       /* UBA map array */
 int32 toy_state = 0;
 uint8 toy_data[TOY_LNT] = { 0 };
 static int32 clk_tps_map[4] = { 0, 50, 60, 800 };       /* 0 = use BEVENT */
@@ -166,20 +158,8 @@ extern int32 ipl;
 extern int32 int_req[IPL_HLVL];
 extern FILE *sim_log;
 
-t_stat CPU24_rd (int32 *data, int32 addr, int32 access);
-t_stat CPU24_wr (int32 data, int32 addr, int32 access);
-t_stat CPU44_rd (int32 *data, int32 addr, int32 access);
-t_stat CPU44_wr (int32 data, int32 addr, int32 access);
-t_stat CPU45_rd (int32 *data, int32 addr, int32 access);
-t_stat CPU45_wr (int32 data, int32 addr, int32 access);
-t_stat CPU60_rd (int32 *data, int32 addr, int32 access);
-t_stat CPU60_wr (int32 data, int32 addr, int32 access);
-t_stat CPU70_rd (int32 *data, int32 addr, int32 access);
-t_stat CPU70_wr (int32 data, int32 addr, int32 access);
 t_stat CPUJ_rd (int32 *data, int32 addr, int32 access);
 t_stat CPUJ_wr (int32 data, int32 addr, int32 access);
-t_stat REG_rd (int32 *data, int32 addr, int32 access);
-t_stat REG_wr (int32 data, int32 addr, int32 access);
 t_stat SR_rd (int32 *data, int32 addr, int32 access);
 t_stat DR_wr (int32 data, int32 addr, int32 access);
 t_stat CTLFB_rd (int32 *data, int32 addr, int32 access);
@@ -190,10 +170,6 @@ t_stat CTLJD_rd (int32 *data, int32 addr, int32 access);
 t_stat CTLJD_wr (int32 data, int32 addr, int32 access);
 t_stat CTLJE_rd (int32 *data, int32 addr, int32 access);
 t_stat CTLJE_wr (int32 data, int32 addr, int32 access);
-t_stat UBA24_rd (int32 *data, int32 addr, int32 access);
-t_stat UBA24_wr (int32 data, int32 addr, int32 access);
-t_stat UBAJ_rd (int32 *data, int32 addr, int32 access);
-t_stat UBAJ_wr (int32 data, int32 addr, int32 access);
 t_stat ioctl_rd (int32 *data, int32 pa, int32 access);
 t_stat ioctl_wr (int32 data, int32 pa, int32 access);
 t_stat ctlwin_rd (int32 *data, int32 pa, int32 access);
@@ -222,8 +198,6 @@ extern t_stat MMR012_rd (int32 *data, int32 addr, int32 access);
 extern t_stat MMR012_wr (int32 data, int32 addr, int32 access);
 extern t_stat MMR3_rd (int32 *data, int32 addr, int32 access);
 extern t_stat MMR3_wr (int32 data, int32 addr, int32 access);
-extern t_stat ubm_rd (int32 *data, int32 addr, int32 access);
-extern t_stat ubm_wr (int32 data, int32 addr, int32 access);
 extern void put_PIRQ (int32 val);
 extern int32 PReadB (int32 pa);
 extern int32 ReadB (int32 va);
@@ -237,18 +211,10 @@ extern int32 calc_ints (int32 nipl, int32 trq);
 
 DIB psw_dib = { IOBA_PSW, IOLN_PSW, &PSW_rd, &PSW_wr, 0 };
 DIB cpuj_dib = { IOBA_CPU, IOLN_CPU, &CPUJ_rd, &CPUJ_wr, 0 };
-DIB cpu24_dib = { IOBA_CPU, IOLN_CPU, &CPU24_rd, &CPU24_wr, 0 };
-DIB cpu44_dib = { IOBA_CPU, IOLN_CPU, &CPU44_rd, &CPU44_wr, 0 };
-DIB cpu45_dib = { IOBA_CPU, IOLN_CPU, &CPU45_rd, &CPU45_wr, 0 };
-DIB cpu60_dib = { IOBA_CPU, IOLN_CPU, &CPU60_rd, &CPU60_wr, 0 };
-DIB cpu70_dib = { IOBA_CPU, IOLN_CPU, &CPU70_rd, &CPU70_wr, 0 };
-DIB reg_dib = { IOBA_GPR, IOLN_GPR, &REG_rd, &REG_wr, 0 };
 DIB ctlfb_dib = { IOBA_CTL, IOLN_CTL, &CTLFB_rd, &CTLFB_wr };
 DIB ctljb_dib = { IOBA_CTL, IOLN_CTL, &CTLJB_rd, &CTLJB_wr };
 DIB ctljd_dib = { IOBA_CTL, IOLN_CTL, &CTLJD_rd, &CTLJD_wr };
 DIB ctlje_dib = { IOBA_CTL, IOLN_CTL, &CTLJE_rd, &CTLJE_wr };
-DIB uba24_dib = { IOBA_UCTL, IOLN_UCTL, &UBA24_rd, &UBA24_wr };
-DIB ubaj_dib = {IOBA_UCTL, IOLN_UCTL, &UBAJ_rd, &UBAJ_wr };
 DIB supv_dib = { IOBA_SUP, IOLN_SUP, &APR_rd, &APR_wr, 0 };
 DIB kipdr_dib = { IOBA_KIPDR, IOLN_KIPDR, &APR_rd, &APR_wr, 0 };
 DIB kdpdr_dib = { IOBA_KDPDR, IOLN_KDPDR, &APR_rd, &APR_wr, 0 };
@@ -262,7 +228,6 @@ DIB sr_dib = { IOBA_SR, IOLN_SR, &SR_rd, NULL, 0 };
 DIB dr_dib = { IOBA_SR, IOLN_SR, NULL, &DR_wr, 0 };
 DIB mmr012_dib = { IOBA_MMR012, IOLN_MMR012, &MMR012_rd, &MMR012_wr, 0 };
 DIB mmr3_dib = { IOBA_MMR3, IOLN_MMR3, &MMR3_rd, &MMR3_wr, 0 };
-DIB ubm_dib = { IOBA_UBM, IOLN_UBM, &ubm_rd, &ubm_wr, 0 };
 DIB ioctl_dib = { (IOPAGEBASE + 010000), 060, &ioctl_rd, &ioctl_wr, 0 };
 DIB ctlwin_dib = { IOPAGEBASE, 010000, &ctlwin_rd, &ctlwin_wr, 0 };
 DIB rom_dib = { (IOPAGEBASE + 013000), 04000, &rom_rd, NULL, 0 };
@@ -315,30 +280,21 @@ CPUTAB cpu_tab[MOD_MAX] = {
 CNFTAB cnf_tab[] = {
     { HAS_PSW,  0, &psw_dib },                          /* PSW */
     { CPUT_J,   0, &cpuj_dib },                         /* CPU control */
-    { CPUT_24,  0, &cpu24_dib },
-    { CPUT_44,  0, &cpu44_dib },
-    { CPUT_45,  0, &cpu45_dib },
-    { CPUT_60,  0, &cpu60_dib },
-    { CPUT_70,  0, &cpu70_dib },
     { CPUT_HSC70,  0, &ioctl_dib },
     { CPUT_HSC70,  0, &ctlwin_dib },
     { CPUT_HSC70,  0, &rom_dib },
     { CPUT_HSC70,  0, &dli_dib },
     { CPUT_HSC70,  0, &fl_dib },
-    { HAS_IOSR, 0, &reg_dib },
     { CPUT_23P, 0, &ctlfb_dib },                        /* board ctls */
     { CPUT_JB,  0, &ctljb_dib },
     { CPUT_53,  0, &ctljd_dib },
     { CPUT_JE,  0, &ctlje_dib },
-    { CPUT_24,  0, &uba24_dib },                        /* UBA */
-    { CPUT_JU,  0, &ubaj_dib },
     { 0, OPT_MMU,  &kipdr_dib },                        /* MMU */
     { 0, OPT_MMU,  &kipar_dib },
     { 0, OPT_MMU,  &uipdr_dib },
     { 0, OPT_MMU,  &uipar_dib },
     { 0, OPT_MMU,  &mmr012_dib },                       /* MMR0-2 */
     { HAS_MMR3, 0, &mmr3_dib },                         /* MMR3 */
-    { 0, OPT_UBM,  &ubm_dib },                          /* Unibus map */
     { HAS_SID,  0, &kdpdr_dib },                        /* supv, I/D */
     { HAS_SID,  0, &kdpar_dib },
     { HAS_SID,  0, &supv_dib },
@@ -498,375 +454,6 @@ t_stat DR_wr (int32 data, int32 pa, int32 access)
 {
 DR = data;
 return SCPE_OK;
-}
-
-/* GPR's - 11/04, 11/05 */
-
-t_stat REG_rd (int32 *data, int32 pa, int32 access)
-{
-*data = R[pa & 07];
-return SCPE_OK;
-}
-
-t_stat REG_wr (int32 data, int32 pa, int32 access)
-{
-int32 reg = pa & 07;
-
-if (access == WRITE)
-    R[reg] = data;
-else if (pa & 1)
-    R[reg] = (R[reg] & 0377) | (data << 8);
-else R[reg] = (R[reg] & ~0377) | data;
-return SCPE_OK;
-}
-
-/* CPU control registers - 11/24 */
-
-t_stat CPU24_rd (int32 *data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 013:                                           /* CPUERR */
-        *data = 0;
-        return SCPE_OK;
-        }                                               /* end switch PA */
-
-*data = 0;
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-t_stat CPU24_wr (int32 data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 013:                                           /* CPUERR */
-        return SCPE_OK;
-        }                                               /* end switch pa */
-
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-/* CPU control registers - 11/44 */
-
-t_stat CPU44_rd (int32 *data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 002:                                           /* MEMERR */
-        *data = MEMERR;
-        return SCPE_OK;
-
-    case 003:                                           /* CCR */
-        *data = CCR & CCR44_RD;
-        return SCPE_OK;
-
-    case 004:                                           /* MAINT */
-        *data = MAINT & CMR44_RD;
-        return SCPE_OK;
-
-    case 005:                                           /* Hit/miss */
-        *data = HITMISS;
-        return SCPE_OK;
-
-    case 006:                                           /* CDR */
-        *data = 0;
-        return SCPE_OK;
-
-    case 013:                                           /* CPUERR */
-        if (CPUERR & CPUE_YEL)                          /* 11/44 stack err */
-            CPUERR = (CPUERR & ~CPUE_YEL) | CPUE_RED;   /* in <2> not <3> */
-        if (CPUERR & (CPUE_ODD|CPUE_NXM|CPUE_TMO))      /* additional flag */
-            CPUERR = CPUERR | CPUE44_BUSE;
-        *data = CPUERR & CPUE_IMP;
-        return SCPE_OK;
-
-    case 015:                                           /* PIRQ */
-        *data = PIRQ;
-        return SCPE_OK;
-        }                                               /* end switch PA */
-
-*data = 0;
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-t_stat CPU44_wr (int32 data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 002:                                           /* MEMERR */
-        MEMERR = 0;
-        return SCPE_OK;
-
-    case 003:                                           /* CCR */
-        ODD_MRG (CCR, data);
-        CCR = data & CCR44_WR;
-        return SCPE_OK;
-
-    case 004:                                           /* MAINT */
-        ODD_MRG (MAINT, data);
-        MAINT = data & CMR44_WR;
-        return SCPE_OK;
-
-    case 005:                                           /* Hit/miss */
-        return SCPE_OK;
-
-    case 013:                                           /* CPUERR */
-        CPUERR = 0;
-        return SCPE_OK;
-
-    case 015:                                           /* PIRQ */
-        EVN_IGN (data);
-        ODD_SHF (data);
-        put_PIRQ (data);
-        return SCPE_OK;
-        }
-
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-/* CPU control registers - 11/45 */
-
-t_stat CPU45_rd (int32 *data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 014:                                           /* MBRK */
-        *data = MBRK;
-        return SCPE_OK;
-
-    case 015:                                           /* PIRQ */
-        *data = PIRQ;
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        *data = STKLIM & STKLIM_RW;
-        return SCPE_OK;
-        }                                               /* end switch PA */
-
-*data = 0;
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-t_stat CPU45_wr (int32 data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 015:                                           /* PIRQ */
-        EVN_IGN (data);
-        ODD_SHF (data);
-        put_PIRQ (data);
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        EVN_IGN (data);
-        ODD_SHF (data);
-        STKLIM = data & STKLIM_RW;
-        return SCPE_OK;
-        }                                               /* end switch pa */
-
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-/* CPU control registers - 11/60 */
-
-t_stat CPU60_rd (int32 *data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 000:                                           /* WCS */
-        *data = WCS & WCS60_RD;
-        return SCPE_OK;
-
-    case 002:                                           /* MEMERR */
-        *data = MEMERR & MEME60_RD;
-        return SCPE_OK;
-
-    case 003:                                           /* CCR */
-        *data = CCR & CCR60_RD;
-        return SCPE_OK;
-
-    case 005:                                           /* Hit/miss */
-        *data = HITMISS;
-        return SCPE_OK;
-
-    case 013:                                           /* CPUERR */
-        if (CPUERR & CPUE_NXM)                          /* TMO only */
-            CPUERR = (CPUERR & ~CPUE_NXM) | CPUE_TMO;
-        *data = CPUERR & CPUE60_RD;
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        *data = STKLIM & STKLIM_RW;
-        return SCPE_OK;
-        }                                               /* end switch PA */
-
-*data = 0;
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-t_stat CPU60_wr (int32 data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 000:                                           /* WCS */
-        WCS = data & WCS60_WR;
-        return SCPE_OK;
-
-    case 002:                                           /* MEMERR */
-        MEMERR = 0;
-        return SCPE_OK;
-
-    case 003:                                           /* CCR */
-        ODD_IGN (data);
-        CCR = data & CCR60_WR;
-        return SCPE_OK;
-
-    case 005:                                           /* Hit/miss */
-        return SCPE_OK;
-
-    case 013:                                           /* CPUERR */
-        CPUERR = 0;
-        return SCPE_OK;
-
-    case 014:                                           /* MBRK */
-        MBRK = data & MBRK60_WR;
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        EVN_IGN (data);
-        ODD_SHF (data);
-        STKLIM = data & STKLIM_RW;
-        return SCPE_OK;
-        }                                               /* end switch pa */
-
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-/* CPU control registers - 11/70 */
-
-t_stat CPU70_rd (int32 *data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-
-    case 000:                                           /* low error */
-        *data = 0;
-        return SCPE_OK;
-
-    case 001:                                           /* high error */
-        *data = 0;
-        return SCPE_OK;
-
-    case 002:                                           /* MEMERR */
-        *data = MEMERR;
-        return SCPE_OK;
-
-    case 003:                                           /* CCR */
-        *data = CCR;
-        return SCPE_OK;
-
-    case 004:                                           /* MAINT */
-        *data = 0;
-        return SCPE_OK;
-
-    case 005:                                           /* Hit/miss */
-        *data = HITMISS;
-        return SCPE_OK;
-
-    case 010:                                           /* low size */
-        *data = (MEMSIZE >> 6) - 1;
-        return SCPE_OK;
-
-    case 011:                                           /* high size */
-        *data = 0;
-        return SCPE_OK;
-
-    case 012:                                           /* system ID */
-        *data = SYSID;
-        return SCPE_OK;
-
-    case 013:                                           /* CPUERR */
-        *data = CPUERR & CPUE_IMP;
-        return SCPE_OK;
-
-    case 014:                                           /* MBRK */
-        *data = MBRK;
-        return SCPE_OK;
-
-    case 015:                                           /* PIRQ */
-        *data = PIRQ;
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        *data = STKLIM & STKLIM_RW;
-        return SCPE_OK;
-        }                                               /* end switch PA */
-
-*data = 0;
-return SCPE_NXM;                                        /* unimplemented */
-}
-
-/* From Walter Mueller: MEMERR is always written using the standard data
-   on the bus: the whole word for DATO, the high byte for DATOB odd,
-   and the low byte with DATOB even. The simulator always puts a byte
-   in the low 8 bits, so for an odd byte reference, it must be shifted
-   to the high byte.
-*/
-
-t_stat CPU70_wr (int32 data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
-    case 000:
-    case 001:
-        return SCPE_OK;                                 /* error addr */
-
-    case 002:                                           /* MEMERR */
-        ODD_SHF (data);
-        MEMERR = MEMERR & ~data;
-        return SCPE_OK;
-
-    case 003:                                           /* CCR */
-        ODD_MRG (CCR, data);
-        CCR = data;
-        return SCPE_OK;
-
-    case 004:                                           /* MAINT */
-        return SCPE_OK;
-
-    case 005:                                           /* Hit/miss */
-        return SCPE_OK;
-
-    case 010:                                           /* low size */
-        return SCPE_OK;
-
-    case 011:                                           /* high size */
-        return SCPE_OK;
-
-    case 012:                                           /* system ID */
-        return SCPE_OK;
-
-    case 013:                                           /* CPUERR */
-        CPUERR = 0;
-        return SCPE_OK;
-
-    case 014:                                           /* MBRK */
-        ODD_IGN (data);
-        MBRK = data & MBRK70_WR;
-        return SCPE_OK;
-
-    case 015:                                           /* PIRQ */
-        EVN_IGN (data);
-        ODD_SHF (data);
-        put_PIRQ (data);
-        return SCPE_OK;
-
-    case 016:                                           /* STKLIM */
-        EVN_IGN (data);
-        ODD_SHF (data);
-        STKLIM = data & STKLIM_RW;
-        return SCPE_OK;
-        }                                               /* end switch pa */
-
-return SCPE_NXM;                                        /* unimplemented */
 }
 
 /* CPU control registers - J11 */
@@ -1144,83 +731,6 @@ switch ((pa >> 1) & 03) {                               /* decode pa<2:1> */
         ODD_MRG (JASR, data);
         JASR = data & ASRJE_RW;
         toy_write (ASRJE_TOYBIT (JASR));
-        return SCPE_OK;
-        }
-
-return SCPE_NXM;
-}
-
-/* Unibus adapter registers - KT24 */
-
-t_stat UBA24_rd (int32 *data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 03) {                               /* decode pa<2:1> */
-
-    case 2:                                             /* LMAL */
-        *data = uba_last & LMAL_RD;
-        return SCPE_OK;
-    case 3:                                             /* LMAH */
-        *data = uba_last & LMAH_RD;
-        return SCPE_OK;
-        }
-
-*data = 0;
-return SCPE_NXM;
-}
-
-t_stat UBA24_wr (int32 data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 03) {                               /* decode pa<2:1> */
-
-    case 3:                                             /* ASR */
-        ODD_IGN (data);
-        uba_last = (uba_last & ~LMAH_WR) | ((data & LMAH_WR) << 16);
-        return SCPE_OK;
-        }
-
-return SCPE_NXM;
-}
-
-/* Unibus registers - KTJ11B */
-
-t_stat UBAJ_rd (int32 *data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 03) {                               /* decode pa<2:1> */
-
-    case 0:                                             /* DCR */
-        *data = UDCR & DCRKTJ_RD;
-        return SCPE_OK;
-
-    case 1:                                             /* DDR */
-        *data = UDDR & DDRKTJ_RW;
-        return SCPE_OK;
-
-    case 2:                                             /* CSR */
-        *data = UCSR & MCRKTJ_RD;
-        return SCPE_OK;
-        }
-
-*data = 0;
-return SCPE_NXM;
-}
-
-t_stat UBAJ_wr (int32 data, int32 pa, int32 access)
-{
-switch ((pa >> 1) & 03) {                               /* decode pa<2:1> */
-
-    case 0:                                             /* DCR */
-        ODD_MRG (UDCR, data);
-        UDCR = (UDCR & ~DCRKTJ_WR) | (data & DCRKTJ_WR);
-        return SCPE_OK;
-
-    case 1:                                             /* DDR */
-        ODD_MRG (UDDR, data);
-        UDDR = data & DDRKTJ_RW;;
-        return SCPE_OK;
-
-    case 2:                                             /* CSR */
-        ODD_MRG (UCSR, data);
-        UCSR = (UCSR & ~MCRKTJ_WR) | (data & MCRKTJ_WR);
         return SCPE_OK;
         }
 
@@ -2059,21 +1569,13 @@ CPUERR = 0;
 MEMERR = 0;
 if (!CPUT (CPUT_J))
     MAINT = 0;
-MBRK = 0;
-WCS = 0;
 if (CPUT (CPUT_JB|CPUT_JE))
     JCSR = JCSR_dflt;
 else JCSR = 0;
 JPCR = 0;
 JASR = 0;
-UDCR = 0;
-UDDR = 0;
-UCSR = 0;
-uba_last = 0;
 DR = 0;
 toy_state = 0;
-for (i = 0; i < UBM_LNT_LW; i++)
-    ub_map[i] = 0;
 for (i = 0; i < TOY_LNT; i++)
     toy_data[i] = 0;
 return SCPE_OK;
