@@ -2642,38 +2642,6 @@ if (BPT_SUMM_RD &&
     (sim_brk_test (va & 0177777, BPT_RDVIR) ||
      sim_brk_test (pa, BPT_RDPHY)))                     /* read breakpoint? */
     ABORT (ABRT_BKPT);                                  /* stop simulation */
-if (ADDR_IS_DMEM (pa)) {
-    DADR = pa;
-    PCSR = PCSR & ~07;
-//    printf ("DMEM rd: %o\n", pa);
-    if (sim_log)
-        fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
-    }
-if (ADDR_IS_CMEM (pa)) {
-//    if (PCSR & 04)                                      /* non-memory access */
-//        data = 0;
-//    else
-        data = RdMemW (pa);
-    if (PCSR & 02) {
-        if (data & 010)
-            SET_INT (CB7);
-        if (data & 04)
-            SET_INT (CB6);
-        if (data & 02)
-            SET_INT (CB5);
-        if (data & 01)
-            SET_INT (CB4);
-        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
-        }
-    if (PCSR & 01) {
-        WrMemW (pa, 0100000);
-        }
-    PCSR = PCSR & ~07;
-//    printf ("CMEM rd: %o\n", pa);
-    if (sim_log)
-        fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
-    return data;
-    }
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemW (pa);
 if ((pa < IOPAGEBASE) ||                                /* not I/O address */

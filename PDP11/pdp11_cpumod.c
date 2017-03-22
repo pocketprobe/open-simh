@@ -284,7 +284,6 @@ CNFTAB cnf_tab[] = {
     { CPUT_HSC70,  0, &ctlwin_dib },
     { CPUT_HSC70,  0, &rom_dib },
     { CPUT_HSC70,  0, &dli_dib },
-    { CPUT_HSC70,  0, &fl_dib },
     { CPUT_23P, 0, &ctlfb_dib },                        /* board ctls */
     { CPUT_JB,  0, &ctljb_dib },
     { CPUT_53,  0, &ctljd_dib },
@@ -439,7 +438,7 @@ DEVICE fl_dev = {
     2, DEV_RDX, 20, 1, DEV_RDX, 8,
     NULL, NULL, &fl_reset,
     &fl_boot, NULL, NULL,
-    &fl_dib, 0
+    &fl_dib, DEV_UBUS | DEV_QBUS
     };
 
 /* Switch and display registers - many */
