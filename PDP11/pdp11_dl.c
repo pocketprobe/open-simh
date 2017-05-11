@@ -125,7 +125,7 @@ const char *dlx_description (DEVICE *dptr);
 
 DIB dli_dib = {
     IOBA_DL, IOLN_DL * DLX_LINES, &dlx_rd, &dlx_wr,
-    2, IVCL (DLI), VEC_AUTO, { &dli_iack, &dlo_iack }, IOLN_DL,
+    2, IVCL (DLI), VEC_DL, { &dli_iack, &dlo_iack }, IOLN_DL,
     };
 
 UNIT dli_unit = { UDATA (&dli_svc, 0, 0), TMLN_SPD_9600_BPS };
