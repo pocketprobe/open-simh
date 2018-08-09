@@ -39,6 +39,7 @@
 */
 struct ROM_File_Descriptor {
     const char *BinaryName;             const char *IncludeFileName; size_t expected_size; unsigned int checksum;  const char *ArrayName;            const char *Comments;} ROMs[] = {
+   {"VAX/ciqba_pra0.bin",               "VAX/ciqba_pra0_bin.h",                     32768,            0xFFE2348A,        "ciqba_pra0_bin"},
    {"VAX/ka655x.bin",                   "VAX/vax_ka655x_bin.h",                    131072,            0xFF7673B6,        "vax_ka655x_bin"},
    {"VAX/ka620.bin",                    "VAX/vax_ka620_bin.h",                      65536,            0xFF7F930F,        "vax_ka620_bin"},
    {"VAX/ka630.bin",                    "VAX/vax_ka630_bin.h",                      65536,            0xFF7F73EF,        "vax_ka630_bin"},
@@ -82,14 +83,14 @@ struct ROM_File_Descriptor {
 
 #if defined(_WIN32)
 #include <sys/utime.h>
-#define utimbuf _utimbuf 
+#define utimbuf _utimbuf
 #define utime _utime
 #define snprintf _snprintf
 #else
 #include <utime.h>
 #endif
 
-int sim_read_ROM_include(const char *include_filename, 
+int sim_read_ROM_include(const char *include_filename,
                          size_t *psize,
                          unsigned char **pROMData,
                          unsigned int *pchecksum,
@@ -229,7 +230,7 @@ return 1;
 int sim_make_ROM_include(const char *rom_filename,
                          size_t expected_size,
                          unsigned int expected_checksum,
-                         const char *include_filename, 
+                         const char *include_filename,
                          const char *rom_array_name,
                          const char *Comments)
 {
@@ -251,14 +252,14 @@ int defines_found;
 
 if (NULL == (rFile = fopen (rom_filename, "rb"))) {
     printf ("Error Opening ROM binary file '%s' for input: %s\n", rom_filename, strerror(errno));
-    if (0 != sim_read_ROM_include(include_filename, 
+    if (0 != sim_read_ROM_include(include_filename,
                                   &include_bytes,
                                   &include_ROMData,
                                   &include_checksum,
                                   &include_array_name,
                                   &defines_found))
         return -1;
-    c = ((include_checksum == expected_checksum) && 
+    c = ((include_checksum == expected_checksum) &&
          (include_bytes == expected_size) &&
          (0 == strcmp(include_array_name, rom_array_name)) &&
          defines_found);
@@ -306,13 +307,13 @@ if ((expected_checksum != 0) && (checksum != expected_checksum)) {
  * If the target include file already exists, determine if it contains the exact
  * data in the base ROM image.  If so, then we are already done
  */
-if (0 == sim_read_ROM_include(include_filename, 
+if (0 == sim_read_ROM_include(include_filename,
                               &include_bytes,
                               &include_ROMData,
                               &include_checksum,
                               &include_array_name,
                               &defines_found)) {
-    c = ((include_checksum == expected_checksum) && 
+    c = ((include_checksum == expected_checksum) &&
          (include_bytes == expected_size) &&
          (0 == strcmp (include_array_name, rom_array_name)) &&
          (0 == memcmp (include_ROMData, ROMData, include_bytes)) &&
@@ -325,7 +326,7 @@ if (0 == sim_read_ROM_include(include_filename,
         }
     }
 
-/* Open output file in binary mode for consistency with all simh 
+/* Open output file in binary mode for consistency with all simh
    source files that have CRLF line endings with explicit writes of \r\n */
 if (NULL == (iFile = fopen (include_filename, "wb"))) {
     printf ("Error Opening '%s' for output: %s\n", include_filename, strerror(errno));
