@@ -23,7 +23,7 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from Robert M Supnik.
 
-   15-Oct-12    MP      Added definitions needed to detect possible tcp 
+   15-Oct-12    MP      Added definitions needed to detect possible tcp
                         connect failures
    25-Sep-12    MP      Reworked for RFC3493 interfaces supporting IPv6 and IPv4
    22-Jun-10    RMS     Fixed types in sim_accept_conn (from Mark Pizzolato)
@@ -281,7 +281,7 @@ if (service) {
     }
 
 if (hostname) {
-    if ((0xffffffff != (ipaddr.s_addr = inet_addr(hostname))) || 
+    if ((0xffffffff != (ipaddr.s_addr = inet_addr(hostname))) ||
         (0 == strcmp("255.255.255.255", hostname))) {
         fixed[0] = &ipaddr;
         fixed[1] = NULL;
@@ -501,28 +501,28 @@ int load_ws2(void) {
 
 /* OS independent routines
 
-   sim_parse_addr       parse a hostname/ipaddress from port and apply defaults 
+   sim_parse_addr       parse a hostname/ipaddress from port and apply defaults
                         and optionally validate an address match
-   sim_addr_acl_check   parse a hostname/ipaddress (possibly in CIDR form) and 
+   sim_addr_acl_check   parse a hostname/ipaddress (possibly in CIDR form) and
                         test against an acl
 */
 
 /* sim_parse_addr       host:port
 
-   Presumption is that the cptr input, if it doesn't contain a ':' character 
-   is a port specifier.  If the host field contains one or more colon characters 
-   (i.e. it is an IPv6 address), the IPv6 address MUST be enclosed in square 
+   Presumption is that the cptr input, if it doesn't contain a ':' character
+   is a port specifier.  If the host field contains one or more colon characters
+   (i.e. it is an IPv6 address), the IPv6 address MUST be enclosed in square
    bracket characters (i.e. Domain Literal format)
 
    Inputs:
         cptr    =       pointer to input string
         host    =       optional pointer to host buffer
         host_len =      length of host buffer
-        default_host =  optional pointer to default host if none specified 
+        default_host =  optional pointer to default host if none specified
                         in cptr
         port    =       optional pointer to port buffer
         port_len =      length of port buffer
-        default_port =  optional pointer to default port if none specified 
+        default_port =  optional pointer to default port if none specified
                         in cptr
         validate_addr = optional name/addr which is checked to be equivalent
                         to the host result of parsing the other input.  This
@@ -530,21 +530,21 @@ int load_ws2(void) {
                         The validate_addr can also be a CIDR address specifier
                         which will match against the provided host.
                         If the validate_addr is provided with cptr as NULL,
-                        the validate_addr is parsed for reasonableness and 
-                        the result returned with 0 indicating a reasonable 
+                        the validate_addr is parsed for reasonableness and
+                        the result returned with 0 indicating a reasonable
                         value and -1 indicating a parsing error.
    Outputs:
         host    =       pointer to buffer for IP address (may be NULL), 0 = none
         port    =       pointer to buffer for IP port (may be NULL), 0 = none
-        result  =       status (0 on complete success or -1 if 
-                        parsing can't happen due to bad syntax, a value is 
-                        out of range, a result can't fit into a result buffer, 
-                        a service name doesn't exist, or a validation name 
+        result  =       status (0 on complete success or -1 if
+                        parsing can't happen due to bad syntax, a value is
+                        out of range, a result can't fit into a result buffer,
+                        a service name doesn't exist, or a validation name
                         doesn't match the parsed host)
 */
 
-int sim_parse_addr (const char *cptr, char *host, size_t host_len, const char *default_host, 
-                                      char *port, size_t port_len, const char *default_port, 
+int sim_parse_addr (const char *cptr, char *host, size_t host_len, const char *default_host,
+                                      char *port, size_t port_len, const char *default_port,
                                       const char *validate_addr)
 {
 char gbuf[CBUFSIZE], default_pbuf[CBUFSIZE];
@@ -558,7 +558,7 @@ if ((host != NULL) && (host_len != 0))
 if ((port != NULL) && (port_len != 0))
     memset (port, 0, port_len);
 if ((cptr == NULL) || (*cptr == 0)) {
-    if (((default_host == NULL) || (*default_host == 0)) || 
+    if (((default_host == NULL) || (*default_host == 0)) ||
         ((default_port == NULL) || (*default_port == 0)))
         return -1;
     if ((host == NULL) || (port == NULL))
@@ -640,7 +640,7 @@ if (validate_addr) {
     struct addrinfo *ai_host, *ai_validate, *ai, *aiv;
     int status;
 
-    if ((hostp == NULL) || 
+    if ((hostp == NULL) ||
         (0 != p_getaddrinfo(hostp, NULL, NULL, &ai_host)))
         return -1;
     if (p_getaddrinfo(validate_addr, NULL, NULL, &ai_validate)) {
@@ -660,9 +660,9 @@ if (validate_addr) {
         }
     if (status != 0) {
         /* be generous and allow successful validations against variations of localhost addresses */
-        if (((0 == strcmp("127.0.0.1", hostp)) && 
+        if (((0 == strcmp("127.0.0.1", hostp)) &&
              (0 == strcmp("::1", validate_addr))) ||
-            ((0 == strcmp("127.0.0.1", validate_addr)) && 
+            ((0 == strcmp("127.0.0.1", validate_addr)) &&
              (0 == strcmp("::1", hostp))))
             status = 0;
         }
@@ -675,29 +675,29 @@ return 0;
 
 /* sim_addr_acl_check   host:port,acl
 
-                        parse a hostname/ipaddress (possibly in CIDR form) and 
+                        parse a hostname/ipaddress (possibly in CIDR form) and
                         test against an acl
 
    Inputs:
-        validate_addr = This address would usually be returned by 
-                        sim_accept_conn.  The validate_addr can also be a 
-                        CIDR address specifier and in that mode, acl should 
-                        be NULL so that we're just validating the syntax 
+        validate_addr = This address would usually be returned by
+                        sim_accept_conn.  The validate_addr can also be a
+                        CIDR address specifier and in that mode, acl should
+                        be NULL so that we're just validating the syntax
                         of what will likely become an entry in an acl list.
                         If the validate_addr is provided with cptr as NULL,
-                        the validate_addr is parsed for reasonableness and 
-                        the result returned with 0 indicating a reasonable 
+                        the validate_addr is parsed for reasonableness and
+                        the result returned with 0 indicating a reasonable
                         value and -1 indicating a parsing error.
-        acl           = pointer to acl string which is comprised of comma 
-                        separated entries each which may have a + or - 
-                        prefix that indicated a permit or deny status when 
+        acl           = pointer to acl string which is comprised of comma
+                        separated entries each which may have a + or -
+                        prefix that indicated a permit or deny status when
                         the entry matches.  Each entry may specify a CIDR
                         form match criteria.
    Outputs:
-        result  =       status (0 on complete success or -1 if 
-                        parsing can't happen due to bad syntax, a value is 
+        result  =       status (0 on complete success or -1 if
+                        parsing can't happen due to bad syntax, a value is
                         out of range or the validate_addr matches a reject
-                        entry in the acl or it is not mentioned at all in 
+                        entry in the acl or it is not mentioned at all in
                         the acl.
 */
 
@@ -736,7 +736,7 @@ if (acl == NULL) {          /* Just checking validate_addr syntax? */
 status = -1;
 while ((*acl != '\0') && !done) {
     struct addrinfo *ai_rule, *ai, *aiv;
-    int permit; 
+    int permit;
     unsigned long bits = 0;
     const char *cc;
     char *c,*c1, rule[260];
@@ -772,7 +772,7 @@ while ((*acl != '\0') && !done) {
                 (ai->ai_family == aiv->ai_family)) {
                 unsigned int bit, addr_bits;
                 unsigned char *da, *dav;
-               
+
                 if (ai->ai_family == AF_INET) {
                     da = (unsigned char *)&((struct sockaddr_in *)ai->ai_addr)->sin_addr;
                     dav = (unsigned char *)&((struct sockaddr_in *)aiv->ai_addr)->sin_addr;
@@ -821,7 +821,7 @@ return status;
 /* sim_parse_addr_ex    localport:host:port
 
    Presumption is that the input, if it doesn't contain a ':' character is a port specifier.
-   If the host field contains one or more colon characters (i.e. it is an IPv6 address), 
+   If the host field contains one or more colon characters (i.e. it is an IPv6 address),
    the IPv6 address MUST be enclosed in square bracket characters (i.e. Domain Literal format)
 
         llll:w.x.y.z:rrrr
@@ -846,10 +846,10 @@ return status;
         port    =       pointer to buffer for IP port (may be NULL), 0 = none
         localport
                 =       pointer to buffer for local IP port (may be NULL), 0 = none
-        result  =       status (0 on complete success or -1 if 
-                        parsing can't happen due to bad syntax, a value is 
-                        out of range, a result can't fit into a result buffer, 
-                        a service name doesn't exist, or a validation name 
+        result  =       status (0 on complete success or -1 if
+                        parsing can't happen due to bad syntax, a value is
+                        out of range, a result can't fit into a result buffer,
+                        a service name doesn't exist, or a validation name
                         doesn't match the parsed host)
 */
 int sim_parse_addr_ex (const char *cptr, char *host, size_t hostlen, const char *default_host, char *port, size_t port_len, char *localport, size_t localport_len, const char *default_port)
@@ -876,11 +876,11 @@ void sim_init_sock (void)
 {
 #if defined (_WIN32)
 int err;
-WORD wVersionRequested; 
-WSADATA wsaData; 
+WORD wVersionRequested;
+WSADATA wsaData;
 wVersionRequested = MAKEWORD (2, 2);
 
-err = WSAStartup (wVersionRequested, &wsaData);         /* start Winsock */ 
+err = WSAStartup (wVersionRequested, &wsaData);         /* start Winsock */
 if (err != 0)
     sim_printf ("Winsock: startup error %d\n", err);
 #if defined(AF_INET6)
@@ -999,9 +999,9 @@ return newsock;
 }
 
 /*
-   Some platforms and/or network stacks have varying support for listening on 
-   an IPv6 socket and receiving connections from both IPv4 and IPv6 client 
-   connections.  This is known as IPv4-Mapped.  Some platforms claim such 
+   Some platforms and/or network stacks have varying support for listening on
+   an IPv6 socket and receiving connections from both IPv4 and IPv6 client
+   connections.  This is known as IPv4-Mapped.  Some platforms claim such
    support (i.e. some Windows versions), but it doesn't work in all cases.
 */
 
@@ -1020,11 +1020,16 @@ if (parse_status)
 if (r)
     return newsock;
 
+if (opt_flags & SIM_SOCK_OPT_MULTICAST)
+    opt_flags |= SIM_SOCK_OPT_DATAGRAM;                 /* must be datagram */
+
 memset(&hints, 0, sizeof(hints));
 hints.ai_flags = AI_PASSIVE;
+if (opt_flags & SIM_SOCK_OPT_MULTICAST)
+    hints.ai_flags |= AI_NUMERICHOST;
 hints.ai_family = AF_UNSPEC;
-hints.ai_protocol = ((opt_flags & SIM_SOCK_OPT_MULTICAST) ? IPPROTO_UDP : IPPROTO_TCP);
-hints.ai_socktype = ((opt_flags & SIM_SOCK_OPT_MULTICAST) ? SOCK_DGRAM : SOCK_STREAM);
+hints.ai_protocol = ((opt_flags & SIM_SOCK_OPT_DATAGRAM) ? IPPROTO_UDP : IPPROTO_TCP);
+hints.ai_socktype = ((opt_flags & SIM_SOCK_OPT_DATAGRAM) ? SOCK_DGRAM : SOCK_STREAM);
 if (p_getaddrinfo(host[0] ? host : NULL, port[0] ? port : NULL, &hints, &result)) {
     if (parse_status)
         *parse_status = -1;
@@ -1033,7 +1038,7 @@ if (p_getaddrinfo(host[0] ? host : NULL, port[0] ? port : NULL, &hints, &result)
 preferred = result;
 #ifdef IPV6_V6ONLY
 /*
-    When we can create a dual stack socket, be sure to find the IPv6 addrinfo 
+    When we can create a dual stack socket, be sure to find the IPv6 addrinfo
     to bind to.
 */
 for (; preferred != NULL; preferred = preferred->ai_next) {
@@ -1044,7 +1049,7 @@ if (preferred == NULL)
     preferred = result;
 #endif
 retry:
-newsock = sim_create_sock (preferred->ai_family, 0);    /* create socket */
+newsock = sim_create_sock (preferred->ai_family, opt_flags); /* create socket */
 if (newsock == INVALID_SOCKET) {                        /* socket error? */
 #ifndef IPV6_V6ONLY
     if (preferred->ai_next) {
@@ -1072,14 +1077,6 @@ if (opt_flags & SIM_SOCK_OPT_REUSEADDR) {
 
     sta = setsockopt (newsock, SOL_SOCKET, SO_REUSEADDR, (char *)&on, sizeof(on));
     }
-if (opt_flags & SIM_SOCK_OPT_MULTICAST) {
-    int on = 1;
-
-    if (preferred->ai_family == AF_INET6)
-        sta = setsockopt (newsock, IPPROTO_IPV6, IPV6_JOIN_GROUP, (char *)&on, sizeof(on));
-    else
-        sta = setsockopt (newsock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&on, sizeof(on));
-    }
 #if defined (SO_EXCLUSIVEADDRUSE)
 else {
     int on = 1;
@@ -1088,17 +1085,42 @@ else {
     }
 #endif
 sta = bind (newsock, preferred->ai_addr, preferred->ai_addrlen);
-p_freeaddrinfo(result);
-if (sta == SOCKET_ERROR)                                /* bind error? */
+if (sta == SOCKET_ERROR) {                              /* bind error? */
+    p_freeaddrinfo(result);
     return sim_err_sock (newsock, "bind");
+    }
+if (opt_flags & SIM_SOCK_OPT_MULTICAST) {
+    if (preferred->ai_family == AF_INET6) {
+        struct ipv6_mreq mreq;
+
+        memcpy (&mreq.ipv6mr_multiaddr, &((struct sockaddr_in6 *)
+	        preferred->ai_addr)->sin6_addr,  sizeof(struct in6_addr));
+        mreq.ipv6mr_interface = 0;                      /* let system choose i/f */
+
+        sta = setsockopt (newsock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
+        }
+    else {
+        struct ip_mreq mreq;
+
+        mreq.imr_multiaddr = ((struct sockaddr_in *) preferred->ai_addr)->sin_addr;
+        mreq.imr_interface.s_addr = 0;                  /* let system choose i/f */
+
+        sta = setsockopt (newsock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+        }
+    if (sta == SOCKET_ERROR)                            /* mreq error? */
+        return sim_err_sock (newsock, "mreq");
+    }
+p_freeaddrinfo(result);
 if (!(opt_flags & SIM_SOCK_OPT_BLOCKING)) {
     sta = sim_setnonblock (newsock);                    /* set nonblocking */
     if (sta == SOCKET_ERROR)                            /* fcntl error? */
         return sim_err_sock (newsock, "setnonblock");
     }
-sta = listen (newsock, 64);                             /* listen on socket */
-if (sta == SOCKET_ERROR)                                /* listen error? */
-    return sim_err_sock (newsock, "listen");
+if (!(opt_flags & SIM_SOCK_OPT_DATAGRAM)) {
+    sta = listen (newsock, 1);                          /* listen on socket */
+    if (sta == SOCKET_ERROR)                            /* listen error? */
+        return sim_err_sock (newsock, "listen");
+    }
 return newsock;                                         /* got it! */
 }
 
@@ -1181,7 +1203,7 @@ if (!(opt_flags & SIM_SOCK_OPT_DATAGRAM)) {
 
     /* enable TCP Keep Alives */
     sta = setsockopt (newsock, SOL_SOCKET, SO_KEEPALIVE, (char *)&keepalive, sizeof(keepalive));
-    if (sta == -1) 
+    if (sta == -1)
         return sim_err_sock (newsock, "setsockopt KEEPALIVE");
     }
 sta = connect (newsock, result->ai_addr, result->ai_addrlen);
@@ -1221,8 +1243,8 @@ socklen_t size;
      (defined (__ALPHA) && defined (__unix__)) || \
      defined (__hpux)
 int size;
-#else 
-size_t size; 
+#else
+size_t size;
 #endif
 SOCKET newsock;
 struct sockaddr_storage clientname;
@@ -1260,7 +1282,7 @@ if ((opt_flags & SIM_SOCK_OPT_NODELAY)) {
 
 /* enable TCP Keep Alives */
 sta = setsockopt (newsock, SOL_SOCKET, SO_KEEPALIVE, (char *)&keepalive, sizeof(keepalive));
-if (sta == -1) 
+if (sta == -1)
     return sim_err_sock (newsock, "setsockopt KEEPALIVE");
 
 return newsock;
@@ -1283,8 +1305,8 @@ socklen_t peernamesize = (socklen_t)sizeof(peername);
      (defined (__ALPHA) && defined (__unix__)) || \
      defined (__hpux)
 int peernamesize = (int)sizeof(peername);
-#else 
-size_t peernamesize = sizeof(peername); 
+#else
+size_t peernamesize = sizeof(peername);
 #endif
 
 memset (&zero, 0, sizeof(zero));
@@ -1319,8 +1341,8 @@ socklen_t size = (socklen_t)addrsize;
      (defined (__ALPHA) && defined (__unix__)) || \
      defined (__hpux)
 int size = (int)addrsize;
-#else 
-size_t size = addrsize; 
+#else
+size_t size = addrsize;
 #endif
 int ret = 0;
 
@@ -1350,9 +1372,9 @@ socklen_t peernamesize = (socklen_t)sizeof(peername);
      defined (__hpux)
 int socknamesize = (int)sizeof(sockname);
 int peernamesize = (int)sizeof(peername);
-#else 
-size_t socknamesize = sizeof(sockname); 
-size_t peernamesize = sizeof(peername); 
+#else
+size_t socknamesize = sizeof(sockname);
+size_t peernamesize = sizeof(peername);
 #endif
 char hostbuf[NI_MAXHOST+1];
 char portbuf[NI_MAXSERV+1];
@@ -1415,8 +1437,8 @@ socklen_t size;
      (defined (__ALPHA) && defined (__unix__)) || \
      defined (__hpux)
 int size;
-#else 
-size_t size; 
+#else
+size_t size;
 #endif
 struct sockaddr_storage clientname;
 
