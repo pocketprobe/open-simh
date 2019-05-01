@@ -48,6 +48,7 @@ extern t_stat build_mbus_tab (DEVICE *dptr, DIB *dibp);
 
 t_stat (*iodispR[IOPAGESIZE >> 1])(int32 *dat, int32 ad, int32 md);
 t_stat (*iodispW[IOPAGESIZE >> 1])(int32 dat, int32 ad, int32 md);
+DIB *iodibp[IOPAGESIZE >> 1];
 
 int32 int_vec[IPL_HLVL][32];                            /* int req to vector */
 int32 (*int_ack[IPL_HLVL][32])(void);                   /* int ack routines */

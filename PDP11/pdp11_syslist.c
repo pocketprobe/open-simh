@@ -34,7 +34,11 @@
    sim_devices          array of pointers to simulated devices
 */
 
+#if !defined (UC15)
 char sim_name[] = "PDP-11";
+#else
+char sim_name[] = "UC-15";
+#endif
 
 extern DEVICE cpu_dev;
 extern DEVICE sys_dev;

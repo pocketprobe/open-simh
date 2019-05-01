@@ -84,12 +84,6 @@ extern int32 saved_PC;
    sim_load             binary loader
 */
 
-#if !defined (UC15)
-char sim_name[] = "PDP-11";
-#else
-char sim_name[] = "UC-15";
-#endif
-
 REG *sim_PC = &cpu_reg[0];
 
 int32 sim_emax = 4;
