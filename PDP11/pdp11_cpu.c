@@ -2736,7 +2736,7 @@ int32 data;
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    printf ("DMEM rd: %o\n", pa);
+    sim_printf ("DMEM PReadW: %o\n", pa);
     if (sim_log)
         fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
     }
@@ -2760,7 +2760,7 @@ if (ADDR_IS_CMEM (pa)) {
         WrMemW (pa, 0100000);
         }
     PCSR = PCSR & ~07;
-//    printf ("CMEM rd: %o\n", pa);
+//    sim_printf ("CMEM rd: %o\n", pa);
     if (sim_log)
         fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
     return data;
@@ -2787,7 +2787,7 @@ int32 data;
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    printf ("DMEM rd: %o\n", pa);
+    sim_printf ("DMEM PReadB: %o\n", pa);
     if (sim_log)
         fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
     }
@@ -2811,7 +2811,7 @@ if (ADDR_IS_CMEM (pa)) {
         WrMemW (pa, 0100000);
         }
     PCSR = PCSR & ~07;
-//    printf ("CMEM rd: %o\n", pa);
+//    sim_printf ("CMEM rd: %o\n", pa);
     if (sim_log)
         fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
     return data;
@@ -2892,7 +2892,7 @@ void PWriteW (int32 data, int32 pa)
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    printf ("DMEM wr: %o = %o\n", pa, data);
+    sim_printf ("DMEM PWriteW: %o = %o\n", pa, data);
     if (sim_log)
         fprintf (sim_log, "DMEM wr: %o = %o at %o\n", pa, data, PC);
     }
@@ -2913,7 +2913,7 @@ if (ADDR_IS_CMEM (pa)) {
         trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
         }
     PCSR = PCSR & ~07;
-//    printf ("CMEM wr: %o = %o\n", pa, data);
+//    sim_printf ("CMEM wr: %o = %o\n", pa, data);
     if (sim_log)
         fprintf (sim_log, "CMEM wr: %o = %o at %o\n", pa, data, PC);
     }
@@ -2939,7 +2939,7 @@ void PWriteB (int32 data, int32 pa)
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    printf ("DMEM wr: %o = %o\n", pa, data);
+    sim_printf ("DMEM PWriteB: %o = %o\n", pa, data);
     if (sim_log)
         fprintf (sim_log, "DMEM wr: %o = %o at %o\n", pa, data, PC);
     }
@@ -2960,7 +2960,7 @@ if (ADDR_IS_CMEM (pa)) {
         trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
         }
     PCSR = PCSR & ~07;
-//    printf ("CMEM wr: %o = %o\n", pa, data);
+//    sim_printf ("CMEM wr: %o = %o\n", pa, data);
     if (sim_log)
         fprintf (sim_log, "CMEM wr: %o = %o at %o\n", pa, data, PC);
     }
@@ -3246,21 +3246,21 @@ t_stat MMR012_rd (int32 *data, int32 pa, int32 access)
 switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
 
     case 0:                                             /* SR */
-        printf ("SR rd\n");
+        sim_printf ("SR rd\n");
         return SCPE_NXM;
 
     case 1:                                             /* MMR0 */
         *data = MMR0 & cpu_tab[cpu_model].mm0;
-        printf ("MMR0 rd: %o at %o\n", *data, PC);
+        sim_printf ("MMR0 rd: %o at %o\n", *data, PC);
         break;
 
     case 2:                                             /* MMR1 */
-        printf ("MMR1 rd\n");
+        sim_printf ("MMR1 rd\n");
         *data = MMR1;
         break;
 
     case 3:                                             /* MMR2 */
-        printf ("MMR2 rd\n");
+        sim_printf ("MMR2 rd\n");
         *data = MMR2;
         break;
         }                                               /* end switch pa */
@@ -3273,11 +3273,11 @@ t_stat MMR012_wr (int32 data, int32 pa, int32 access)
 switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
 
     case 0:                                             /* DR */
-        printf ("DR wr\n");
+        sim_printf ("DR wr\n");
         return SCPE_NXM;
 
     case 1:                                             /* MMR0 */
-        printf ("MMR0 wr %o at %o\n", data, PC);
+        sim_printf ("MMR0 wr %o at %o\n", data, PC);
         if (access == WRITEB)
             data = (pa & 1)? (MMR0 & 0377) | (data << 8): (MMR0 & ~0377) | data;
         data = data & cpu_tab[cpu_model].mm0;
@@ -3285,7 +3285,7 @@ switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
         return SCPE_OK;
 
     default:                                            /* MMR1, MMR2 */
-        printf ("MMR1/2 wr\n");
+        sim_printf ("MMR1/2 wr\n");
         return SCPE_OK;
         }                                               /* end switch pa */
 }

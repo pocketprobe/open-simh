@@ -283,7 +283,6 @@ CNFTAB cnf_tab[] = {
     { CPUT_HSC70,  0, &ioctl_dib },
     { CPUT_HSC70,  0, &ctlwin_dib },
     { CPUT_HSC70,  0, &rom_dib },
-    { CPUT_HSC70,  0, &dli_dib },
     { CPUT_23P, 0, &ctlfb_dib },                        /* board ctls */
     { CPUT_JB,  0, &ctljb_dib },
     { CPUT_53,  0, &ctljd_dib },
@@ -761,70 +760,70 @@ switch (rg) {                                           /* decode pa<2:1> */
         *data = WADR[WIDX][rg];
         *data = (*data & 0177) << 2;
         *data = *data | (rg << 9) | (016 << 12);
-//        printf ("WADR%d rd %o\n", rg, *data);
+//        sim_printf ("WADR%d rd %o\n", rg, *data);
         return SCPE_OK;
 
     case 010:                                           /* WIDX */
         *data = WIDX;
-//        printf ("WIDX rd: %o\n", *data);
+//        sim_printf ("WIDX rd: %o\n", *data);
         return SCPE_OK;
 
     case 011:                                           /* WBUS */
         *data = WBUS;
-//        printf ("WBUS rd: %o\n", *data);
+//        sim_printf ("WBUS rd: %o\n", *data);
         return SCPE_OK;
 
     case 012:                                           /* low error */
         *data = EADR & 0177777;
-//        printf ("low error rd: %o\n", *data);
+//        sim_printf ("low error rd: %o\n", *data);
         return SCPE_OK;
 
     case 013:                                           /* high error */
         *data = (EADR >> 16) & 077;
-//        printf ("high error rd: %o\n", *data);
+//        sim_printf ("high error rd: %o\n", *data);
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR - NI */
         *data = PCSR | 0100000;
-//        printf ("Pio CSR rd: %o\n", *data);
+//        sim_printf ("Pio CSR rd: %o\n", *data);
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
         *data = SDR & 07777;
-//        printf ("SDR rd: %o\n", *data);
+//        sim_printf ("SDR rd: %o\n", *data);
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
         *data = KINI;
-        printf ("K init rd\n", *data);
+        sim_printf ("K init rd\n", *data);
         if (sim_log)
             fprintf (sim_log, "K init rd\n", *data);
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
         *data = KSTS[(KINI & 017)];
-        printf ("K status rd\n", *data);
+        sim_printf ("K status rd\n", *data);
         if (sim_log)
             fprintf (sim_log, "K status rd\n", *data);
         return SCPE_OK;
 
     case 024:                                           /* data mem low addr */
         *data = DADR & 0177777;
-//        printf ("data mem low rd: %o\n", *data);
+        sim_printf ("data mem low rd: %o\n", *data);
         return SCPE_OK;
 
     case 025:                                           /* data mem high addr */
         *data = (DADR >> 16) & 07;
-//        printf ("data mem high rd: %o\n", *data);
+        sim_printf ("data mem high rd: %o\n", *data);
         return SCPE_OK;
 
     case 026:                                           /* ctrl mem low addr - NI */
         *data = LOCADR;
-//        printf ("ctrl mem low rd: %o\n", *data);
+//        sim_printf ("ctrl mem low rd: %o\n", *data);
         return SCPE_OK;
 
     case 027:                                           /* serial number reg - NI */
-        printf ("serial num rd\n");
+        sim_printf ("serial num rd\n");
         *data = 0;
         return SCPE_OK;
         }
@@ -846,34 +845,34 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 005:                                           /* WADR5 */
     case 006:                                           /* WADR6 */
     case 007:                                           /* WADR7 */
-//        printf ("WADR%d wr: %o\n", rg, data);
+//        sim_printf ("WADR%d wr: %o\n", rg, data);
         WADR[WIDX][rg] = data;
         return SCPE_OK;
 
     case 010:                                           /* WIDX */
-//        printf ("WIDX wr: %o\n", data);
+//        sim_printf ("WIDX wr: %o\n", data);
         WIDX = data & 0177;
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
-//        printf ("Pio CSR wr: %o\n", data);
+//        sim_printf ("Pio CSR wr: %o\n", data);
         PCSR = data;
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
-//        printf ("SDR wr: %o\n", data);
+//        sim_printf ("SDR wr: %o\n", data);
         SDR = data & 07777;
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
-        printf ("K init wr: %o\n", data);
+        sim_printf ("K init wr: %o\n", data);
         if (sim_log)
             fprintf (sim_log, "K init wr: %o\n", data);
         KINI = data;
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
-        printf ("K status wr: %o\n", data);
+        sim_printf ("K status wr: %o\n", data);
         if (sim_log)
             fprintf (sim_log, "K status wr: %o\n", data);
         KSTS[0] = data | (parity (data, 1) << 7);       /* can only write to req 0 */
@@ -902,7 +901,7 @@ else {
     if (ADDR_IS_MEM (va))                               /* memory address? */
         *data = (M[va >> 1]);
     else {
-        printf ("Error: %o is not mem addr\n", va);
+        sim_printf ("Error: %o is not mem addr\n", va);
         return SCPE_NXM;
         }
     if (PCSR & 02) {                                    /* interrupt cycle */
@@ -978,7 +977,7 @@ if (ADDR_IS_MEM (va)) {                                 /* memory address? */
         M[va >> 1] = data;
     }
 else {
-    printf ("Error: %o is not mem addr\n", va);
+    sim_printf ("Error: %o is not mem addr\n", va);
     return SCPE_NXM;
     }
 return SCPE_OK;
@@ -991,7 +990,7 @@ int32 ln = sz * 512;
 int32 i;
 uint8 *fbuf = uptr->filebuf;
 
-printf ("Boot device write, %o -> %X, %d\n", ma, da, sz);
+sim_printf ("Boot device write, %o -> %X, %d\n", ma, da, sz);
 if (sim_log)
     fprintf (sim_log, "Boot device write, %o -> %X, %d\n", ma, da, sz);
 if (mapen) {                                            /* use reloc? */
@@ -1017,7 +1016,7 @@ int32 ln = sz * 512;
 int32 i;
 uint8 *fbuf = uptr->filebuf;
 
-printf ("Boot device read, %X, %d -> %o\n", da, sz, ma);
+sim_printf ("Boot device read, %X, %d -> %o\n", da, sz, ma);
 if (sim_log)
     fprintf (sim_log, "Boot device read, %X, %d -> %o\n", da, sz, ma);
 if (mapen) {                                            /* use reloc? */
@@ -1040,22 +1039,22 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
         *data = fl_csr;
-        printf ("fl_csr rd: %o at %o\n", *data, PC);
+        sim_printf ("fl_csr rd: %o at %o\n", *data, PC);
         return SCPE_OK;
 
     case 001:                                           /* MADR0 */
         *data = fl_madr0 | fl_unit[unitno].TRK;
-        printf ("fl_madr0 rd: %o\n", *data);
+        sim_printf ("fl_madr0 rd: %o\n", *data);
         return SCPE_OK;
 
     case 002:                                           /* MADR1 */
         *data = fl_madr1;
-        printf ("fl_madr1 rd: %o\n", *data);
+        sim_printf ("fl_madr1 rd: %o\n", *data);
         return SCPE_OK;
 
     case 003:                                           /* MADR2 */
         *data = fl_madr2;
-        printf ("fl_madr2 rd: %o\n", *data);
+        sim_printf ("fl_madr2 rd: %o\n", *data);
         return SCPE_OK;
         }
 return SCPE_NXM;
@@ -1069,7 +1068,7 @@ int32 unitno;
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
-        printf ("fl_csr wr: %o at %o\n", data, PC);
+        sim_printf ("fl_csr wr: %o at %o\n", data, PC);
         unitno = (data >> FLCSR_V_SEL) & 1;            /* get drive select */
         fl_csr = data & FLCSR_RW;
         cmd = data & FLCSR_CS;
@@ -1083,7 +1082,7 @@ switch (rg) {                                           /* decode pa<2:1> */
                     sim_activate (&fl_unit[unitno], FL_WAIT);
                     }
 //                fl_madr2 = fl_madr2 | 0377;             /* indicate no M.cache2 module? */
-//                printf ("force_interrupt: fl_madr2 = %o\n", fl_madr2);
+//                sim_printf ("force_interrupt: fl_madr2 = %o\n", fl_madr2);
                 }
             else if ((fl_csr & 1) == 0) {               /* not busy? */
                 fl_unit[unitno].CMD = cmd;
@@ -1094,17 +1093,17 @@ switch (rg) {                                           /* decode pa<2:1> */
         return SCPE_OK;
 
     case 001:                                           /* MADR0 */
-        printf ("fl_madr0 wr: %o\n", data);
+        sim_printf ("fl_madr0 wr: %o\n", data);
         fl_madr0 = data & FLMA0_RW;
         return SCPE_OK;
 
     case 002:                                           /* MADR1 */
-        printf ("fl_madr1 wr: %o\n", data);
+        sim_printf ("fl_madr1 wr: %o\n", data);
         fl_madr1 = data;
         return SCPE_OK;
 
     case 003:                                           /* MADR2 */
-        printf ("fl_madr2 wr: %o\n", data);
+        sim_printf ("fl_madr2 wr: %o\n", data);
         fl_madr2 = data;
         return SCPE_OK;
         }
@@ -1130,14 +1129,14 @@ switch (uptr->CMD >> 5) {
     case 0:
         if (uptr->CMD & 020) {                          /* seek */
             uptr->TRK = fl_madr2 & FLMA2_DT;
-            printf ("fl: seek track %d\n", uptr->TRK);
+            sim_printf ("fl: seek track %d\n", uptr->TRK);
             fl_csr = fl_csr & ~1;                       /* set not busy */
             fl_csr = fl_csr | 04;
             fl_setint ();
             }
         else {                                          /* restore */
             uptr->TRK = 0;
-            printf ("fl: restore\n");
+            sim_printf ("fl: restore\n");
             fl_csr = fl_csr & ~1;                       /* set not busy */
             fl_csr = fl_csr | 04;
             fl_setint ();
@@ -1147,11 +1146,11 @@ switch (uptr->CMD >> 5) {
     case 1:                                             /* step */
         if (uptr->DIR) {
             uptr->TRK++;
-            printf ("fl: step in\n");
+            sim_printf ("fl: step in\n");
             }
         else {
             uptr->TRK--;
-            printf ("fl: step out\n");
+            sim_printf ("fl: step out\n");
             }
         fl_csr = fl_csr & ~1;                           /* set not busy */
         fl_setint ();
@@ -1160,7 +1159,7 @@ switch (uptr->CMD >> 5) {
     case 2:                                             /* step in */
         uptr->DIR = 1;
         uptr->TRK++;
-        printf ("fl: step in\n");
+        sim_printf ("fl: step in\n");
         fl_csr = fl_csr & ~1;                           /* set not busy */
         fl_setint ();
         break;
@@ -1168,7 +1167,7 @@ switch (uptr->CMD >> 5) {
     case 3:                                             /* step out */
         uptr->DIR = 0;
         uptr->TRK--;
-        printf ("fl: step out\n");
+        sim_printf ("fl: step out\n");
         fl_csr = fl_csr & ~1;                           /* set not busy */
         fl_setint ();
         break;
@@ -1180,13 +1179,13 @@ switch (uptr->CMD >> 5) {
         sec = fl_madr1 & FLMA1_DS;
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
         if (uptr->CMD & 020) {
-            printf ("fl: read multi sector\n");
+            sim_printf ("fl: read multi sector\n");
             fl_read (uptr, da, (FL_NUMSC - sec), ma, FALSE);
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
             //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | 020;
             }
         else {
-            printf ("fl: read single sector\n");
+            sim_printf ("fl: read single sector\n");
             fl_read (uptr, da, 1, ma, FALSE);
             ma = ma + 512;
             //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (sec + 1);
@@ -1210,13 +1209,13 @@ switch (uptr->CMD >> 5) {
         if ((da * 512) > uptr->hwmark)                  /* update hwmark */
             uptr->hwmark = (da * 512);
         if (uptr->CMD & 020) {
-            printf ("fl: write multi sector\n");
+            sim_printf ("fl: write multi sector\n");
             fl_write (uptr, da, (FL_NUMSC - sec), ma, FALSE);
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
             //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | 020;
             }
         else {
-            printf ("fl: write single sector\n");
+            sim_printf ("fl: write single sector\n");
             fl_write (uptr, da, 1, ma, FALSE);
             ma = ma + 512;
             //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (sec + 1);
@@ -1233,13 +1232,13 @@ switch (uptr->CMD >> 5) {
 
     case 6:
         if (uptr->CMD & 020) {                          /* force interrupt */
-            printf ("fl: force interrupt\n");
+            sim_printf ("fl: force interrupt\n");
             fl_csr = fl_csr & ~1;                       /* set not busy */
             if (uptr->CMD & 017)
                 fl_setint ();
             }
         else {                                          /* read address */
-            printf ("fl: read address\n");
+            sim_printf ("fl: read address\n");
             fl_setint ();
             }
         break;
@@ -1250,13 +1249,13 @@ switch (uptr->CMD >> 5) {
             ((fl_madr0 & FLMA0_A0) >> 8);
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), 1);
         if (uptr->CMD & 020) {                          /* write track */
-            printf ("fl: write track\n");
+            sim_printf ("fl: write track\n");
             if ((da * 512) > uptr->hwmark)              /* update hwmark */
                 uptr->hwmark = (da * 512);
             fl_write (uptr, da, FL_NUMSC, ma, FALSE);
             }
         else {                                          /* read track */
-            printf ("fl: read track\n");
+            sim_printf ("fl: read track\n");
             fl_read (uptr, da, FL_NUMSC, ma, FALSE);
             }
         ma = ma + (FL_NUMSC * 512);
@@ -1295,7 +1294,7 @@ extern int32 rs;
 extern int32 saved_PC;
 
 if (unitno != 0) {
-    printf ("Boot only supported from unit 0\n");
+    sim_printf ("Boot only supported from unit 0\n");
     return SCPE_NOFNC;
     }
 fl_read (&fl_unit[unitno], 0, 1, 06000, FALSE);                           /* read first 8 blocks */
@@ -1337,7 +1336,7 @@ switch (rg) {                                           /* decode pa<2:1> */
         break;
 
     case 020:                                           /* console halt */
-        printf ("console halt, status = %o\n", R[0]);
+        sim_printf ("console halt, status = %o\n", R[0]);
         *data = 0;                                      /* HALT */
         break;
 
@@ -1354,7 +1353,7 @@ switch (rg) {                                           /* decode pa<2:1> */
         break;
 
     default:
-        printf ("rom_rd: %o\n", pa);
+        sim_printf ("rom_rd: %o\n", pa);
         *data = 0;
         }
 return SCPE_OK;
