@@ -2736,9 +2736,7 @@ int32 data;
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-    sim_printf ("DMEM PReadW: %o\n", pa);
-    if (sim_log)
-        fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
+//    sim_printf ("DMEM PReadW: %o\n", pa);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04)                                      /* non-memory access */
@@ -2761,8 +2759,6 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~07;
 //    sim_printf ("CMEM rd: %o\n", pa);
-    if (sim_log)
-        fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
     return data;
     }
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
@@ -2787,9 +2783,7 @@ int32 data;
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-    sim_printf ("DMEM PReadB: %o\n", pa);
-    if (sim_log)
-        fprintf (sim_log, "DMEM rd: %o at %o\n", pa, PC);
+//    sim_printf ("DMEM PReadB: %o\n", pa);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04)                                      /* non-memory access */
@@ -2812,8 +2806,6 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~07;
 //    sim_printf ("CMEM rd: %o\n", pa);
-    if (sim_log)
-        fprintf (sim_log, "CMEM rd: %o at %o\n", pa, PC);
     return data;
     }
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
@@ -2892,9 +2884,7 @@ void PWriteW (int32 data, int32 pa)
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-    sim_printf ("DMEM PWriteW: %o = %o\n", pa, data);
-    if (sim_log)
-        fprintf (sim_log, "DMEM wr: %o = %o at %o\n", pa, data, PC);
+//    sim_printf ("DMEM PWriteW: %o = %o\n", pa, data);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04) {                                    /* non-memory access */
@@ -2914,8 +2904,6 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~07;
 //    sim_printf ("CMEM wr: %o = %o\n", pa, data);
-    if (sim_log)
-        fprintf (sim_log, "CMEM wr: %o = %o at %o\n", pa, data, PC);
     }
 if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     WrMemW (pa, data);
@@ -2939,9 +2927,7 @@ void PWriteB (int32 data, int32 pa)
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-    sim_printf ("DMEM PWriteB: %o = %o\n", pa, data);
-    if (sim_log)
-        fprintf (sim_log, "DMEM wr: %o = %o at %o\n", pa, data, PC);
+//    sim_printf ("DMEM PWriteB: %o = %o\n", pa, data);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04) {                                    /* non-memory access */
@@ -2961,8 +2947,6 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~07;
 //    sim_printf ("CMEM wr: %o = %o\n", pa, data);
-    if (sim_log)
-        fprintf (sim_log, "CMEM wr: %o = %o at %o\n", pa, data, PC);
     }
 if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     WrMemB (pa, data);
@@ -3246,21 +3230,17 @@ t_stat MMR012_rd (int32 *data, int32 pa, int32 access)
 switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
 
     case 0:                                             /* SR */
-        sim_printf ("SR rd\n");
         return SCPE_NXM;
 
     case 1:                                             /* MMR0 */
         *data = MMR0 & cpu_tab[cpu_model].mm0;
-        sim_printf ("MMR0 rd: %o at %o\n", *data, PC);
         break;
 
     case 2:                                             /* MMR1 */
-        sim_printf ("MMR1 rd\n");
         *data = MMR1;
         break;
 
     case 3:                                             /* MMR2 */
-        sim_printf ("MMR2 rd\n");
         *data = MMR2;
         break;
         }                                               /* end switch pa */
@@ -3273,11 +3253,9 @@ t_stat MMR012_wr (int32 data, int32 pa, int32 access)
 switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
 
     case 0:                                             /* DR */
-        sim_printf ("DR wr\n");
         return SCPE_NXM;
 
     case 1:                                             /* MMR0 */
-        sim_printf ("MMR0 wr %o at %o\n", data, PC);
         if (access == WRITEB)
             data = (pa & 1)? (MMR0 & 0377) | (data << 8): (MMR0 & ~0377) | data;
         data = data & cpu_tab[cpu_model].mm0;
@@ -3285,7 +3263,6 @@ switch ((pa >> 1) & 3) {                                /* decode pa<2:1> */
         return SCPE_OK;
 
     default:                                            /* MMR1, MMR2 */
-        sim_printf ("MMR1/2 wr\n");
         return SCPE_OK;
         }                                               /* end switch pa */
 }
