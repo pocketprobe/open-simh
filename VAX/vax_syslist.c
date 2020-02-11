@@ -62,7 +62,7 @@ extern DEVICE vc_dev;
 extern DEVICE lk_dev;
 extern DEVICE vs_dev;
 extern DEVICE dpv_dev;
-extern DEVICE ci_dev;
+extern DEVICE cq_dev;
 extern DEVICE hsc_dev;
 extern DEVICE rf_dev;
 
@@ -97,7 +97,7 @@ DEVICE *sim_devices[] = {
     &rqd_dev,
     &ts_dev,
     &tq_dev,
-    &ci_dev,
+    &cq_dev,
     &hsc_dev,
     &rf_dev,
     &xq_dev,
