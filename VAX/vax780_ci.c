@@ -71,6 +71,7 @@
 #define PMCSR_LSPE      0x00002000                      /* local store parity error */
 #define PMCSR_CSPE      0x00004000                      /* control store parity error */
 #define PMCSR_PE        0x00008000                      /* parity error */
+#define PMCSR_RD        0x0000FFFE
 #define PMCSR_RW        (PMCSR_PSA | PMCSR_WP | PMCSR_MIE | \
                          PMCSR_MTD | PMCSR_RSVD)
 #define PMCSR_W1C       (PMCSR_PE | PMCSR_CSPE | PMCSR_LSPE | \
@@ -227,11 +228,11 @@ switch (rg) {                                           /* CI780 specific regist
 
     case PMCSR_OF:
     case PMCSR_OF1:
-        if (uptr->ci_state > PORT_UNINIT)
-            ci_pmcsr = ci_pmcsr & ~PMCSR_UI;
-        else
-            ci_pmcsr = ci_pmcsr | PMCSR_UI;
-        *val = (ci_pmcsr & 0xFFFE);                     /* TODO: Need defined mask */
+        *val = (ci_pmcsr & PMCSR_RD);
+        if (uptr->ci_state == PORT_UNINIT)
+            *val |= PMCSR_UI;
+        if ((ci_pmcsr & 0x7F00) > 0)                /* any error bits set? */
+            *val |= PMCSR_PE;                       /* yes, set parity error */
         sim_debug (DBG_REG, &ci_dev, "PMCSR rd: %08x\n", *val);
         break;
 
@@ -270,7 +271,7 @@ switch (rg) {                                           /* case on type */
 
     case CNFGR_OF:
         sim_debug (DBG_REG, &ci_dev, "CNFGR wr: %08X\n", val);
-        ci_cnfgr = (val & CNFGR_PFD) | CNFGR_CODE;
+        ci_cnfgr = val & CNFGR_PFD;
         break;
 
     case PMCSR_OF:
@@ -282,15 +283,6 @@ switch (rg) {                                           /* case on type */
             }
         ci_pmcsr &= ~(val & PMCSR_W1C);                 /* Clear W1C bits */
         ci_pmcsr = (ci_pmcsr & ~PMCSR_RW) | (val & PMCSR_RW); /* Set RW bits */
-
-        if (uptr->ci_state > PORT_UNINIT)
-            ci_pmcsr = ci_pmcsr & ~PMCSR_UI;
-        else
-            ci_pmcsr = ci_pmcsr | PMCSR_UI;
-
-        if ((ci_pmcsr & 0x7F00) > 0)
-            ci_pmcsr |= PMCSR_PE;                       /* Parity Error bit is composite of other parity error bits */
-        else ci_pmcsr &= ~PMCSR_PE;
 
         if (val & PMCSR_MIF)                            /* interrupt W1C */
             ci_clr_int();
@@ -337,8 +329,8 @@ t_stat ci_reset (DEVICE *dptr)
 {
 int32 i;
 
-ci_cnfgr = CNFGR_CODE;
-ci_pmcsr = PMCSR_UI;
+ci_cnfgr = 0;
+ci_pmcsr = 0;
 ci_madr = 0;
 for (i = 0; i < 8192; i++)
     ci_mdatr[i] = 0;
