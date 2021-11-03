@@ -376,16 +376,17 @@ if (state < PORT_INIT) {                                /* change to uninit */
         sim_cancel (uptr);                              /* stop poll */
         sim_debug_unit (DBG_CONN, uptr, "deactivating unit\n");
         ciq_clear (&cp->rx_queue);                      /* clear queue */
-        if (cp->multi_sock) {
-            do r = sim_read_sock (cp->multi_sock, rcv_pkt.data, CI_MAXFR);
-            while (r > 0);                              /* clear network buffer */
-            }
         }
     }
 else if (state >= PORT_INIT) {                          /* change to init */
     if (uptr->ci_state < PORT_INIT) {                   /* currently uninit? */
         sim_clock_coschedule (uptr, tmxr_poll);         /* start poll */
         sim_debug_unit (DBG_CONN, uptr, "activating unit\n");
+        ciq_clear (&cp->rx_queue);                      /* clear queue */
+        if (cp->multi_sock) {
+            do r = sim_read_sock (cp->multi_sock, rcv_pkt.data, CI_MAXFR);
+            while (r > 0);                              /* clear network buffer */
+            }
         }
    }
 uptr->ci_state = state;                                 /* update state */
@@ -1148,7 +1149,7 @@ if (uptr->ci_node > port) {                             /* are we the server? */
     return SCPE_OK;
     }
 sim_debug_unit (DBG_CONN, uptr, "Connecting to node %d at %s...\n", port, node->host);
-newsock = sim_connect_sock (node->host, NULL, NULL);
+newsock = sim_connect_sock_ex (NULL, node->host, NULL, NULL, 0);
 if (newsock == INVALID_SOCKET) {
     sim_debug_unit (DBG_CONN, uptr, "Unable to establish VC to node %d\n", port);
     return CISE_VCERR;
