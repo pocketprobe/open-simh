@@ -132,10 +132,13 @@
 #define SOP_1194        (BUS_U|OPT_EIS|OPT_FPP|OPT_MMU|OPT_UBM|OPT_RH11)
 #define OPT_1194        (OPT_CIS)
 
-#define SOP_HSC70       (BUS_Q|OPT_EIS|OPT_FPP|OPT_MMU)
-#define OPT_HSC70       (OPT_CIS)
+#define SOP_HSC50       (BUS_Q|OPT_EIS|OPT_FPP|OPT_MMU)
+#define OPT_HSC50       0
 
-#define MOD_MAX         21
+#define SOP_HSC70       (BUS_Q|OPT_EIS|OPT_FPP|OPT_MMU)
+#define OPT_HSC70       0
+
+#define MOD_MAX         22
 
 /* MFPT codes */
 

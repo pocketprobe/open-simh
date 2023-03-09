@@ -42,6 +42,7 @@ extern t_addr cpu_memsize;
 int32 calc_ints (int32 nipl, int32 trq);
 
 extern t_stat cpu_build_dib (void);
+extern t_stat ioc_build_dib (void);
 extern t_stat build_mbus_tab (DEVICE *dptr, DIB *dibp);
 
 /* I/O data structures */
@@ -142,6 +143,16 @@ for (i = IPL_HLVL - 1; i > nipl; i--) {                 /* loop thru lvls */
 return 0;
 }
 
+t_stat ubm_rd (int32 *data, int32 addr, int32 access)
+{
+return SCPE_OK;
+}
+
+t_stat ubm_wr (int32 data, int32 addr, int32 access)
+{
+return SCPE_OK;
+}
+
 /* Build tables from device list */
 
 t_stat build_dib_tab (void)
@@ -159,6 +170,8 @@ int_vec[IPL_CB6][INT_V_CB6] = VEC_CB6;
 int_vec[IPL_CB5][INT_V_CB5] = VEC_CB5;
 int_vec[IPL_CB4][INT_V_CB4] = VEC_CB4;
 if ((r = cpu_build_dib ()))                             /* build CPU entries */
+    return r;
+if ((r = ioc_build_dib ()))                             /* build IOC entries */
     return r;
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* loop thru dev */
     dibp = (DIB *) dptr->ctxt;                          /* get DIB */

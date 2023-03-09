@@ -75,35 +75,17 @@
 #ifndef _HSC_DEFS_H
 #define _HSC_DEFS_H   0
 
-#include "pdp11_defs.h"                                 /* simulator defns */
-
-#define IOPAGEBASE      017760000                       /* 2**22 - 2**13 */
-#define IOPAGESIZE      000020000                       /* 2**13 */
-#define IOPAGEMASK      (IOPAGESIZE - 1)                /* 2**13 - 1 */
-
-/* CPU models */
-
-#define MOD_HSC50       21
-#define MOD_HSC70       22
-
-#define CPUT_HSC50      (1u << MOD_HSC50)               /* HSC50 */
-#define CPUT_HSC70      (1u << MOD_HSC70)               /* HSC70 */
-
-#define CPUT_F          (CPUT_HSC50)
-#define CPUT_J          (CPUT_HSC70)
-
 /* Other memory spaces */
 
 #define ADDR_IS_CMEM(x) ((((t_addr) (x)) < 017000000) && (((t_addr) (x)) >= 016000000))
 #define ADDR_IS_DMEM(x) ((((t_addr) (x)) < 016000000) && (((t_addr) (x)) >= 014000000))
+#define ADDR_IS_PMEM(x) (((t_addr) (x)) < 004000000)
 
 /* IO parameters */
 
 #define DLX_LINES       2                               /* max # of KL11/DL11's */
 
-/* Device information block */
-
-/* Processor registers which have I/O page addresses */
+/* I/O page layout */
 
 #define IOBA_FL         (IOPAGEBASE + 017400)
 #define IOLN_FL         010
@@ -140,11 +122,5 @@
 #define VEC_CB6         0130
 #define VEC_CB5         0124
 #define VEC_CB4         0120
-
-/* Function prototypes */
-
-int32 clk_cosched (int32 wait);
-
-#include "pdp11_io_lib.h"
 
 #endif

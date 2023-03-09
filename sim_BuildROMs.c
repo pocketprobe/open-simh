@@ -71,6 +71,7 @@ struct ROM_File_Descriptor {
    {"PDP11/dazzledart/dazzle.lda",      "PDP11/pdp11_dazzle_dart_rom.h",             6096,            0xFFF83848,        "dazzle_lda"},
    {"PDP11/11logo/11logo.lda",          "PDP11/pdp11_11logo_rom.h",                 26009,            0xFFDD77F7,        "logo_lda"},
    {"swtp6800/swtp6800/swtbugv10.bin",  "swtp6800/swtp6800/swtp_swtbugv10_bin.h",    1024,            0xFFFE4FBC,        "swtp_swtbugv10_bin"},
+   {"HSC/hsc70.bin",                    "HSC/hsc_hsc70_bin.h",                       4096,            0xFFFD24FF,        "hsc_hsc70_bin"},
    };
 
 

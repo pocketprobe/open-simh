@@ -134,8 +134,9 @@
 #define MOD_1184        17
 #define MOD_1193        18
 #define MOD_1194        19
-#define MOD_HSC70       20
-#define MOD_T           21
+#define MOD_HSC50       20
+#define MOD_HSC70       21
+#define MOD_T           22
 
 #define CPUT_03         (1u << MOD_1103)                /* LSI-11 */
 #define CPUT_04         (1u << MOD_1104)                /* 11/04 */
@@ -157,10 +158,12 @@
 #define CPUT_84         (1u << MOD_1184)                /* 11/84 */
 #define CPUT_93         (1u << MOD_1193)                /* 11/93 */
 #define CPUT_94         (1u << MOD_1194)                /* 11/94 */
+#define CPUT_HSC50      (1u << MOD_HSC50)               /* HSC50 */
 #define CPUT_HSC70      (1u << MOD_HSC70)               /* HSC70 */
 #define CPUT_T          (1u << MOD_T)                   /* T-11 */
 
-#define CPUT_F          (CPUT_23|CPUT_23P|CPUT_24)      /* all F11's */
+#define CPUT_F          (CPUT_23|CPUT_23P|CPUT_24| \
+                         CPUT_HSC50)                    /* all F11's */
 #define CPUT_J          (CPUT_53|CPUT_73|CPUT_73B| \
                          CPUT_83|CPUT_84|CPUT_93| \
                          CPUT_94|CPUT_HSC70)
@@ -258,11 +261,6 @@
                          CPUT_70|CPUT_J)
 #define HAS_LTCM        (CPUT_04|CPUT_05|CPUT_20|CPUT_24|CPUT_34| \
                          CPUT_40|CPUT_44|CPUT_45|CPUT_60|CPUT_70) //|CPUT_J)
-
-/* Other memory spaces */
-
-#define ADDR_IS_CMEM(x) ((((t_addr) (x)) < 017000000) && (((t_addr) (x)) >= 016000000))
-#define ADDR_IS_DMEM(x) ((((t_addr) (x)) < 016000000) && (((t_addr) (x)) >= 014000000))
 
 /* Protection modes */
 
@@ -600,8 +598,6 @@ typedef struct pdp_dib DIB;
 #define IOLN_KIPAR      020
 #define IOBA_KDPAR      (IOPAGEBASE + 012360)
 #define IOLN_KDPAR      020
-#define IOBA_FL         (IOPAGEBASE + 017400)
-#define IOLN_FL         010
 
 /* Interrupt assignments; within each level, priority is right to left
    PIRQn has the highest priority with a level and is always bit <0>
@@ -946,6 +942,40 @@ void uc15_WrMemW (int32 pa, int32 d);
 void uc15_WrMemB (int32 pa, int32 d);
 int32 Map_Read18 (uint32 ba, int32 bc, uint32 *buf);
 int32 Map_Write18 (uint32 ba, int32 bc, uint32 *buf);
+
+#elif defined (HSC)
+
+#define INIMODEL        MOD_HSC70
+#define INIOPTNS        SOP_1173
+#define INIMEMSIZE      004000000                       /* 2**20 */
+#define ADDR_IS_MEM(x)  (((t_addr) (x)) < 017000000)
+
+/* Other memory spaces */
+
+#define ADDR_IS_CMEM(x) ((((t_addr) (x)) < 017000000) && (((t_addr) (x)) >= 016000000))
+#define ADDR_IS_DMEM(x) ((((t_addr) (x)) < 016000000) && (((t_addr) (x)) >= 014000000))
+#define ADDR_IS_PMEM(x) (((t_addr) (x)) < 004000000)
+
+/* I/O page layout */
+
+#define IOBA_CWIN       IOPAGEBASE
+#define IOLN_CWIN       010000
+#define IOBA_IOC        (IOPAGEBASE + 010000)
+#define IOLN_IOC        060
+#define IOBA_ROM        (IOPAGEBASE + 013000)
+#define IOLN_ROM        04000
+#define IOBA_FL         (IOPAGEBASE + 017400)
+#define IOLN_FL         010
+
+#define RdMemW(pa)      hsc_RdMemW (pa)
+#define RdMemB(pa)      hsc_RdMemB (pa)
+#define WrMemW(pa,d)    hsc_WrMemW (pa, d)
+#define WrMemB(pa, d)   hsc_WrMemB (pa, d)
+
+int32 hsc_RdMemW (int32 pa);
+int32 hsc_RdMemB (int32 pa);
+void hsc_WrMemW (int32 pa, int32 d);
+void hsc_WrMemB (int32 pa, int32 d);
 
 #else                                                   /* PDP-11 */
 

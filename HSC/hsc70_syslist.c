@@ -36,6 +36,8 @@ extern DEVICE clk_dev;
 extern DEVICE dli_dev;
 extern DEVICE dlo_dev;
 extern DEVICE fl_dev;
+extern DEVICE rom_dev;
+extern DEVICE ioc_dev;
 
 DEVICE *sim_devices[] = {
     &cpu_dev,
@@ -46,5 +48,7 @@ DEVICE *sim_devices[] = {
     &dli_dev,
     &dlo_dev,
     &fl_dev,
+    &rom_dev,
+    &ioc_dev,
     NULL
     };
