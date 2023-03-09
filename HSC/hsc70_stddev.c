@@ -467,6 +467,11 @@ t_stat fl_rd (int32 *data, int32 pa, int32 access)
 {
 int32 rg = (pa >> 1) & 03;
 int32 unitno = (fl_csr >> FLCSR_V_SEL) & 1;
+
+if ((fl_csr & FLCSR_ME) == 0) {                         /* motor not enabled? */
+    *data = 0;                                          /* controller held in reset state */
+    return SCPE_OK;
+    }
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
@@ -501,10 +506,10 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
 //        sim_printf ("fl_csr wr: %o at %o\n", data, PC);
-        unitno = (data >> FLCSR_V_SEL) & 1;            /* get drive select */
         fl_csr = data & FLCSR_RW;
-        cmd = data & FLCSR_CS;
         if (fl_csr & FLCSR_ME) {                        /* motor enabled */
+            cmd = data & FLCSR_CS;
+            unitno = (data >> FLCSR_V_SEL) & 1;         /* get drive select */
             if ((cmd >> 4) == 015) {                    /* force interrupt? */
                 sim_cancel (&fl_unit[unitno]);
                 fl_csr = fl_csr & ~1;                   /* set not busy */
@@ -513,8 +518,6 @@ switch (rg) {                                           /* decode pa<2:1> */
                     fl_csr = fl_csr | 1;                /* set busy */
                     sim_activate (&fl_unit[unitno], FL_WAIT);
                     }
-//                fl_madr2 = fl_madr2 | 0377;             /* indicate no M.cache2 module? */
-//                sim_printf ("force_interrupt: fl_madr2 = %o\n", fl_madr2);
                 }
             else if ((fl_csr & 1) == 0) {               /* not busy? */
                 fl_unit[unitno].CMD = cmd;
