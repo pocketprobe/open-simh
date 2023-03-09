@@ -35,6 +35,9 @@
 
 extern int32 PCSR;
 extern int32 trap_req, ipl;
+extern int32 EADR;
+extern int32 CPUERR;
+extern jmp_buf save_env;
 
 extern int32 calc_ints (int32 nipl, int32 trq);
 
@@ -48,6 +51,7 @@ if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
 //    sim_printf ("DMEM PReadW: %o\n", pa);
+    return RdPMemW (pa);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04)                                      /* non-memory access */
@@ -74,6 +78,9 @@ if (ADDR_IS_CMEM (pa)) {
     }
 if (ADDR_IS_PMEM (pa))                                  /* program memory address? */
     return RdPMemW (pa);
+EADR = pa;
+setCPUERR (CPUE_NXM);
+ABORT (TRAP_NXM);
 }
 
 int32 hsc_RdMemB (int32 pa)
@@ -84,6 +91,7 @@ if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
 //    sim_printf ("DMEM PReadB: %o\n", pa);
+    return RdPMemB (pa);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04)                                      /* non-memory access */
@@ -110,6 +118,9 @@ if (ADDR_IS_CMEM (pa)) {
     }
 if (ADDR_IS_PMEM (pa))                                  /* program memory address? */
     return RdPMemB (pa);
+EADR = pa;
+setCPUERR (CPUE_NXM);
+ABORT (TRAP_NXM);
 }
 
 void hsc_WrMemW (int32 pa, int32 data)
@@ -118,6 +129,8 @@ if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
 //    sim_printf ("DMEM PWriteW: %o = %o\n", pa, data);
+    WrPMemW (pa, data);
+    return;
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04) {                                    /* non-memory access */
@@ -137,12 +150,16 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~07;
 //    sim_printf ("CMEM wr: %o = %o\n", pa, data);
+    WrPMemW (pa, data);
+    return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
     WrPMemW (pa, data);
     return;
     }
-return;
+EADR = pa;
+setCPUERR (CPUE_NXM);
+ABORT (TRAP_NXM);
 }
 
 void hsc_WrMemB (int32 pa, int32 data)
@@ -151,6 +168,8 @@ if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
 //    sim_printf ("DMEM PWriteB: %o = %o\n", pa, data);
+    WrPMemB (pa, data);
+    return;
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04) {                                    /* non-memory access */
@@ -170,10 +189,14 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~07;
 //    sim_printf ("CMEM wr: %o = %o\n", pa, data);
+    WrPMemB (pa, data);
+    return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
     WrPMemB (pa, data);
     return;
     }             
-return;
+EADR = pa;
+setCPUERR (CPUE_NXM);
+ABORT (TRAP_NXM);
 }
