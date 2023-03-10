@@ -260,7 +260,7 @@
                          CPUT_34|CPUT_40|CPUT_44|CPUT_45|CPUT_60| \
                          CPUT_70|CPUT_J)
 #define HAS_LTCM        (CPUT_04|CPUT_05|CPUT_20|CPUT_24|CPUT_34| \
-                         CPUT_40|CPUT_44|CPUT_45|CPUT_60|CPUT_70) //|CPUT_J)
+                         CPUT_40|CPUT_44|CPUT_45|CPUT_60|CPUT_70|CPUT_J)
 
 /* Protection modes */
 
