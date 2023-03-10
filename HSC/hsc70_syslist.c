@@ -1,4 +1,4 @@
-/* hsc70_syslist.c: HSC-70 device list
+/* hsc70_syslist.c: HSC70 device list
 
    Copyright (c) 2017, Matt Burke
 

@@ -1,4 +1,4 @@
-/* hsc70_io.c: HSC-70 I/O simulator
+/* hsc70_io.c: HSC70 I/O simulator
 
    Copyright (c) 2017, Matt Burke
    This module incorporates code from SimH, Copyright (c) 1993-2012, Robert M Supnik

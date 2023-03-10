@@ -617,7 +617,10 @@ REG cpu_reg[] = {
 MTAB cpu_mod[] = {
     { MTAB_XTD|MTAB_VDV, 0, "TYPE", NULL,
       NULL, &cpu_show_model },
-#if !defined (UC15)
+#if defined (HSC)
+    { MTAB_XTD|MTAB_VDV, MOD_HSC50, NULL, "HSC50", &cpu_set_model, NULL, NULL, "Set CPU type to HSC50" },
+    { MTAB_XTD|MTAB_VDV, MOD_HSC70, NULL, "HSC70", &cpu_set_model, NULL, NULL, "Set CPU type to HSC70" },
+#elif !defined (UC15)
     { MTAB_XTD|MTAB_VDV, MOD_1103, NULL, "11/03", &cpu_set_model, NULL, NULL, "Set CPU type to 11/03" },
     { MTAB_XTD|MTAB_VDV, MOD_1104, NULL, "11/04", &cpu_set_model, NULL, NULL, "Set CPU type to 11/04" },
     { MTAB_XTD|MTAB_VDV, MOD_1105, NULL, "11/05", &cpu_set_model, NULL, NULL, "Set CPU type to 11/05" },

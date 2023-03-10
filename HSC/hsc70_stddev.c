@@ -1,3 +1,28 @@
+/* hsc70_stddev.c: HSC70 standard devices
+
+   Copyright (c) 2023, Matt Burke
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+   Except as contained in this notice, the name of the author shall not be
+   used in advertising or otherwise to promote the sale, use or other dealings
+   in this Software without prior written authorization from the author.
+*/
 
 #include "pdp11_defs.h"
 #include "hsc_hsc70_bin.h"
@@ -63,6 +88,7 @@ int32 SDR = 0;                                          /* switch/display regist
 int32 PCSR = 0;                                         /* Pio control/status */
 
 extern DIB dli_dib;
+extern DEVICE dli_dev;
 extern int32 EADR, DADR;
 extern t_addr cpu_memsize;
 extern int32 trap_req;
@@ -70,6 +96,7 @@ extern int32 ipl;
 extern int32 int_req[IPL_HLVL];
 extern int32 R[8];
 extern FILE *sim_log;
+extern int32 autcon_enb;
 
 t_stat ioc_rd (int32 *data, int32 pa, int32 access);
 t_stat ioc_wr (int32 data, int32 pa, int32 access);
@@ -82,9 +109,6 @@ t_stat fl_wr (int32 data, int32 pa, int32 access);
 t_stat fl_svc (UNIT *uptr);
 t_stat fl_reset (DEVICE *dptr);
 t_stat fl_boot (int32 unitno, DEVICE *dptr);
-#if 0
-t_stat rom_boot (int32 flag, CONST char *ptr);
-#endif
 
 extern int32 PReadB (int32 pa);
 extern int32 ReadB (int32 va);
@@ -98,16 +122,6 @@ extern int32 calc_ints (int32 nipl, int32 trq);
 
 DIB ioc_dib = { IOBA_IOC, IOLN_IOC, &ioc_rd, &ioc_wr, 0 };
 DIB cwin_dib = { IOBA_CWIN, IOLN_CWIN, &cwin_rd, &cwin_wr, 0 };
-
-#if 0
-/* Special boot command, overrides regular boot */
-
-CTAB hsc_cmd[] = {
-    { "BOOT", &rom_boot, RU_BOOT,
-      "bo{ot}                   boot simulator\n", NULL, &run_cmd_message },
-    { NULL }
-    };
-#endif
 
 DIB rom_dib = {
     IOBA_ROM, IOLN_ROM, &rom_rd, NULL,
@@ -164,7 +178,7 @@ DEVICE fl_dev = {
     2, DEV_RDX, 20, 1, DEV_RDX, 8,
     NULL, NULL, &fl_reset,
     &fl_boot, NULL, NULL,
-    &fl_dib, DEV_UBUS | DEV_QBUS
+    &fl_dib, 0 //DEV_UBUS | DEV_QBUS
     };
 
 int32 parity (int32 val, int32 odd)
@@ -759,27 +773,17 @@ saved_PC = IOBA_ROM;
 return SCPE_OK;
 }
 
-#if 0
-t_stat rom_boot (int32 flag, CONST char *ptr)
-{
-char gbuf[CBUFSIZE];
-
-if ((ptr = get_sim_sw (ptr)) == NULL)                   /* get switches */
-    return SCPE_INVSW;
-get_glyph (ptr, gbuf, 0);                               /* get glyph */
-if (gbuf[0] && strcmp (gbuf, "CPU"))
-    return SCPE_ARG;                                    /* Only can specify CPU device */
-cpu_set_boot (IOPAGEBASE + 013000);
-return SCPE_OK;
-}
-#endif
-
 /* Build I/O space entries for IOC */
 
 t_stat ioc_build_dib (void)
 {
 t_stat r;
 
+autcon_enb = 0;                                         /* turn off autoconfigration */
+fl_dev.flags |= (DEV_UBUS | DEV_QBUS);
+dli_dev.flags &= ~(DEV_DISABLE | DEV_DIS);
+dli_dib.ba = IOBA_DL;
+dli_dib.vec = VEC_DL;
 if (r = build_ubus_tab (&ioc_dev, &ioc_dib))            /* add to dispatch tab */
      return r;
 if (r = build_ubus_tab (&ioc_dev, &cwin_dib))           /* add to dispatch tab */

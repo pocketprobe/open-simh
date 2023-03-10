@@ -1,6 +1,6 @@
-/* pdp11_defs.h: PDP-11 simulator definitions
+/* hsc70_defs.h HSC70 simulator definitions
 
-   Copyright (c) 1993-2011, Robert M Supnik
+   Copyright (c) 2023, Matt Burke
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -15,61 +15,13 @@
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-   ROBERT M SUPNIK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
    IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-   Except as contained in this notice, the name of Robert M Supnik shall not be
+   Except as contained in this notice, the name of the author shall not be
    used in advertising or otherwise to promote the sale, use or other dealings
-   in this Software without prior written authorization from Robert M Supnik.
-
-   The author gratefully acknowledges the help of Max Burnet, Megan Gentry,
-   and John Wilson in resolving questions about the PDP-11
-
-   11-Dec-11    RMS     Fixed priority of PIRQ vs IO; added INT_INTERNALn
-   22-May-10    RMS     Added check for 64b definitions
-   19-Nov-08    RMS     Moved I/O support routines to I/O library
-   16-May-08    RMS     Added KE11A, DC11 support
-   02-Feb-08    RMS     Fixed DMA memory address limit test (found by John Dundas)
-   25-Jan-08    RMS     Added RC11, KG11A support (from John Dundas)
-   16-Dec-06    RMS     Added TA11 support
-   29-Oct-06    RMS     Added clock coscheduling
-   06-Jul-06    RMS     Added multiple KL11/DL11 support
-   26-Jun-06    RMS     Added RF11 support
-   24-May-06    RMS     Added 11/44 DR support (from CIS diagnostic)
-   17-May-06    RMS     Added CR11/CD11 support (from John Dundas)
-   30-Sep-04    RMS     Added Massbus support
-                        Removed Map_Addr prototype
-                        Removed map argument from Unibus routines
-                        Added framework for model selection
-   28-May-04    RMS     Added DHQ support
-   25-Jan-04    RMS     Removed local debug logging support
-   22-Dec-03    RMS     Added second DEUNA/DELUA support
-   18-Oct-03    RMS     Added DECtape off reel message
-   19-May-03    RMS     Revised for new conditional compilation
-   05-Apr-03    RMS     Fixed bug in MMR1 update (found by Tim Stark)
-   28-Feb-03    RMS     Added TM logging support
-   19-Jan-03    RMS     Changed mode definitions for Apple Dev Kit conflict
-   11-Nov-02    RMS     Changed log definitions to be VAX compatible
-   10-Oct-02    RMS     Added vector information to DIB
-                        Changed DZ11 vector to Unibus standard
-                        Added DEQNA/DELQA, DEUNA/DELUA support
-                        Added multiple RQDX3, autoconfigure support
-   12-Sep-02    RMS     Added TMSCP, KW11P,and RX211 support
-   28-Apr-02    RMS     Clarified PDF ACF mnemonics
-   22-Apr-02    RMS     Added HTRAP, BPOK maint register flags, MT_MAXFR
-   06-Mar-02    RMS     Changed system type to KDJ11A
-   20-Jan-02    RMS     Added multiboard DZ11 support
-   09-Nov-01    RMS     Added bus map support
-   07-Nov-01    RMS     Added RQDX3 support
-   26-Oct-01    RMS     Added symbolic definitions for IO page
-   19-Oct-01    RMS     Added DZ definitions
-   15-Oct-01    RMS     Added logging capabilities
-   07-Sep-01    RMS     Revised for multilevel interrupts
-   01-Jun-01    RMS     Added DZ11 support
-   23-Apr-01    RMS     Added RK611 support
-   05-Apr-01    RMS     Added TS11/TSV05 support
-   10-Feb-01    RMS     Added DECtape support
+   in this Software without prior written authorization from the author.
 */
 
 #ifndef _HSC_DEFS_H

@@ -119,13 +119,11 @@ const char *dlx_description (DEVICE *dptr);
    dli_reg      DLI register list
 */
 
-#define IOBA_DL         (IOPAGEBASE + 017520)
 #define IOLN_DL         010
-#define VEC_DL          0300
 
 DIB dli_dib = {
-    IOBA_DL, IOLN_DL * DLX_LINES, &dlx_rd, &dlx_wr,
-    2, IVCL (DLI), VEC_DL, { &dli_iack, &dlo_iack }, IOLN_DL,
+    IOBA_AUTO, IOLN_DL * DLX_LINES, &dlx_rd, &dlx_wr,
+    2, IVCL (DLI), VEC_AUTO, { &dli_iack, &dlo_iack }, IOLN_DL,
     };
 
 UNIT dli_unit = { UDATA (&dli_svc, 0, 0), TMLN_SPD_9600_BPS };

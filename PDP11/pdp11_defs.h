@@ -947,7 +947,8 @@ int32 Map_Write18 (uint32 ba, int32 bc, uint32 *buf);
 
 #define INIMODEL        MOD_HSC70
 #define INIOPTNS        SOP_1173
-#define INIMEMSIZE      004000000                       /* 2**20 */
+//#define INIMEMSIZE      004000000                       /* 2**20 */
+#define INIMEMSIZE      020000000                         // temp to cover control and data memory
 #define ADDR_IS_MEM(x)  (((t_addr) (x)) < 017000000)
 
 /* Other memory spaces */
@@ -966,6 +967,8 @@ int32 Map_Write18 (uint32 ba, int32 bc, uint32 *buf);
 #define IOLN_ROM        04000
 #define IOBA_FL         (IOPAGEBASE + 017400)
 #define IOLN_FL         010
+#define IOBA_DL         (IOPAGEBASE + 017520)
+#define VEC_DL          0300
 
 #define RdMemW(pa)      hsc_RdMemW (pa)
 #define RdMemB(pa)      hsc_RdMemB (pa)
