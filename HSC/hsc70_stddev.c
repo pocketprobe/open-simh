@@ -77,7 +77,7 @@ int32 WADR[128][8];
 int32 WIDX = 0;
 int32 WBUS = 0;
 int32 KINI = 0;                                         /* K init reg */
-int32 KSTS[10] = { 0000, 0004, 0002, 0377, 0377, 0377, 0377, 0377, 0377, 0377 };
+int32 KSTS[10] = { 0000, 0001, 0002, 0377, 0377, 0377, 0377, 0377, 0377, 0377 };
 int32 CDATA = 0;
 int32 fl_csr = 0;
 int32 fl_madr0 = 0;
@@ -97,6 +97,7 @@ extern int32 int_req[IPL_HLVL];
 extern int32 R[8];
 extern FILE *sim_log;
 extern int32 autcon_enb;
+extern int16 inst_pc;
 
 t_stat ioc_rd (int32 *data, int32 pa, int32 access);
 t_stat ioc_wr (int32 data, int32 pa, int32 access);
@@ -266,6 +267,7 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 023:                                           /* K status reg - NI */
         *data = KSTS[(KINI & 017)];
+        *data = *data | (parity (*data, 1) << 7);       /* odd parity bit */
 //        sim_printf ("K status rd\n", *data);
         return SCPE_OK;
 
@@ -292,6 +294,66 @@ switch (rg) {                                           /* decode pa<2:1> */
         
 *data = 0;
 return SCPE_NXM;
+}
+
+/* Search control memory to find the KI structure, or
+ * at least that's what it's assumed to be. This starts
+ * with an alternating pattern of 1s and 0s. How much
+ * of control memory should be searched to find it?
+ *
+ * The offset to the KH (another assumption) structure
+ * can then be found. The following location should
+ * be the offset - 1. The software then expects the
+ * requestor to negate the offset as some sort of
+ * indication that it has been read.
+ */
+
+uint16 k_init_common ()
+{
+uint16 *CM = &M[016000000 >> 1];                        /* control memory */
+uint16 ki, kh = 0;
+
+for (ki = 0; ki < 20; ki++) {                           /* search for KI structure */
+    if ((CM[ki] == 0125252) && (CM[ki + 1] == 052525)) {
+        kh = CM[ki + 2];                                /* get offset to KH structure */
+        if (CM[ki + 3] != (kh - 1))                     /* verify offset */
+            break;                                      /* failed */
+        CM[ki + 2] = -CM[ki + 2];                       /* indicate offset read */
+        kh = (kh << 1);                                 /* convert to word offset */
+        }
+    }
+return kh;
+}
+
+/* The value at offset 0164 starts out at 177777 and
+ * the software expects the requestor to change this
+ * value (to what?)
+ *
+ * The value at offset 044 is assumed to be a version
+ * number for the requestor microcode. Must be at
+ * least 2.44?
+ */
+
+void kci_init ()
+{
+uint16 *CM = &M[016000000 >> 1];                        /* control memory */
+uint16 kh = k_init_common ();
+CM[kh + (0164 >> 1)] = 0;                               /* KH$NAD? */
+CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
+}
+
+/* The software expects the requestor to set location
+ * 074 to a value of 1 or 2
+ *
+ * The microcode version must be at least 3.00
+ */
+
+void ksdi_init ()
+{
+uint16 *CM = &M[016000000 >> 1];                        /* control memory */
+uint16 kh = k_init_common ();
+CM[kh + (074 >> 1)] = 1;
+CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
 }
 
 t_stat ioc_wr (int32 data, int32 pa, int32 access)
@@ -328,12 +390,20 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 022:                                           /* K init reg - NI */
 //        sim_printf ("K init wr: %o\n", data);
+        if (~KINI & data & 01000) {                     /* K.ci run */
+//            sim_printf ("K.ci startup\n");
+            kci_init ();
+            }
+        else if (~KINI & data & 02000) {                /* K.sdi run */
+//            sim_printf ("K.sdi startup\n");
+            ksdi_init ();
+            }
         KINI = data;
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
 //        sim_printf ("K status wr: %o\n", data);
-        KSTS[0] = data | (parity (data, 1) << 7);       /* can only write to req 0 */
+        KSTS[0] = data;                                 /* can only write to req 0 */
         return SCPE_OK;
         }
 
@@ -381,9 +451,8 @@ else {
     else LOCADR = (LOCADR & ~016) | 02;                 /* read/write cycle */
     CDATA = *data;
     }
-//sim_printf ("CMEM rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, PC);
 if (sim_log)
-    fprintf (sim_log, "CMEM rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, PC);
+    fprintf (sim_log, "CWIN rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, (uint16)inst_pc);
 PCSR = PCSR & ~07;                                      /* reset special cycle */
 return SCPE_OK;
 }
@@ -398,9 +467,8 @@ va = (WADR[WIDX][rg] & 0177600) << 2;
 va = va | (pa & 0777);
 WBUS = (va >> 2);
 LOCADR = (va >> 1) & 1;
-//sim_printf ("CMEM wr: %06o = %06o (%o) at %o\n", va, data, pa, PC);
 if (sim_log)
-    fprintf (sim_log, "CMEM wr: %06o = %06o (%o) at %o\n", va, data, pa, PC);
+    fprintf (sim_log, "CWIN wr: %06o = %06o (%o) at %o\n", va, data, pa, (uint16)inst_pc);
 va = va | (016 << 18);
 CDATA = data;
 if (PCSR & 04) {                                        /* non-memory access cycle */

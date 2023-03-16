@@ -38,6 +38,8 @@ extern int32 trap_req, ipl;
 extern int32 EADR;
 extern int32 CPUERR;
 extern jmp_buf save_env;
+extern FILE *sim_log;
+extern int16 inst_pc;
 
 extern int32 calc_ints (int32 nipl, int32 trq);
 
@@ -50,13 +52,17 @@ int32 data;
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    sim_printf ("DMEM PReadW: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "DMEM rdw: %o at %o\n", pa, (uint16)inst_pc);
     return RdPMemW (pa);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04)                                      /* non-memory access */
 //        data = 0;
 //    else
+    if (PCSR & 04000)                                   /* bank swap? */
+        data = RdPMemW (pa - 04000000);                 /* FIXME - temporary relocation */
+    else
         data = RdPMemW (pa);
     if (PCSR & 02) {
         if (data & 010)
@@ -73,11 +79,16 @@ if (ADDR_IS_CMEM (pa)) {
         WrPMemW (pa, 0100000);
         }
     PCSR = PCSR & ~07;
-//    sim_printf ("CMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "CMEM rdw: %o at %o\n", pa, (uint16)inst_pc);
     return data;
     }
-if (ADDR_IS_PMEM (pa))                                  /* program memory address? */
-    return RdPMemW (pa);
+if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
+    if (PCSR & 02000)                                   /* bank swap? */
+        return RdPMemW (pa ^ 02000000);                 /* yes, invert A19 */
+    else
+        return RdPMemW (pa);
+    }
 EADR = pa;
 setCPUERR (CPUE_NXM);
 ABORT (TRAP_NXM);
@@ -90,13 +101,17 @@ int32 data;
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    sim_printf ("DMEM PReadB: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "DMEM rdb: %o at %o\n", pa, (uint16)inst_pc);
     return RdPMemB (pa);
     }
 if (ADDR_IS_CMEM (pa)) {
 //    if (PCSR & 04)                                      /* non-memory access */
 //        data = 0;
 //    else
+    if (PCSR & 04000)                                   /* bank swap? */
+        data = RdPMemB (pa - 04000000);                 /* FIXME - temporary relocation */
+    else
         data = RdPMemB (pa);
     if (PCSR & 02) {
         if (data & 010)
@@ -113,11 +128,16 @@ if (ADDR_IS_CMEM (pa)) {
         WrPMemW (pa, 0100000);
         }
     PCSR = PCSR & ~07;
-//    sim_printf ("CMEM rd: %o\n", pa);
+    if (sim_log)
+        fprintf (sim_log, "CMEM rdb: %o at %o\n", pa, (uint16)inst_pc);
     return data;
     }
-if (ADDR_IS_PMEM (pa))                                  /* program memory address? */
-    return RdPMemB (pa);
+if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
+    if (PCSR & 02000)                                   /* bank swap? */
+        return RdPMemB (pa ^ 02000000);                 /* yes, invert A19 */
+    else
+        return RdPMemB (pa);
+    }
 EADR = pa;
 setCPUERR (CPUE_NXM);
 ABORT (TRAP_NXM);
@@ -128,7 +148,8 @@ void hsc_WrMemW (int32 pa, int32 data)
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    sim_printf ("DMEM PWriteW: %o = %o\n", pa, data);
+    if (sim_log)
+        fprintf (sim_log, "DMEM wrw: %o = %o at %o\n", pa, data, (uint16)inst_pc);
     WrPMemW (pa, data);
     return;
     }
@@ -149,12 +170,19 @@ if (ADDR_IS_CMEM (pa)) {
         trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
         }
     PCSR = PCSR & ~07;
-//    sim_printf ("CMEM wr: %o = %o\n", pa, data);
-    WrPMemW (pa, data);
+    if (sim_log)
+        fprintf (sim_log, "CMEM wrw: %o = %o at %o\n", pa, data, (uint16)inst_pc);
+    if (PCSR & 04000)                                   /* bank swap? */
+        WrPMemW (pa - 04000000, data);                  /* FIXME - temporary relocation */
+    else
+        WrPMemW (pa, data);
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
-    WrPMemW (pa, data);
+    if (PCSR & 02000)                                   /* bank swap? */
+        WrPMemW (pa ^ 02000000, data);                  /* yes, invert A19 */
+    else
+        WrPMemW (pa, data);
     return;
     }
 EADR = pa;
@@ -167,7 +195,8 @@ void hsc_WrMemB (int32 pa, int32 data)
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~07;
-//    sim_printf ("DMEM PWriteB: %o = %o\n", pa, data);
+    if (sim_log)
+        fprintf (sim_log, "DMEM wrb: %o = %o at %o\n", pa, data, (uint16)inst_pc);
     WrPMemB (pa, data);
     return;
     }
@@ -188,12 +217,19 @@ if (ADDR_IS_CMEM (pa)) {
         trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
         }
     PCSR = PCSR & ~07;
-//    sim_printf ("CMEM wr: %o = %o\n", pa, data);
-    WrPMemB (pa, data);
+    if (sim_log)
+        fprintf (sim_log, "CMEM wrb: %o = %o at %o\n", pa, data, (uint16)inst_pc);
+    if (PCSR & 04000)                                   /* bank swap? */
+        WrPMemB (pa - 04000000, data);                  /* FIXME - temporary relocation */
+    else
+        WrPMemB (pa, data);
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
-    WrPMemB (pa, data);
+    if (PCSR & 02000)                                   /* bank swap? */
+        WrPMemB (pa ^ 02000000, data);                  /* yes, invert A19 */
+    else
+        WrPMemB (pa, data);
     return;
     }             
 EADR = pa;
