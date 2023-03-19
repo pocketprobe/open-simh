@@ -418,42 +418,15 @@ int32 rg;
 rg = (va >> 9) & 07;                                    /* get window reg for this addr */
 pa = (WADR[WINDR][rg] & 0177600) << 2;
 pa = pa | (va & 0777);
-WBUSR = (pa >> 2);                                      /* high order address history */
-LOCADR = (pa >> 1) & 1;                                 /* low order address history */
 pa = pa | (016 << 18);                                  /* FIXME: add offset to control memory */
-if (PCSR & PCSR_NMA) {                                  /* non-memory access cycle */
-    LOCADR = LOCADR | 016;
-    *data = CDATA;
-    }
+if (ADDR_IS_CMEM (pa))                              /* memory address? */
+    *data = hsc_RdMemW (pa);
 else {
-    if (ADDR_IS_MEM (pa))                               /* memory address? */
-        *data = (M[pa >> 1]);
-    else {
-        sim_printf ("Error: %o is not mem addr\n", pa);
-        return SCPE_NXM;
-        }
-    if (PCSR & PCSR_CIE) {                              /* interrupt cycle */
-        LOCADR = (LOCADR & ~016) | 04;
-        if (*data & 010)
-            SET_INT (CB7);
-        if (*data & 04)
-            SET_INT (CB6);
-        if (*data & 02)
-            SET_INT (CB5);
-        if (*data & 01)
-            SET_INT (CB4);
-        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
-        }
-    else if (PCSR & PCSR_LCK) {                         /* lock cycle */
-        LOCADR = (LOCADR & ~016) | 010;
-        M[pa >> 1] = 0100000;
-        }
-    else LOCADR = (LOCADR & ~016) | 02;                 /* read/write cycle */
-    CDATA = *data;                                      /* data history */
+    sim_printf ("Error: %o is not mem addr\n", pa);
+    return SCPE_NXM;
     }
 if (sim_log)
     fprintf (sim_log, "CWIN rd: %06o = %06o (%o) at %o\n", (pa & ~(016 << 18)), *data, va, (uint16)inst_pc);
-PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);        /* reset special cycle */
 return SCPE_OK;
 }
 
@@ -465,42 +438,14 @@ int32 rg;
 rg = (va >> 9) & 07;                                    /* translate virtual address */
 pa = (WADR[WINDR][rg] & 0177600) << 2;
 pa = pa | (va & 0777);
-WBUSR = (pa >> 2);                                      /* high order address history */
-LOCADR = (pa >> 1) & 1;                                 /* low order address history */
 if (sim_log)
     fprintf (sim_log, "CWIN wr: %06o = %06o (%o) at %o\n", pa, data, va, (uint16)inst_pc);
 pa = pa | (016 << 18);                                  /* FIXME: add offset to control memory */
-CDATA = data;                                           /* data history */
-if (PCSR & PCSR_NMA) {                                  /* non-memory access cycle */
-    LOCADR = LOCADR | 016;
-    return SCPE_OK;
-    }
-if (PCSR & PCSR_CIE) {                                  /* interrupt cycle */
-    LOCADR = (LOCADR & ~016) | 04;
-    if (data & 010)
-        SET_INT (CB7);
-    if (data & 04)
-        SET_INT (CB6);
-    if (data & 02)
-        SET_INT (CB5);
-    if (data & 01)
-        SET_INT (CB4);
-    trap_req = calc_ints (ipl, trap_req);               /* recalc int req */
-    }
-else if (PCSR & PCSR_LCK) {                             /* lock cycle */
-    LOCADR = (LOCADR & ~016) | 010;
-    M[pa >> 1] = 0100000;
-    }
-else LOCADR = (LOCADR & ~016) | 02;                     /* read/write cycle */
-PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);        /* reset special cycle */
-if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
-    if (access == WRITEB) {
-        if (pa & 1)
-            M[pa >> 1] = (M[pa >> 1] & 0377) | (data << 8);
-        else M[pa >> 1] = (M[pa >> 1] & ~0377) | data;
-        }
+if (ADDR_IS_CMEM (pa)) {                                /* memory address? */
+    if (access == WRITEB)
+        hsc_WrMemB (pa, data);
     else
-        M[pa >> 1] = data;
+        hsc_WrMemW (pa, data);
     }
 else {
     sim_printf ("Error: %o is not mem addr\n", pa);

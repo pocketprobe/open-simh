@@ -39,6 +39,9 @@ extern int32 CPUERR;
 extern jmp_buf save_env;
 extern FILE *sim_log;
 extern int16 inst_pc;
+extern int32 LOCADR;
+extern int32 CDATA;
+extern int32 WBUSR;
 
 extern int32 calc_ints (int32 nipl, int32 trq);
 
@@ -57,26 +60,35 @@ if (ADDR_IS_DMEM (pa)) {
     return RdPMemW (pa);
     }
 if (ADDR_IS_CMEM (pa)) {
-//    if (PCSR & PCSR_NMA)                                /* non-memory access */
-//        data = 0;
-//    else
-    if (PCSR & PCSR_CBK)                                /* bank swap? */
-        data = RdPMemW (pa - 04000000);                 /* FIXME - temporary relocation */
-    else
-        data = RdPMemW (pa);
-    if (PCSR & PCSR_CIE) {
-        if (data & 010)
-            SET_INT (CB7);
-        if (data & 04)
-            SET_INT (CB6);
-        if (data & 02)
-            SET_INT (CB5);
-        if (data & 01)
-            SET_INT (CB4);
-        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+    WBUSR = ((pa & 0777777) >> 2);                      /* high order address history */
+    LOCADR = (pa >> 1) & 1;                             /* low order address history */
+    if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
+        LOCADR = LOCADR | 016;
+        data = CDATA;
         }
-    if (PCSR & PCSR_LCK) {
-        WrPMemW (pa, 0100000);
+    else {
+        if (PCSR & PCSR_CBK)                            /* bank swap? */
+            data = RdPMemW (pa - 04000000);             /* FIXME - temporary relocation */
+        else
+            data = RdPMemW (pa);
+        if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
+            LOCADR = (LOCADR & ~016) | 04;
+            if (data & 010)
+                SET_INT (CB7);
+            if (data & 04)
+                SET_INT (CB6);
+            if (data & 02)
+                SET_INT (CB5);
+            if (data & 01)
+                SET_INT (CB4);
+            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
+            }
+        else if (PCSR & PCSR_LCK) {                     /* lock cycle */
+            LOCADR = (LOCADR & ~016) | 010;
+            M[pa >> 1] = 0100000;
+            }
+        else LOCADR = (LOCADR & ~016) | 02;             /* read/write cycle */
+        CDATA = data;                                   /* data history */
         }
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
@@ -100,32 +112,41 @@ int32 data;
 
 if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
-    PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);        /* reset special cycle */
+    PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
         fprintf (sim_log, "DMEM rdb: %o at %o\n", pa, (uint16)inst_pc);
     return RdPMemB (pa);
     }
 if (ADDR_IS_CMEM (pa)) {
-//    if (PCSR & PCSR_NMA)                                /* non-memory access */
-//        data = 0;
-//    else
-    if (PCSR & PCSR_CBK)                                /* bank swap? */
-        data = RdPMemB (pa - 04000000);                 /* FIXME - temporary relocation */
-    else
-        data = RdPMemB (pa);
-    if (PCSR & PCSR_CIE) {
-        if (data & 010)
-            SET_INT (CB7);
-        if (data & 04)
-            SET_INT (CB6);
-        if (data & 02)
-            SET_INT (CB5);
-        if (data & 01)
-            SET_INT (CB4);
-        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+    WBUSR = ((pa & 0777777) >> 2);                      /* high order address history */
+    LOCADR = (pa >> 1) & 1;                             /* low order address history */
+    if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
+        LOCADR = LOCADR | 016;
+        data = CDATA;
         }
-    if (PCSR & PCSR_LCK) {
-        WrPMemW (pa, 0100000);
+    else {
+        if (PCSR & PCSR_CBK)                            /* bank swap? */
+            data = RdPMemB (pa - 04000000);             /* FIXME - temporary relocation */
+        else
+            data = RdPMemB (pa);
+        if (PCSR & PCSR_CIE) {
+            LOCADR = (LOCADR & ~016) | 04;
+            if (data & 010)
+                SET_INT (CB7);
+            if (data & 04)
+                SET_INT (CB6);
+            if (data & 02)
+                SET_INT (CB5);
+            if (data & 01)
+                SET_INT (CB4);
+            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
+            }
+        else if (PCSR & PCSR_LCK) {
+            LOCADR = (LOCADR & ~016) | 010;
+            M[pa >> 1] = 0100000;
+            }
+        else LOCADR = (LOCADR & ~016) | 02;             /* read/write cycle */
+        CDATA = data;                                   /* data history */
         }
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
@@ -154,28 +175,38 @@ if (ADDR_IS_DMEM (pa)) {
     return;
     }
 if (ADDR_IS_CMEM (pa)) {
-//    if (PCSR & PCSR_NMA) {                             /* non-memory access */
-//        PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK); /* reset special cycle */
-//        return;
-//        }
-    if (PCSR & PCSR_CIE) {
-        if (data & 010)
-            SET_INT (CB7);
-        if (data & 04)
-            SET_INT (CB6);
-        if (data & 02)
-            SET_INT (CB5);
-        if (data & 01)
-            SET_INT (CB4);
-        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+    WBUSR = ((pa & 0777777) >> 2);                      /* high order address history */
+    LOCADR = (pa >> 1) & 1;                             /* low order address history */
+    CDATA = data;                                       /* data history */
+    if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
+        LOCADR = LOCADR | 016;
+        }
+    else {
+        if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
+            LOCADR = (LOCADR & ~016) | 04;
+            if (data & 010)
+                SET_INT (CB7);
+            if (data & 04)
+                SET_INT (CB6);
+            if (data & 02)
+                SET_INT (CB5);
+            if (data & 01)
+                SET_INT (CB4);
+            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
+            }
+        else if (PCSR & PCSR_LCK) {                     /* lock cycle */
+            LOCADR = (LOCADR & ~016) | 010;
+            M[pa >> 1] = 0100000;
+            }
+        else LOCADR = (LOCADR & ~016) | 02;             /* read/write cycle */
+        if (sim_log)
+            fprintf (sim_log, "CMEM wrw: %o = %o at %o\n", pa, data, (uint16)inst_pc);
+        if (PCSR & PCSR_CBK)                            /* bank swap? */
+            WrPMemW (pa - 04000000, data);              /* FIXME - temporary relocation */
+        else
+            WrPMemW (pa, data);
         }
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
-    if (sim_log)
-        fprintf (sim_log, "CMEM wrw: %o = %o at %o\n", pa, data, (uint16)inst_pc);
-    if (PCSR & PCSR_CBK)                                /* bank swap? */
-        WrPMemW (pa - 04000000, data);                  /* FIXME - temporary relocation */
-    else
-        WrPMemW (pa, data);
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
@@ -201,28 +232,38 @@ if (ADDR_IS_DMEM (pa)) {
     return;
     }
 if (ADDR_IS_CMEM (pa)) {
-//    if (PCSR & PCSR_NMA) {                             /* non-memory access */
-//        PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK); /* reset special cycle */
-//        return;
-//        }
-    if (PCSR & PCSR_CIE) {
-        if (data & 010)
-            SET_INT (CB7);
-        if (data & 04)
-            SET_INT (CB6);
-        if (data & 02)
-            SET_INT (CB5);
-        if (data & 01)
-            SET_INT (CB4);
-        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+    WBUSR = ((pa & 0777777) >> 2);                      /* high order address history */
+    LOCADR = (pa >> 1) & 1;                             /* low order address history */
+    CDATA = data;                                       /* data history */
+    if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
+        LOCADR = LOCADR | 016;
+        }
+    else {
+        if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
+            LOCADR = (LOCADR & ~016) | 04;
+            if (data & 010)
+                SET_INT (CB7);
+            if (data & 04)
+                SET_INT (CB6);
+            if (data & 02)
+                SET_INT (CB5);
+            if (data & 01)
+                SET_INT (CB4);
+            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
+            }
+        else if (PCSR & PCSR_LCK) {                     /* lock cycle */
+            LOCADR = (LOCADR & ~016) | 010;
+            M[pa >> 1] = 0100000;
+            }
+        else LOCADR = (LOCADR & ~016) | 02;             /* read/write cycle */
+        if (sim_log)
+            fprintf (sim_log, "CMEM wrb: %o = %o at %o\n", pa, data, (uint16)inst_pc);
+        if (PCSR & PCSR_CBK)                            /* bank swap? */
+            WrPMemB (pa - 04000000, data);              /* FIXME - temporary relocation */
+        else
+            WrPMemB (pa, data);
         }
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
-    if (sim_log)
-        fprintf (sim_log, "CMEM wrb: %o = %o at %o\n", pa, data, (uint16)inst_pc);
-    if (PCSR & PCSR_CBK)                                /* bank swap? */
-        WrPMemB (pa - 04000000, data);                  /* FIXME - temporary relocation */
-    else
-        WrPMemB (pa, data);
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
