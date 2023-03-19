@@ -75,15 +75,12 @@
 
 int32 WADR[128][8];                                     /* window address registers */
 int32 WINDR = 0;                                        /* window index register */
-int32 WBUSR = 0;                                        /* window bus register */
 int32 KINI = 0;                                         /* K init register */
 int32 KSTS[10] = { 0000, 0001, 0002, 0377, 0377, 0377, 0377, 0377, 0377, 0377 };
-int32 CDATA = 0;                                        /* control bus data */
 int32 fl_csr = 0;
 int32 fl_madr0 = 0;
 int32 fl_madr1 = 0;
 int32 fl_madr2 = 0;
-int32 LOCADR = 0;                                       /* control mem low address */
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
 
@@ -98,11 +95,12 @@ extern int32 R[8];
 extern FILE *sim_log;
 extern int32 autcon_enb;
 extern int16 inst_pc;
+extern int32 CADR, CDATA, CCYCLE;
 
 t_stat ioc_rd (int32 *data, int32 pa, int32 access);
 t_stat ioc_wr (int32 data, int32 pa, int32 access);
-t_stat cwin_rd (int32 *data, int32 pa, int32 access);
-t_stat cwin_wr (int32 data, int32 pa, int32 access);
+t_stat cwin_rd (int32 *data, int32 va, int32 access);
+t_stat cwin_wr (int32 data, int32 va, int32 access);
 t_stat rom_rd (int32 *data, int32 pa, int32 access);
 t_stat rom_boot (int32 unitno, DEVICE *dptr);
 t_stat fl_rd (int32 *data, int32 pa, int32 access);
@@ -236,7 +234,7 @@ switch (rg) {                                           /* decode pa<2:1> */
         return SCPE_OK;
 
     case 011:                                           /* WBUSR */
-        *data = WBUSR;
+        *data = (CADR >> 1);
 //        sim_printf ("WBUSR rd: %o\n", *data);
         return SCPE_OK;
 
@@ -281,8 +279,8 @@ switch (rg) {                                           /* decode pa<2:1> */
 //        sim_printf ("data mem high rd: %o\n", *data);
         return SCPE_OK;
 
-    case 026:                                           /* ctrl mem low addr - NI */
-        *data = LOCADR;
+    case 026:                                           /* ctrl mem low addr */
+        *data = (CCYCLE << 1) | (CADR & 1);
 //        sim_printf ("ctrl mem low rd: %o\n", *data);
         return SCPE_OK;
 
