@@ -73,17 +73,17 @@
 #define UNIT_WLK        (1u << UNIT_V_UF)
 #define UNIT_WPRT       (UNIT_WLK | UNIT_RO)            /* write protect */
 
-int32 WADR[128][8];
-int32 WIDX = 0;
-int32 WBUS = 0;
-int32 KINI = 0;                                         /* K init reg */
+int32 WADR[128][8];                                     /* window address registers */
+int32 WINDR = 0;                                        /* window index register */
+int32 WBUSR = 0;                                        /* window bus register */
+int32 KINI = 0;                                         /* K init register */
 int32 KSTS[10] = { 0000, 0001, 0002, 0377, 0377, 0377, 0377, 0377, 0377, 0377 };
-int32 CDATA = 0;
+int32 CDATA = 0;                                        /* control bus data */
 int32 fl_csr = 0;
 int32 fl_madr0 = 0;
 int32 fl_madr1 = 0;
 int32 fl_madr2 = 0;
-int32 LOCADR = 0;
+int32 LOCADR = 0;                                       /* control mem low address */
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
 
@@ -224,20 +224,20 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 005:                                           /* WADR5 */
     case 006:                                           /* WADR6 */
     case 007:                                           /* WADR7 */
-        *data = WADR[WIDX][rg];
+        *data = WADR[WINDR][rg];
         *data = (*data & 0177) << 2;
         *data = *data | (rg << 9) | (016 << 12);
 //        sim_printf ("WADR%d rd %o\n", rg, *data);
         return SCPE_OK;
 
-    case 010:                                           /* WIDX */
-        *data = WIDX;
-//        sim_printf ("WIDX rd: %o\n", *data);
+    case 010:                                           /* WINDR */
+        *data = WINDR;
+//        sim_printf ("WINDR rd: %o\n", *data);
         return SCPE_OK;
 
-    case 011:                                           /* WBUS */
-        *data = WBUS;
-//        sim_printf ("WBUS rd: %o\n", *data);
+    case 011:                                           /* WBUSR */
+        *data = WBUSR;
+//        sim_printf ("WBUSR rd: %o\n", *data);
         return SCPE_OK;
 
     case 012:                                           /* low error */
@@ -250,8 +250,8 @@ switch (rg) {                                           /* decode pa<2:1> */
 //        sim_printf ("high error rd: %o\n", *data);
         return SCPE_OK;
 
-    case 020:                                           /* Pio CSR - NI */
-        *data = PCSR | 0100000;
+    case 020:                                           /* Pio CSR */
+        *data = PCSR | PCSR_ENA;
 //        sim_printf ("Pio CSR rd: %o\n", *data);
         return SCPE_OK;
 
@@ -370,12 +370,12 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 006:                                           /* WADR6 */
     case 007:                                           /* WADR7 */
 //        sim_printf ("WADR%d wr: %o\n", rg, data);
-        WADR[WIDX][rg] = data;
+        WADR[WINDR][rg] = data;
         return SCPE_OK;
 
-    case 010:                                           /* WIDX */
-//        sim_printf ("WIDX wr: %o\n", data);
-        WIDX = data & 0177;
+    case 010:                                           /* WINDR */
+//        sim_printf ("WINDR wr: %o\n", data);
+        WINDR = data & 0177;
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
@@ -391,11 +391,11 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 022:                                           /* K init reg - NI */
 //        sim_printf ("K init wr: %o\n", data);
         if (~KINI & data & 01000) {                     /* K.ci run */
-//            sim_printf ("K.ci startup\n");
+            sim_printf ("K.ci startup\n");
             kci_init ();
             }
         else if (~KINI & data & 02000) {                /* K.sdi run */
-//            sim_printf ("K.sdi startup\n");
+            sim_printf ("K.sdi startup\n");
             ksdi_init ();
             }
         KINI = data;
@@ -410,29 +410,29 @@ switch (rg) {                                           /* decode pa<2:1> */
 return SCPE_NXM;
 }
 
-t_stat cwin_rd (int32 *data, int32 pa, int32 access)
+t_stat cwin_rd (int32 *data, int32 va, int32 access)
 {
-int32 va;
+int32 pa;
 int32 rg;
 
-rg = (pa >> 9) & 07;                                    /* get window reg for this addr */
-va = (WADR[WIDX][rg] & 0177600) << 2;
-va = va | (pa & 0777);
-WBUS = (va >> 2);                                       /* save history */
-LOCADR = (va >> 1) & 1;
-va = va | (016 << 18);
-if (PCSR & 04) {                                        /* non-memory access cycle */
+rg = (va >> 9) & 07;                                    /* get window reg for this addr */
+pa = (WADR[WINDR][rg] & 0177600) << 2;
+pa = pa | (va & 0777);
+WBUSR = (pa >> 2);                                      /* high order address history */
+LOCADR = (pa >> 1) & 1;                                 /* low order address history */
+pa = pa | (016 << 18);                                  /* FIXME: add offset to control memory */
+if (PCSR & PCSR_NMA) {                                  /* non-memory access cycle */
     LOCADR = LOCADR | 016;
     *data = CDATA;
     }
 else {
-    if (ADDR_IS_MEM (va))                               /* memory address? */
-        *data = (M[va >> 1]);
+    if (ADDR_IS_MEM (pa))                               /* memory address? */
+        *data = (M[pa >> 1]);
     else {
-        sim_printf ("Error: %o is not mem addr\n", va);
+        sim_printf ("Error: %o is not mem addr\n", pa);
         return SCPE_NXM;
         }
-    if (PCSR & 02) {                                    /* interrupt cycle */
+    if (PCSR & PCSR_CIE) {                              /* interrupt cycle */
         LOCADR = (LOCADR & ~016) | 04;
         if (*data & 010)
             SET_INT (CB7);
@@ -444,38 +444,38 @@ else {
             SET_INT (CB4);
         trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
         }
-    else if (PCSR & 01) {                               /* lock cycle */
+    else if (PCSR & PCSR_LCK) {                         /* lock cycle */
         LOCADR = (LOCADR & ~016) | 010;
-        M[va >> 1] = 0100000;
+        M[pa >> 1] = 0100000;
         }
     else LOCADR = (LOCADR & ~016) | 02;                 /* read/write cycle */
-    CDATA = *data;
+    CDATA = *data;                                      /* data history */
     }
 if (sim_log)
-    fprintf (sim_log, "CWIN rd: %06o = %06o (%o) at %o\n", (va & ~(016 << 18)), *data, pa, (uint16)inst_pc);
-PCSR = PCSR & ~07;                                      /* reset special cycle */
+    fprintf (sim_log, "CWIN rd: %06o = %06o (%o) at %o\n", (pa & ~(016 << 18)), *data, va, (uint16)inst_pc);
+PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);        /* reset special cycle */
 return SCPE_OK;
 }
 
-t_stat cwin_wr (int32 data, int32 pa, int32 access)
+t_stat cwin_wr (int32 data, int32 va, int32 access)
 {
-int32 va;
+int32 pa;
 int32 rg;
 
-rg = (pa >> 9) & 07;
-va = (WADR[WIDX][rg] & 0177600) << 2;
-va = va | (pa & 0777);
-WBUS = (va >> 2);
-LOCADR = (va >> 1) & 1;
+rg = (va >> 9) & 07;                                    /* translate virtual address */
+pa = (WADR[WINDR][rg] & 0177600) << 2;
+pa = pa | (va & 0777);
+WBUSR = (pa >> 2);                                      /* high order address history */
+LOCADR = (pa >> 1) & 1;                                 /* low order address history */
 if (sim_log)
-    fprintf (sim_log, "CWIN wr: %06o = %06o (%o) at %o\n", va, data, pa, (uint16)inst_pc);
-va = va | (016 << 18);
-CDATA = data;
-if (PCSR & 04) {                                        /* non-memory access cycle */
+    fprintf (sim_log, "CWIN wr: %06o = %06o (%o) at %o\n", pa, data, va, (uint16)inst_pc);
+pa = pa | (016 << 18);                                  /* FIXME: add offset to control memory */
+CDATA = data;                                           /* data history */
+if (PCSR & PCSR_NMA) {                                  /* non-memory access cycle */
     LOCADR = LOCADR | 016;
     return SCPE_OK;
     }
-if (PCSR & 02) {                                        /* interrupt cycle */
+if (PCSR & PCSR_CIE) {                                  /* interrupt cycle */
     LOCADR = (LOCADR & ~016) | 04;
     if (data & 010)
         SET_INT (CB7);
@@ -487,23 +487,23 @@ if (PCSR & 02) {                                        /* interrupt cycle */
         SET_INT (CB4);
     trap_req = calc_ints (ipl, trap_req);               /* recalc int req */
     }
-else if (PCSR & 01) {                                   /* lock cycle */
+else if (PCSR & PCSR_LCK) {                             /* lock cycle */
     LOCADR = (LOCADR & ~016) | 010;
-    M[va >> 1] = 0100000;
+    M[pa >> 1] = 0100000;
     }
 else LOCADR = (LOCADR & ~016) | 02;                     /* read/write cycle */
-PCSR = PCSR & ~07;
-if (ADDR_IS_MEM (va)) {                                 /* memory address? */
+PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);        /* reset special cycle */
+if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     if (access == WRITEB) {
-        if (va & 1)
-            M[va >> 1] = (M[va >> 1] & 0377) | (data << 8);
-        else M[va >> 1] = (M[va >> 1] & ~0377) | data;
+        if (pa & 1)
+            M[pa >> 1] = (M[pa >> 1] & 0377) | (data << 8);
+        else M[pa >> 1] = (M[pa >> 1] & ~0377) | data;
         }
     else
-        M[va >> 1] = data;
+        M[pa >> 1] = data;
     }
 else {
-    sim_printf ("Error: %o is not mem addr\n", va);
+    sim_printf ("Error: %o is not mem addr\n", pa);
     return SCPE_NXM;
     }
 return SCPE_OK;
@@ -814,7 +814,7 @@ if (unitno != 0) {
     sim_printf ("Boot only supported from unit 0\n");
     return SCPE_NOFNC;
     }
-fl_read (&fl_unit[unitno], 0, 1, 06000, FALSE);                           /* read first 8 blocks */
+fl_read (&fl_unit[unitno], 0, 1, 06000, FALSE);         /* read first 8 blocks */
 fl_read (&fl_unit[unitno], 2, 7, 07000, FALSE);
 REGFILE[1][rs] = 0177400;                               /* boot device CSR */
 REGFILE[2][rs] = 06000;                                 /* boot base */
@@ -827,8 +827,8 @@ t_stat rom_rd (int32 *data, int32 pa, int32 access)
 uint16 *rom = (uint16*) hsc_hsc70_bin;
 //uint32 rg = ((pa >> 1) & 01777);                        /* decode PA<1> */
 uint32 rg = ((pa - IOPAGEBASE - 013000) >> 1);
-if (PCSR & 0400)
-    rg = rg + 02000;
+if (PCSR & PCSR_PG2)                                    /* second page selected? */
+    rg = rg + 02000;                                    /* yes, add offset */
 *data = sim_rom_read_with_delay (rom[rg]);
 return SCPE_OK;
 }

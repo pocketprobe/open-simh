@@ -27,20 +27,60 @@
 #ifndef _HSC_DEFS_H
 #define _HSC_DEFS_H   0
 
+#define INIMODEL        MOD_HSC70
+#define INIOPTNS        SOP_1173
+//#define INIMEMSIZE      004000000                       /* 2**20 */
+#define INIMEMSIZE      020000000                         // temp to cover control and data memory
+#define ADDR_IS_MEM(x)  (((t_addr) (x)) < 017000000)
+
 /* Other memory spaces */
 
 #define ADDR_IS_CMEM(x) ((((t_addr) (x)) < 017000000) && (((t_addr) (x)) >= 016000000))
 #define ADDR_IS_DMEM(x) ((((t_addr) (x)) < 016000000) && (((t_addr) (x)) >= 014000000))
 #define ADDR_IS_PMEM(x) (((t_addr) (x)) < 004000000)
 
+/* I/O page layout */
+
+#define IOBA_CWIN       IOPAGEBASE
+#define IOLN_CWIN       010000
+#define IOBA_IOC        (IOPAGEBASE + 010000)
+#define IOLN_IOC        060
+#define IOBA_ROM        (IOPAGEBASE + 013000)
+#define IOLN_ROM        04000
+#define IOBA_FL         (IOPAGEBASE + 017400)
+#define IOLN_FL         010
+#define IOBA_DL         (IOPAGEBASE + 017520)
+#define VEC_DL          0300
+
+#define RdMemW(pa)      hsc_RdMemW (pa)
+#define RdMemB(pa)      hsc_RdMemB (pa)
+#define WrMemW(pa,d)    hsc_WrMemW (pa, d)
+#define WrMemB(pa, d)   hsc_WrMemB (pa, d)
+
+int32 hsc_RdMemW (int32 pa);
+int32 hsc_RdMemB (int32 pa);
+void hsc_WrMemW (int32 pa, int32 d);
+void hsc_WrMemB (int32 pa, int32 d);
+
+/* P.ioj control/status register */
+
+#define PCSR_ENA        0100000                         /* OCP secure/enable */
+#define PCSR_CBK        0004000                         /* control mem bank swap */
+#define PCSR_PBK        0002000                         /* program mem bank swap */
+#define PCSR_PG2        0000400                         /* boot ROM page select */
+#define PCSR_CBE        0000200                         /* control bus enable */
+#define PCSR_HIP        0000040                         /* high byte parity */
+#define PCSR_LOP        0000020                         /* low byte parity */
+#define PCSR_LED        0000010                         /* P.ioj module LED */
+#define PCSR_NMA        0000004                         /* non-memory access */
+#define PCSR_CIE        0000002                         /* control mem interrupt enable */
+#define PCSR_LCK        0000001                         /* control mem lock enable */
+
+# if 0
+
 /* IO parameters */
 
 #define DLX_LINES       2                               /* max # of KL11/DL11's */
-
-/* I/O page layout */
-
-#define IOBA_FL         (IOPAGEBASE + 017400)
-#define IOLN_FL         010
 
 /* Interrupt assignments; within each level, priority is right to left
    PIRQn has the highest priority with a level and is always bit <0>
@@ -74,5 +114,7 @@
 #define VEC_CB6         0130
 #define VEC_CB5         0124
 #define VEC_CB4         0120
+
+#endif
 
 #endif

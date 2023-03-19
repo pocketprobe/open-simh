@@ -945,40 +945,7 @@ int32 Map_Write18 (uint32 ba, int32 bc, uint32 *buf);
 
 #elif defined (HSC)
 
-#define INIMODEL        MOD_HSC70
-#define INIOPTNS        SOP_1173
-//#define INIMEMSIZE      004000000                       /* 2**20 */
-#define INIMEMSIZE      020000000                         // temp to cover control and data memory
-#define ADDR_IS_MEM(x)  (((t_addr) (x)) < 017000000)
-
-/* Other memory spaces */
-
-#define ADDR_IS_CMEM(x) ((((t_addr) (x)) < 017000000) && (((t_addr) (x)) >= 016000000))
-#define ADDR_IS_DMEM(x) ((((t_addr) (x)) < 016000000) && (((t_addr) (x)) >= 014000000))
-#define ADDR_IS_PMEM(x) (((t_addr) (x)) < 004000000)
-
-/* I/O page layout */
-
-#define IOBA_CWIN       IOPAGEBASE
-#define IOLN_CWIN       010000
-#define IOBA_IOC        (IOPAGEBASE + 010000)
-#define IOLN_IOC        060
-#define IOBA_ROM        (IOPAGEBASE + 013000)
-#define IOLN_ROM        04000
-#define IOBA_FL         (IOPAGEBASE + 017400)
-#define IOLN_FL         010
-#define IOBA_DL         (IOPAGEBASE + 017520)
-#define VEC_DL          0300
-
-#define RdMemW(pa)      hsc_RdMemW (pa)
-#define RdMemB(pa)      hsc_RdMemB (pa)
-#define WrMemW(pa,d)    hsc_WrMemW (pa, d)
-#define WrMemB(pa, d)   hsc_WrMemB (pa, d)
-
-int32 hsc_RdMemW (int32 pa);
-int32 hsc_RdMemB (int32 pa);
-void hsc_WrMemW (int32 pa, int32 d);
-void hsc_WrMemB (int32 pa, int32 d);
+#include "hsc70_defs.h"
 
 #else                                                   /* PDP-11 */
 

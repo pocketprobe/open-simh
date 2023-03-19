@@ -38,6 +38,7 @@ extern int32 autcon_enb;
 extern int32 uba_last;
 extern DEVICE cpu_dev;
 extern t_addr cpu_memsize;
+extern int32 EADR;
 
 int32 calc_ints (int32 nipl, int32 trq);
 
@@ -83,9 +84,12 @@ t_stat stat;
 idx = (pa & IOPAGEMASK) >> 1;
 if (iodispR[idx]) {
     stat = iodispR[idx] (data, pa, access);
+    if (stat != SCPE_OK)
+        EADR = pa;
     trap_req = calc_ints (ipl, trap_req);
     return stat;
     }
+EADR = pa;
 return SCPE_NXM;
 }
 
@@ -97,9 +101,12 @@ t_stat stat;
 idx = (pa & IOPAGEMASK) >> 1;
 if (iodispW[idx]) {
     stat = iodispW[idx] (data, pa, access);
+    if (stat != SCPE_OK)
+        EADR = pa;
     trap_req = calc_ints (ipl, trap_req);
     return stat;
     }
+EADR = pa;
 return SCPE_NXM;
 }
 

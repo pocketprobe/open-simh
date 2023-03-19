@@ -306,7 +306,6 @@ int32 MMR0 = 0;                                         /* MMR0 - status */
 int32 MMR1 = 0;                                         /* MMR1 - R+/-R */
 int32 MMR2 = 0;                                         /* MMR2 - saved PC */
 int32 MMR3 = 0;                                         /* MMR3 - 22b status */
-int32 EADR = 0;                                         /* error address */
 int32 cpu_bme = 0;                                      /* bus map enable */
 int32 cpu_astop = 0;                                    /* address stop */
 int32 isenable = 0, dsenable = 0;                       /* i, d space flags */
@@ -2647,12 +2646,10 @@ if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemW (pa);
 if ((pa < IOPAGEBASE) ||                                /* not I/O address */
     (CPUT (CPUT_J) && (pa >= IOBA_CPU))) {              /* or J11 int reg? */
-        EADR = pa;
         setCPUERR (CPUE_NXM);
         ABORT (TRAP_NXM);
         }
 if (iopageR (&data, pa, READ) != SCPE_OK) {             /* invalid I/O addr? */
-    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2737,12 +2734,10 @@ int32 data;
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemW (pa);
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
-    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageR (&data, pa, READ) != SCPE_OK) {             /* invalid I/O addr? */
-    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2756,12 +2751,10 @@ int32 data;
 if (ADDR_IS_MEM (pa))                                   /* memory address? */
     return RdMemB (pa);
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
-    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageR (&data, pa, READ) != SCPE_OK) {             /* invalid I/O addr? */
-    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2831,12 +2824,10 @@ if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     return;
     }
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
-    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageW (data, pa, WRITE) != SCPE_OK) {             /* invalid I/O addr? */
-    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
@@ -2850,12 +2841,10 @@ if (ADDR_IS_MEM (pa)) {                                 /* memory address? */
     return;
     }
 if (pa < IOPAGEBASE) {                                  /* not I/O address? */
-    EADR = pa;
     setCPUERR (CPUE_NXM);
     ABORT (TRAP_NXM);
     }
 if (iopageW (data, pa, WRITEB) != SCPE_OK) {            /* invalid I/O addr? */
-    EADR = pa;
     setCPUERR (CPUE_TMO);
     ABORT (TRAP_NXM);
     }
