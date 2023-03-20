@@ -308,7 +308,6 @@ return SCPE_NXM;
 
 uint16 k_init_common ()
 {
-uint16 *CM = &M[CMEMBASE >> 1];                         /* control memory */
 uint16 ki, kh = 0;
 
 for (ki = 0; ki < 20; ki++) {                           /* search for KI structure */
@@ -334,7 +333,6 @@ return kh;
 
 void kci_init ()
 {
-uint16 *CM = &M[CMEMBASE >> 1];                         /* control memory */
 uint16 kh = k_init_common ();
 CM[kh + (0164 >> 1)] = 0;                               /* KH$NAD? */
 CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
@@ -348,7 +346,6 @@ CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, m
 
 void ksdi_init ()
 {
-uint16 *CM = &M[CMEMBASE >> 1];                         /* control memory */
 uint16 kh = k_init_common ();
 CM[kh + (074 >> 1)] = 1;
 CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
@@ -799,5 +796,15 @@ if (r = build_ubus_tab (&ioc_dev, &ioc_dib))            /* add to dispatch tab *
      return r;
 if (r = build_ubus_tab (&ioc_dev, &cwin_dib))           /* add to dispatch tab */
      return r;
+if (CM == NULL) {                                       /* First time init */
+    CM = (uint16 *) calloc (CMEMSIZE, sizeof (uint16)); /* 2 banks */
+    if (CM == NULL)
+        return SCPE_MEM;
+    }
+if (DM == NULL) {                                       /* First time init */
+    DM = (uint16 *) calloc (DMEMSIZE >> 1, sizeof (uint16));
+    if (DM == NULL)
+        return SCPE_MEM;
+    }
 return SCPE_OK;
 }

@@ -29,9 +29,8 @@
 
 #define INIMODEL        MOD_HSC70
 #define INIOPTNS        SOP_1173
-//#define INIMEMSIZE      004000000                       /* 2**20 */
-#define INIMEMSIZE      020000000                         // temp to cover control and data memory
-#define ADDR_IS_MEM(x)  (((t_addr) (x)) < 017000000)
+#define INIMEMSIZE      004000000                       /* 2**20 */
+#define ADDR_IS_MEM(x)  (((t_addr) (x)) < IOPAGEBASE)   /* All of memory space handled by hsc70_mem.c */
 
 /* Other memory spaces */
 
@@ -49,7 +48,7 @@
 #define ADDR_IS_DMEM(x) ((((t_addr) (x)) >= DMEMBASE) && \
                         (((t_addr) (x)) < (DMEMBASE + DMEMSIZE)))
 
-#define ADDR_IS_PMEM(x) (((t_addr) (x)) < 004000000)
+#define ADDR_IS_PMEM(x) (((t_addr) (x)) < INIMEMSIZE)
 
 /* I/O page layout */
 
@@ -73,6 +72,9 @@ int32 hsc_RdMemW (int32 pa);
 int32 hsc_RdMemB (int32 pa);
 void hsc_WrMemW (int32 pa, int32 d);
 void hsc_WrMemB (int32 pa, int32 d);
+
+extern uint16 *CM;                                      /* Control memory */
+extern uint16 *DM;                                      /* Data memory */
 
 /* P.ioj control/status register */
 

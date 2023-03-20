@@ -26,12 +26,12 @@
 
 #include "pdp11_defs.h"
 
-#define RdPMemW(pa)     (M[(pa) >> 1])
-#define RdPMemB(pa)     ((((pa) & 1)? M[(pa) >> 1] >> 8: M[(pa) >> 1]) & 0377)
-#define WrPMemW(pa,d)   M[(pa) >> 1] = (d)
-#define WrPMemB(pa,d)   M[(pa) >> 1] = ((pa) & 1)? \
-                            ((M[(pa) >> 1] & 0377) | (((d) & 0377) << 8)): \
-                            ((M[(pa) >> 1] & ~0377) | ((d) & 0377))
+#define RdxMemW(x,pa)   (x[(pa) >> 1])
+#define RdxMemB(x,pa)   ((((pa) & 1)? x[(pa) >> 1] >> 8: x[(pa) >> 1]) & 0377)
+#define WrxMemW(x,pa,d) x[(pa) >> 1] = (d)
+#define WrxMemB(x,pa,d) x[(pa) >> 1] = ((pa) & 1)? \
+                            ((x[(pa) >> 1] & 0377) | (((d) & 0377) << 8)): \
+                            ((x[(pa) >> 1] & ~0377) | ((d) & 0377))
 
 const char *cycles[] = {
     "STD",
@@ -49,6 +49,8 @@ extern int16 inst_pc;
 
 extern int32 calc_ints (int32 nipl, int32 trq);
 
+uint16 *CM = NULL;                                      /* control memory */
+uint16 *DM = NULL;                                      /* data memory */
 int32 CADR = 0;                                         /* control memory address */
 int32 CDATA = 0;                                        /* control memory data */
 int32 CCYCLE = 0;                                       /* control memory cycle */
@@ -60,24 +62,26 @@ int32 hsc_RdMemW (int32 pa)
 int32 data;
 
 if (ADDR_IS_DMEM (pa)) {
+    pa = pa & DMEMMASK;
     DADR = pa;
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
-    data = RdPMemW (pa);
+    data = RdxMemW (DM, pa);
     if (sim_log)
         fprintf (sim_log, "DMEM rd: %07o = %06o at %o\n", pa, data, (uint16)inst_pc);
     return data;
     }
 if (ADDR_IS_CMEM (pa)) {
-    CADR = (pa & CMEMMASK) >> 1;                        /* save address */
+    pa = pa & CMEMMASK;
+    CADR = (pa >> 1);                                   /* save address */
     if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
         CCYCLE = 07;
         data = CDATA;
         }
     else {
         if (PCSR & PCSR_CBK)                            /* bank swap? */
-            data = RdPMemW (pa - 04000000);             /* FIXME - temporary relocation */
+            data = RdxMemW (CM, pa + (CMEMSIZE >> 1));  /* select upper half of memory */
         else
-            data = RdPMemW (pa);
+            data = RdxMemW (CM, pa);
         if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
             CCYCLE = 02;
             if (data & 010)
@@ -92,7 +96,7 @@ if (ADDR_IS_CMEM (pa)) {
             }
         else if (PCSR & PCSR_LCK) {                     /* lock cycle */
             CCYCLE = 04;
-            M[pa >> 1] = 0100000;                       /* indicate locked */
+            WrxMemW (CM, pa, 0100000);                  /* indicate locked */
             }
         else CCYCLE = 01;                               /* read/write cycle */
         CDATA = data;                                   /* data history */
@@ -104,9 +108,9 @@ if (ADDR_IS_CMEM (pa)) {
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
     if (PCSR & PCSR_PBK)                                /* bank swap? */
-        return RdPMemW (pa ^ 02000000);                 /* yes, invert A19 */
+        return RdxMemW (M, pa ^ 02000000);              /* yes, invert A19 */
     else
-        return RdPMemW (pa);
+        return RdxMemW (M, pa);
     }
 EADR = pa;
 setCPUERR (CPUE_NXM);
@@ -118,24 +122,26 @@ int32 hsc_RdMemB (int32 pa)
 int32 data;
 
 if (ADDR_IS_DMEM (pa)) {
+    pa = pa & DMEMMASK;
     DADR = pa;
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
-    data = RdPMemB (pa);
+    data = RdxMemB (DM, pa);
     if (sim_log)
         fprintf (sim_log, "DMEM rd: %07o = %03o at %o\n", pa, data, (uint16)inst_pc);
     return data;
     }
 if (ADDR_IS_CMEM (pa)) {
-    CADR = (pa & CMEMMASK) >> 1;                        /* save address */
+    pa = pa & CMEMMASK;
+    CADR = (pa >> 1);                                   /* save address */
     if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
         CCYCLE = 07;
         data = CDATA;
         }
     else {
         if (PCSR & PCSR_CBK)                            /* bank swap? */
-            data = RdPMemB (pa - 04000000);             /* FIXME - temporary relocation */
+            data = RdxMemB (CM, pa + (CMEMSIZE >> 1));  /* select upper half of memory */
         else
-            data = RdPMemB (pa);
+            data = RdxMemB (CM, pa);
         if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
             CCYCLE = 02;
             if (data & 010)
@@ -150,7 +156,7 @@ if (ADDR_IS_CMEM (pa)) {
             }
         else if (PCSR & PCSR_LCK) {                     /* lock cycle */
             CCYCLE = 04;
-            M[pa >> 1] = 0100000;                       /* indicate locked */
+            WrxMemW (CM, pa, 0100000);                  /* indicate locked */
             }
         else CCYCLE = 01;                               /* read/write cycle */
         CDATA = data;                                   /* data history */
@@ -162,9 +168,9 @@ if (ADDR_IS_CMEM (pa)) {
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
     if (PCSR & PCSR_PBK)                                /* bank swap? */
-        return RdPMemB (pa ^ 02000000);                 /* yes, invert A19 */
+        return RdxMemB (M, pa ^ 02000000);              /* yes, invert A19 */
     else
-        return RdPMemB (pa);
+        return RdxMemB (M, pa);
     }
 EADR = pa;
 setCPUERR (CPUE_NXM);
@@ -174,15 +180,17 @@ ABORT (TRAP_NXM);
 void hsc_WrMemW (int32 pa, int32 data)
 {
 if (ADDR_IS_DMEM (pa)) {
+    pa = pa & DMEMMASK;
     DADR = pa;
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
         fprintf (sim_log, "DMEM wr: %07o = %06o at %o\n", pa, data, (uint16)inst_pc);
-    WrPMemW (pa, data);
+    WrxMemW (DM, pa, data);
     return;
     }
 if (ADDR_IS_CMEM (pa)) {
-    CADR = (pa & CMEMMASK) >> 1;                        /* save address */
+    pa = pa & CMEMMASK;
+    CADR = (pa >> 1);                                   /* save address */
     CDATA = data;                                       /* data history */
     if (PCSR & PCSR_NMA)                                /* non-memory access cycle */
         CCYCLE = 07;
@@ -201,13 +209,13 @@ if (ADDR_IS_CMEM (pa)) {
             }
         else if (PCSR & PCSR_LCK) {                     /* lock cycle */
             CCYCLE = 04;
-            M[pa >> 1] = 0100000;                       /* indicate locked */
+            WrxMemW (CM, pa, 0100000);                  /* indicate locked */
             }
         else CCYCLE = 01;                               /* read/write cycle */
         if (PCSR & PCSR_CBK)                            /* bank swap? */
-            WrPMemW (pa - 04000000, data);              /* FIXME - temporary relocation */
+            WrxMemW (CM, pa + (CMEMSIZE >> 1), data);   /* select upper half of memory */
         else
-            WrPMemW (pa, data);
+            WrxMemW (CM, pa, data);
         }
     if (sim_log)
         fprintf (sim_log, "CMEM wr (%s): %07o = %06o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
@@ -216,9 +224,9 @@ if (ADDR_IS_CMEM (pa)) {
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
     if (PCSR & PCSR_PBK)                                /* bank swap? */
-        WrPMemW (pa ^ 02000000, data);                  /* yes, invert A19 */
+        WrxMemW (M, pa ^ 02000000, data);               /* yes, invert A19 */
     else
-        WrPMemW (pa, data);
+        WrxMemW (M, pa, data);
     return;
     }
 EADR = pa;
@@ -229,15 +237,17 @@ ABORT (TRAP_NXM);
 void hsc_WrMemB (int32 pa, int32 data)
 {
 if (ADDR_IS_DMEM (pa)) {
+    pa = pa & DMEMMASK;
     DADR = pa;
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
         fprintf (sim_log, "DMEM wr: %07o = %03o at %o\n", pa, data, (uint16)inst_pc);
-    WrPMemB (pa, data);
+    WrxMemB (DM, pa, data);
     return;
     }
 if (ADDR_IS_CMEM (pa)) {
-    CADR = (pa & CMEMMASK) >> 1;                        /* save address */
+    pa = pa & CMEMMASK;
+    CADR = (pa >> 1);                                   /* save address */
     CDATA = data;                                       /* data history */
     if (PCSR & PCSR_NMA)                                /* non-memory access cycle */
         CCYCLE = 07;
@@ -256,13 +266,13 @@ if (ADDR_IS_CMEM (pa)) {
             }
         else if (PCSR & PCSR_LCK) {                     /* lock cycle */
             CCYCLE = 04;
-            M[pa >> 1] = 0100000;                       /* indicate locked */
+            WrxMemW (CM, pa, 0100000);                  /* indicate locked */
             }
         else CCYCLE = 01;                               /* read/write cycle */
         if (PCSR & PCSR_CBK)                            /* bank swap? */
-            WrPMemB (pa - 04000000, data);              /* FIXME - temporary relocation */
+            WrxMemB (CM, pa + (CMEMSIZE >> 1), data);   /* select upper half of memory */
         else
-            WrPMemB (pa, data);
+            WrxMemB (CM, pa, data);
         }
     if (sim_log)
         fprintf (sim_log, "CMEM wr (%s): %07o = %03o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
@@ -271,9 +281,9 @@ if (ADDR_IS_CMEM (pa)) {
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
     if (PCSR & PCSR_PBK)                                /* bank swap? */
-        WrPMemB (pa ^ 02000000, data);                  /* yes, invert A19 */
+        WrxMemB (M, pa ^ 02000000, data);               /* yes, invert A19 */
     else
-        WrPMemB (pa, data);
+        WrxMemB (M, pa, data);
     return;
     }             
 EADR = pa;
