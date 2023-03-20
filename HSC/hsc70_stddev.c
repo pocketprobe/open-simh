@@ -308,7 +308,7 @@ return SCPE_NXM;
 
 uint16 k_init_common ()
 {
-uint16 *CM = &M[016000000 >> 1];                        /* control memory */
+uint16 *CM = &M[CMEMBASE >> 1];                         /* control memory */
 uint16 ki, kh = 0;
 
 for (ki = 0; ki < 20; ki++) {                           /* search for KI structure */
@@ -334,7 +334,7 @@ return kh;
 
 void kci_init ()
 {
-uint16 *CM = &M[016000000 >> 1];                        /* control memory */
+uint16 *CM = &M[CMEMBASE >> 1];                         /* control memory */
 uint16 kh = k_init_common ();
 CM[kh + (0164 >> 1)] = 0;                               /* KH$NAD? */
 CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
@@ -348,7 +348,7 @@ CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, m
 
 void ksdi_init ()
 {
-uint16 *CM = &M[016000000 >> 1];                        /* control memory */
+uint16 *CM = &M[CMEMBASE >> 1];                         /* control memory */
 uint16 kh = k_init_common ();
 CM[kh + (074 >> 1)] = 1;
 CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
@@ -416,15 +416,15 @@ int32 rg;
 rg = (va >> 9) & 07;                                    /* get window reg for this addr */
 pa = (WADR[WINDR][rg] & 0177600) << 2;
 pa = pa | (va & 0777);
-pa = pa | (016 << 18);                                  /* FIXME: add offset to control memory */
-if (ADDR_IS_CMEM (pa))                              /* memory address? */
+pa = pa + CMEMBASE;                                     /* FIXME: add offset to control memory */
+if (ADDR_IS_CMEM (pa))                                  /* memory address? */
     *data = hsc_RdMemW (pa);
 else {
     sim_printf ("Error: %o is not mem addr\n", pa);
     return SCPE_NXM;
     }
-if (sim_log)
-    fprintf (sim_log, "CWIN rd: %06o = %06o (%o) at %o\n", (pa & ~(016 << 18)), *data, va, (uint16)inst_pc);
+//if (sim_log)
+//    fprintf (sim_log, "CWIN rd: %06o = %06o (%o) at %o\n", (pa & CMEMMASK), *data, va, (uint16)inst_pc);
 return SCPE_OK;
 }
 
@@ -436,9 +436,9 @@ int32 rg;
 rg = (va >> 9) & 07;                                    /* translate virtual address */
 pa = (WADR[WINDR][rg] & 0177600) << 2;
 pa = pa | (va & 0777);
-if (sim_log)
-    fprintf (sim_log, "CWIN wr: %06o = %06o (%o) at %o\n", pa, data, va, (uint16)inst_pc);
-pa = pa | (016 << 18);                                  /* FIXME: add offset to control memory */
+//if (sim_log)
+//    fprintf (sim_log, "CWIN wr: %06o = %06o (%o) at %o\n", (pa & CMEMMASK), data, va, (uint16)inst_pc);
+pa = pa + CMEMBASE;                                     /* FIXME: add offset to control memory */
 if (ADDR_IS_CMEM (pa)) {                                /* memory address? */
     if (access == WRITEB)
         hsc_WrMemB (pa, data);

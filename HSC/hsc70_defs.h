@@ -35,8 +35,20 @@
 
 /* Other memory spaces */
 
-#define ADDR_IS_CMEM(x) ((((t_addr) (x)) < 017000000) && (((t_addr) (x)) >= 016000000))
-#define ADDR_IS_DMEM(x) ((((t_addr) (x)) < 016000000) && (((t_addr) (x)) >= 014000000))
+#define CMEMWIDTH       18                              /* Control memory addr width */
+#define CMEMSIZE        (1u << CMEMWIDTH)               /* Control memory size */
+#define CMEMMASK        (CMEMSIZE - 1)                  /* Control memory addr mask */
+#define CMEMBASE        016000000                       /* Control memory base addr */
+#define ADDR_IS_CMEM(x) ((((t_addr) (x)) >= CMEMBASE) && \
+                        (((t_addr) (x)) < (CMEMBASE + CMEMSIZE)))
+
+#define DMEMWIDTH       19                              /* Data memory addr width */
+#define DMEMSIZE        (1u << DMEMWIDTH)               /* Data memory size */
+#define DMEMMASK        (DMEMSIZE - 1)                  /* Data memory addr mask */
+#define DMEMBASE        014000000                       /* Data memory base addr */
+#define ADDR_IS_DMEM(x) ((((t_addr) (x)) >= DMEMBASE) && \
+                        (((t_addr) (x)) < (DMEMBASE + DMEMSIZE)))
+
 #define ADDR_IS_PMEM(x) (((t_addr) (x)) < 004000000)
 
 /* I/O page layout */
