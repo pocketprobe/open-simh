@@ -83,6 +83,7 @@ int32 fl_madr1 = 0;
 int32 fl_madr2 = 0;
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
+uint16 kci_kh;
 
 extern DIB dli_dib;
 extern DEVICE dli_dev;
@@ -116,6 +117,19 @@ extern void WriteB (int32 data, int32 addr);
 extern void WriteW (int32 data, int32 addr);
 extern int32 ReadW (int32 addr);
 extern int32 calc_ints (int32 nipl, int32 trq);
+
+t_stat kci_show (int32 flag, CONST char *ptr);
+t_stat kci_process (int32 flag, CONST char *ptr);
+
+/* Special boot command, overrides regular boot */
+
+CTAB hsc_cmd[] = {
+    { "KCI", &kci_show, 0,
+      "kci                   dump K.ci structures\n", NULL, NULL },
+    { "KPR", &kci_process, 0,
+      "kpr                   process K.ci queue\n", NULL, NULL },
+    { NULL }
+    };
 
 /* Fixed I/O address table entries */
 
@@ -322,20 +336,15 @@ for (ki = 0; ki < 20; ki++) {                           /* search for KI structu
 return kh;
 }
 
-/* The value at offset 0164 starts out at 177777 and
- * the software expects the requestor to change this
- * value (to what?)
- *
- * The value at offset 044 is assumed to be a version
- * number for the requestor microcode. Must be at
- * least 2.44?
- */
+/* The microcode version must be at least 2.44 */
 
 void kci_init ()
 {
 uint16 kh = k_init_common ();
-CM[kh + (0164 >> 1)] = 0;                               /* KH$NAD? */
-CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
+kci_kh = kh;
+sim_printf ("K.ci startup: KH = %06o at %o\n", (kh << 1), (uint16)inst_pc);
+CM[kh + (0164 >> 1)] = 3;                               /* KH$NAD - CI node address */
+CM[kh + (044 >> 1)] = 01400;                            /* KG$VRS - version (major = 3, minor = 0) */
 }
 
 /* The software expects the requestor to set location
@@ -344,11 +353,301 @@ CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, m
  * The microcode version must be at least 3.00
  */
 
-void ksdi_init ()
+void ksdi_init (uint32 req)
 {
 uint16 kh = k_init_common ();
-CM[kh + (074 >> 1)] = 1;
-CM[kh + (044 >> 1)] = 01400;                            /* version? major = 3, minor = 0 */
+sim_printf ("K.sdi %d startup: KH = %06o at %o\n", req, (kh << 1), (uint16)inst_pc);
+CM[kh + (074 >> 1)] = 1;                                /* KG$RSL? */
+CM[kh + (044 >> 1)] = 01400;                            /* KG$VRS - version (major = 3, minor = 0) */
+}
+
+void print_word (uint16 kh, char *name, uint16 off, uint16 len)
+{
+if (len == 0)
+    sim_printf ("%s %06o\n", name, (kh << 1) + off);
+else if (len == 1) {
+    if (off & 1)
+        sim_printf ("%s %06o\\  %03o\n", name, (kh << 1) + off, (CM[kh + (off >> 1)] >> 8));
+    else
+        sim_printf ("%s %06o\\  %03o\n", name, (kh << 1) + off, CM[kh + (off >> 1)] & 0377);
+    }
+else {
+    sim_printf ("%s %06o/", name, (kh << 1) + off);
+    for (int i = 1; i <= (len >> 1); i++) {
+        sim_printf ("  %06o", CM[kh + (off + i >> 1)]);
+        if (i % 8 == 0)
+            sim_printf ("\n              ");
+        }
+    sim_printf ("\n");
+    }
+//    sim_printf ("%s %06o/  %06o\n", name, (kh << 1) + off, CM[kh + (off >> 1)]);
+//else if (len == 4)
+//    sim_printf ("%s %06o/  %06o  %06o\n", name, (kh << 1) + off, CM[kh + (off >> 1)], CM[kh + ((off + 2) >> 1)]);
+}
+
+t_stat kci_show (int32 flag, CONST char *ptr)
+{
+uint16 kh = kci_kh;
+uint16 wk2h, wk2t;
+
+print_word (kh, "KH$LNK", 0000, 2);
+
+wk2h = kh + (0000 >> 1);
+wk2h = CM[wk2h];
+if (wk2h != 0) {
+    wk2h = wk2h << 1;
+    print_word (wk2h, "   LNK", 0000, 2);
+    print_word (wk2h, "   LNK", 0002, 2);
+    print_word (wk2h, "   LNK", 0004, 2);
+    print_word (wk2h, "   LNK", 0006, 2);
+    print_word (wk2h, "   LNK", 0010, 2);
+    print_word (wk2h, "   LNK", 0012, 2);
+    print_word (wk2h, "   LNK", 0014, 2);
+    print_word (wk2h, "   LNK", 0016, 2);
+    print_word (wk2h, "   LNK", 0020, 2);
+}
+
+print_word (kh, "KH$FLG", 0002, 2);
+print_word (kh, "KH$3WK", 0004, 4);
+print_word (kh, "KH$2WK", 0010, 4);
+wk2h = kh + (0010 >> 1);
+for (;;) {
+    wk2h = CM[wk2h];
+    if (wk2h == 0)
+        break;
+    wk2h = wk2h << 1;
+    print_word (wk2h, "   2WK", 0000, 2);
+    print_word (wk2h, "   2WK", 0002, 2);
+    print_word (wk2h, "   2WK", 0004, 2);
+    print_word (wk2h, "   2WK", 0006, 2);
+    print_word (wk2h, "   2WK", 0010, 2);
+    print_word (wk2h, "   2WK", 0012, 2);
+    print_word (wk2h, "   2WK", 0014, 2);
+    print_word (wk2h, "   2WK", 0016, 2);
+    print_word (wk2h, "   2WK", 0020, 2);
+    sim_printf ("   ---\n");
+    }
+print_word (kh, "KH$1WK", 0014, 4);
+print_word (kh, "KH$0WK", 0020, 4);
+print_word (kh, "KH$EQ ", 0024, 4);
+print_word (kh, "KH$SRR", 0030, 4);
+print_word (kh, "KH$DRR", 0034, 4);
+print_word (kh, "KG$TLK", 0040, 2);
+print_word (kh, "KG$SLT", 0042, 1);
+print_word (kh, "KG$TYP", 0043, 1);
+print_word (kh, "KG$VRS", 0044, 2);
+print_word (kh, "KG$FCB", 0046, 2);
+
+wk2h = kh + (0046 >> 1);
+for (;;) {
+    wk2h = CM[wk2h];
+    if (wk2h == 0)
+        break;
+    wk2h = wk2h << 1;
+    print_word (wk2h, "   FCB", 0000, 2);
+    print_word (wk2h, "   FCB", 0002, 2);
+    print_word (wk2h, "   FCB", 0004, 2);
+    print_word (wk2h, "   FCB", 0006, 2);
+    sim_printf ("   ---\n");
+    }
+
+print_word (kh, "KG$FBU", 0050, 2);
+
+wk2h = kh + (0050 >> 1);
+wk2h = CM[wk2h];
+if (wk2h != 0) {
+    wk2h = wk2h << 1;
+    print_word (wk2h, "   FBU", 0000, 2);
+    print_word (wk2h, "   FBU", 0002, 2);
+    print_word (wk2h, "   FBU", 0004, 2);
+    print_word (wk2h, "   FBU", 0006, 2);
+    print_word (wk2h, "   FBU", 0010, 2);
+    print_word (wk2h, "   FBU", 0012, 2);
+    print_word (wk2h, "   FBU", 0014, 2);
+    print_word (wk2h, "   FBU", 0016, 2);
+    print_word (wk2h, "   FBU", 0020, 2);
+}
+
+print_word (kh, "KG$BWS", 0052, 2);
+print_word (kh, "KG$TMR", 0054, 2);
+print_word (kh, "KG$DMP", 0056, 2);
+
+wk2h = kh + (0056 >> 1);
+wk2h = CM[wk2h];
+if (wk2h != 0) {
+    wk2h = wk2h << 1;
+    print_word (wk2h, "   DMP", 0000, 2);
+    print_word (wk2h, "   DMP", 0002, 2);
+    print_word (wk2h, "   DMP", 0004, 2);
+    print_word (wk2h, "   DMP", 0006, 2);
+    print_word (wk2h, "   DMP", 0010, 2);
+    print_word (wk2h, "   DMP", 0012, 2);
+    print_word (wk2h, "   DMP", 0014, 2);
+    print_word (wk2h, "   DMP", 0016, 2);
+    print_word (wk2h, "   DMP", 0020, 2);
+}
+
+print_word (kh, "KG$DCA", 0060, 2);
+print_word (kh, "KG$TST", 0062, 2);
+print_word (kh, "KG$FRS", 0064, 2);
+print_word (kh, "KG$LAS", 0066, 2);
+print_word (kh, "KG$MDL", 0070, 0);
+print_word (kh, "KG$MTY", 0070, 2);
+print_word (kh, "KG$PFL", 0072, 2);
+print_word (kh, "KG$RSL", 0074, 2);
+print_word (kh, "KG$LTR", 0076, 2);
+print_word (kh, "KG$PSA", 0100, 2);
+print_word (kh, "KG$PSB", 0102, 2);
+print_word (kh, "KG$DSA", 0104, 20);
+print_word (kh, "KG$MC0", 0130, 8);
+print_word (kh, "KG$KSA", 0140, 0);
+print_word (kh, "KH$D2T", 0140, 2);
+print_word (kh, "KH$CIM", 0142, 2);
+
+wk2h = kh + (0142 >> 1);
+wk2h = CM[wk2h];
+if (wk2h != 0) {
+    wk2h = wk2h << 1;
+    print_word (wk2h, "   CIM", 0000, 2);
+    print_word (wk2h, "   CIM", 0002, 2);
+    print_word (wk2h, "   CIM", 0004, 2);
+    print_word (wk2h, "   CIM", 0006, 2);
+    print_word (wk2h, "   CIM", 0010, 2);
+    print_word (wk2h, "   CIM", 0012, 2);
+    print_word (wk2h, "   CIM", 0014, 2);
+    print_word (wk2h, "   CIM", 0016, 2);
+    print_word (wk2h, "   CIM", 0020, 2);
+}
+
+print_word (kh, "KH$D1T", 0144, 2);
+print_word (kh, "KH$VA ", 0146, 2);
+print_word (kh, "KH$D0T", 0150, 2);
+print_word (kh, "KH$CVS", 0152, 2);
+print_word (kh, "KH$TMR", 0154, 4);
+print_word (kh, "KH$BFR", 0160, 4);
+print_word (kh, "KH$NAD", 0164, 2);
+print_word (kh, "KH$PDS", 0166, 1);
+print_word (kh, "KH$KDS", 0167, 1);
+print_word (kh, "KH$MBA", 0170, 1);
+print_word (kh, "KH$MXD", 0171, 1);
+print_word (kh, "KH$BSV", 0172, 2);
+print_word (kh, "KH$ABQ", 0174, 2);
+
+wk2h = kh + (0174 >> 1);
+wk2h = CM[wk2h];
+if (wk2h != 0) {
+    wk2h = wk2h << 1;
+    print_word (wk2h, "   ABQ", 0000, 2);
+    print_word (wk2h, "   ABQ", 0002, 2);
+    print_word (wk2h, "   ABQ", 0004, 2);
+    print_word (wk2h, "   ABQ", 0006, 2);
+    print_word (wk2h, "   ABQ", 0010, 2);
+    print_word (wk2h, "   ABQ", 0012, 2);
+    print_word (wk2h, "   ABQ", 0014, 2);
+    print_word (wk2h, "   ABQ", 0016, 2);
+    print_word (wk2h, "   ABQ", 0020, 2);
+}
+
+return SCPE_OK;
+}
+
+t_stat kci_process (int32 flag, CONST char *ptr)
+{
+uint16 kh = kci_kh;
+uint16 wqh, wqt, tq, tqh, tqt, iq, iqh, iqt, iqf;
+
+for (;;) {
+    wqh = CM[kh + (0010 >> 1)];                         /* get the 2WK pointer */
+    if (wqh == 0)                                       /* if queue is empty */
+        break;
+    if (wqh == 0100000) {                               /* locked */
+        sim_printf ("2WK queue currently locked\n");
+        break;
+        }
+    wqh = wqh << 1;                                     /* convert to word offset */
+    wqt = CM[kh + (0012 >> 1)];                         /* get the 2WK pointer */
+    wqt = wqt << 1;                                     /* convert to word offset */
+//    sim_printf ("PRE  2WK H = %o T = %o\n", (wk2h << 1), (wk2t << 1));
+    tq = CM[wqh + (0004 >> 1)];                         /* get transmission queue pointer */
+    if (tq == 0)                                        /* should not happen */
+        sim_printf ("Work item has no transmission queue\n");
+    else {
+        tq = tq << 1;                                   /* convert to word offset */
+//        sim_printf ("     TQ = %o\n", (dst << 1));
+        tqh = CM[tq];                                   /* get transmission queue header */
+        if (tqh == 0100000) {                           /* locked */
+            sim_printf ("Transmission queue currently locked\n");
+            break;
+            }
+        if (tqh == 1) {                                 /* software process waiting on queue */
+            sim_printf ("Software process waiting on queue\n");
+            iq = CM[tq - (0004 >> 1)];                  /* get service queue pointer */
+            iq = iq << 1;
+            iqh = CM[iq];                               /* service queue header */
+            iqf = CM[iq - (0002 >> 1)];                 /* service queue flags */
+            if (iqf & 040000) {                         /* interrupt queue */
+                sim_printf ("Service queue is interrupt queue\n");
+                CM[tq - (0004 >> 1)] = 0;               /* clear service queue pointer */
+                if (iqh == 0 || iqh == 1) {             /* interrupt queue empty */
+                    CM[iq] = (tq >> 1) - 1;             /* point to start of tranmission queue */
+                    CM[iq + (0002 >> 1)] = (tq >> 1) - 1;/* point to start of tranmission queue */
+                    }
+                else {
+                    iqt = CM[iq + (0002>> 1)];          /* last item in queue */
+                    iqt = iqt << 1;
+                    if (CM[iqt] != 0)
+                        sim_printf ("Interrupt queue tail item has non-zero pointer: %06o\n", CM[iqt]);
+                    else {
+                        CM[iqt] = (tq >> 1) - 1;        /* point to start of tranmission queue */
+                        CM[iq + (0002>> 1)] = (tq >> 1) - 1; /* update queue tail */
+                        }
+                    }
+                if ((iqf & 0100000) == 0) {             /* no interrupt pending */
+                    sim_printf ("CB4 INT\n");
+                    SET_INT (CB4);
+                    trap_req = calc_ints (ipl, trap_req); /* recalc int req */
+                    CM[iq - (0002 >> 1)] |= 0100000;    /* interrupt now pending */
+                    }
+                }
+            tqh = 0;                                    /* queue is empty */
+            }
+        else
+            tqh = tqh << 1;                             /* convert to word offset */
+        tqt = CM[tq + (0002 >> 1)];                     /* get transmission queue tail */
+        tqt = tqt << 1;                                 /* convert to word offset */
+//        sim_printf ("PRE  TQ H = %o T = %o\n", (dsth << 1), (dstt << 1));
+        if (tqh != 0) {                                 /* if queue is not empty */
+            if (CM[tqt] != 0)                           /* should not happen */
+                sim_printf ("Queue tail item has non-zero pointer: %06o\n", CM[tqt]);
+            else {                                      /* add to end of queue */
+                CM[tqt] = (wqh >> 1);                   /* add link to 2WK item */
+                CM[tq + (0002 >> 1)] = (wqh >> 1);      /* update queue tail pointer */
+                }
+            }
+        else {                                          /* transmission queue is empty */
+            CM[tq] = (wqh >> 1);                        /* set head */
+            CM[tq + (0002 >> 1)] = (wqh >> 1);          /* set tail */
+            }
+        sim_printf ("Work item at %06o added to queue at address %o\n", (wqh << 1), (tq << 1));
+        CM[kh + (0010 >> 1)] = CM[wqh];                 /* point 2WK queue to next item */
+        if (CM[wqh] == 0)                               /* no next item? */
+            CM[kh + (0012 >> 1)] = 0;                   /* queue now empty */
+        CM[wqh] = 0;                                    /* remove next link from 2WK item */
+
+        wqh = CM[kh + (0010 >> 1)];                     /* get the 2WK pointer */
+        wqh = wqh << 1;                                 /* convert to word offset */
+        wqt = CM[kh + (0012 >> 1)];                     /* get the 2WK pointer */
+        wqt = wqt << 1;                                 /* convert to word offset */
+//        sim_printf ("POST 2WK H = %o T = %o\n", (wk2h << 1), (wk2t << 1));
+        tqh = CM[tq];                                   /* get transmission queue header */
+        tqh = tqh << 1;
+        tqt = CM[tq + (0002 >> 1)];                     /* get transmission queue tail */
+        tqt = tqt << 1;                                 /* convert to word offset */
+//        sim_printf ("POST DST H = %o T = %o\n\n", (dsth << 1), (dstt << 1));
+        }
+    }
+
+return SCPE_OK;
 }
 
 t_stat ioc_wr (int32 data, int32 pa, int32 access)
@@ -385,13 +684,19 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 022:                                           /* K init reg - NI */
 //        sim_printf ("K init wr: %o\n", data);
-        if (~KINI & data & 01000) {                     /* K.ci run */
-            sim_printf ("K.ci startup\n");
+        if (~KINI & data & 01000)                       /* K.ci run */
             kci_init ();
-            }
-        else if (~KINI & data & 02000) {                /* K.sdi run */
-            sim_printf ("K.sdi startup\n");
-            ksdi_init ();
+        else if (~KINI & data & 0100)                   /* K.sdi run */
+            ksdi_init (8);
+        else if (~KINI & data & 0200)                   /* K.sdi run */
+            ksdi_init (9);
+        else {
+            for (int i = 10; i < 16; i++) {             /* K.sdi run */
+                if (~KINI & data & (1u << i)) {
+                    ksdi_init (i - 10);
+                    break;
+                    }
+                }
             }
         KINI = data;
         return SCPE_OK;
@@ -806,5 +1111,6 @@ if (DM == NULL) {                                       /* First time init */
     if (DM == NULL)
         return SCPE_MEM;
     }
+sim_vm_cmd = hsc_cmd;
 return SCPE_OK;
 }
