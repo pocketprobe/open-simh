@@ -26,13 +26,6 @@
 
 #include "pdp11_defs.h"
 
-#define RdxMemW(x,pa)   (x[(pa) >> 1])
-#define RdxMemB(x,pa)   ((((pa) & 1)? x[(pa) >> 1] >> 8: x[(pa) >> 1]) & 0377)
-#define WrxMemW(x,pa,d) x[(pa) >> 1] = (d)
-#define WrxMemB(x,pa,d) x[(pa) >> 1] = ((pa) & 1)? \
-                            ((x[(pa) >> 1] & 0377) | (((d) & 0377) << 8)): \
-                            ((x[(pa) >> 1] & ~0377) | ((d) & 0377))
-
 const char *cycles[] = {
     "STD",
     "INT",

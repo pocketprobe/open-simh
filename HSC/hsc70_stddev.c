@@ -308,6 +308,40 @@ switch (rg) {                                           /* decode pa<2:1> */
 return SCPE_NXM;
 }
 
+#define GETW(off)       RdxMemW (CM, off)
+#define GETB(off)       RdxMemB (CM, off)
+#define PUTW(off, val)  WrxMemW (CM, off, val)
+#define PUTB(off, val)  WrxMemB (CM, off, val)
+#define GETP(off)       ((GETW (off) & 0077776) ? (GETW (off) << 2) : GETW (off))
+#define PUTP(off, val)  PUTW (off, (val >> 2))
+
+#define Q_LOCKED(q)     (GETW (q) & 0100000)
+
+/* transmission queue */
+
+#define Q_SRVC          0004                            /* service queue pointer */
+#define Q_PROC          0002
+#define Q_FLGS          0001
+#define Q_HEAD          0000                            /* Resource queue head */
+#define Q_TAIL          0002                            /* Resource queue tail */
+#define Q_WTHD          0004                            /* Waiter queue head */
+#define Q_WTTL          0006                            /* Waiter queue tail */
+
+#define FLGS_IQ         0100                            /* interrupt queue */
+#define FLGS_INT        0200                            /* interrupt pending */
+
+#define KI_C1           0000                            /* check value 1 - 125252 */
+#define KI_C2           0002                            /* check value 2 - 052525 */
+#define KI_KIA          0004                            /* K init address */
+#define KI_CHK          0006                            /* check value */
+
+#define KG_VRS          0044                            /* microcode version */
+#define KG_RSL          0074
+
+#define KH_LNK          0000
+#define KH_2WK          0010
+#define KH_NAD          0164                            /* node address */
+
 /* Search control memory to find the KI structure, or
  * at least that's what it's assumed to be. This starts
  * with an alternating pattern of 1s and 0s. How much
@@ -322,15 +356,15 @@ return SCPE_NXM;
 
 uint16 k_init_common ()
 {
-uint16 ki, kh = 0;
+uint16 ki, kh = 0, chk;
 
-for (ki = 0; ki < 20; ki++) {                           /* search for KI structure */
-    if ((CM[ki] == 0125252) && (CM[ki + 1] == 052525)) {
-        kh = CM[ki + 2];                                /* get offset to KH structure */
-        if (CM[ki + 3] != (kh - 1))                     /* verify offset */
+for (ki = 0; ki < 20; ki = ki + 2) {                     /* search for KI structure */
+    if ((GETW (ki) == 0125252) && (GETW (ki + 2) == 052525)) {
+        kh = GETW (ki + KI_KIA);                        /* get offset to KH structure */
+        if (GETW (ki + KI_CHK) != (kh - 1))             /* verify offset */
             break;                                      /* failed */
-        CM[ki + 2] = -CM[ki + 2];                       /* indicate offset read */
-        kh = (kh << 1);                                 /* convert to word offset */
+        PUTW (ki + KI_KIA, -kh);
+        kh = kh << 2;                                   /* convert to byte offset */
         }
     }
 return kh;
@@ -342,9 +376,9 @@ void kci_init ()
 {
 uint16 kh = k_init_common ();
 kci_kh = kh;
-sim_printf ("K.ci startup: KH = %06o at %o\n", (kh << 1), (uint16)inst_pc);
-CM[kh + (0164 >> 1)] = 3;                               /* KH$NAD - CI node address */
-CM[kh + (044 >> 1)] = 01400;                            /* KG$VRS - version (major = 3, minor = 0) */
+sim_printf ("K.ci startup: KH = %06o at %o\n", kh, (uint16)inst_pc);
+PUTW (kh + KH_NAD, 3);                                  /* KH$NAD - CI node address */
+PUTW (kh + KG_VRS, 01400);                              /* KG$VRS - version (major = 3, minor = 0) */
 }
 
 /* The software expects the requestor to set location
@@ -356,33 +390,27 @@ CM[kh + (044 >> 1)] = 01400;                            /* KG$VRS - version (maj
 void ksdi_init (uint32 req)
 {
 uint16 kh = k_init_common ();
-sim_printf ("K.sdi %d startup: KH = %06o at %o\n", req, (kh << 1), (uint16)inst_pc);
-CM[kh + (074 >> 1)] = 1;                                /* KG$RSL? */
-CM[kh + (044 >> 1)] = 01400;                            /* KG$VRS - version (major = 3, minor = 0) */
+sim_printf ("K.sdi %d startup: KH = %06o at %o\n", req, kh, (uint16)inst_pc);
+PUTW (kh + KG_RSL, 1);                                  /* KG$RSL? */
+PUTW (kh + KG_VRS, 01400);                              /* KG$VRS - version (major = 3, minor = 0) */
 }
 
 void print_word (uint16 kh, char *name, uint16 off, uint16 len)
 {
 if (len == 0)
-    sim_printf ("%s %06o\n", name, (kh << 1) + off);
+    sim_printf ("%s %06o\n", name, kh + off);
 else if (len == 1) {
-    if (off & 1)
-        sim_printf ("%s %06o\\  %03o\n", name, (kh << 1) + off, (CM[kh + (off >> 1)] >> 8));
-    else
-        sim_printf ("%s %06o\\  %03o\n", name, (kh << 1) + off, CM[kh + (off >> 1)] & 0377);
+    sim_printf ("%s %06o\\  %03o\n", name, kh + off, GETB (kh + off));
     }
 else {
-    sim_printf ("%s %06o/", name, (kh << 1) + off);
+    sim_printf ("%s %06o/", name, kh + off);
     for (int i = 1; i <= (len >> 1); i++) {
-        sim_printf ("  %06o", CM[kh + (off + i >> 1)]);
+        sim_printf ("  %06o", GETW (kh + off + (i << 1)));
         if (i % 8 == 0)
             sim_printf ("\n              ");
         }
     sim_printf ("\n");
     }
-//    sim_printf ("%s %06o/  %06o\n", name, (kh << 1) + off, CM[kh + (off >> 1)]);
-//else if (len == 4)
-//    sim_printf ("%s %06o/  %06o  %06o\n", name, (kh << 1) + off, CM[kh + (off >> 1)], CM[kh + ((off + 2) >> 1)]);
 }
 
 t_stat kci_show (int32 flag, CONST char *ptr)
@@ -390,12 +418,11 @@ t_stat kci_show (int32 flag, CONST char *ptr)
 uint16 kh = kci_kh;
 uint16 wk2h, wk2t;
 
-print_word (kh, "KH$LNK", 0000, 2);
+print_word (kh, "KH$LNK", KH_LNK, 2);
 
-wk2h = kh + (0000 >> 1);
-wk2h = CM[wk2h];
+wk2h = kh + KH_LNK;
+wk2h = GETP (wk2h);
 if (wk2h != 0) {
-    wk2h = wk2h << 1;
     print_word (wk2h, "   LNK", 0000, 2);
     print_word (wk2h, "   LNK", 0002, 2);
     print_word (wk2h, "   LNK", 0004, 2);
@@ -410,12 +437,11 @@ if (wk2h != 0) {
 print_word (kh, "KH$FLG", 0002, 2);
 print_word (kh, "KH$3WK", 0004, 4);
 print_word (kh, "KH$2WK", 0010, 4);
-wk2h = kh + (0010 >> 1);
+wk2h = kh + KH_2WK;
 for (;;) {
-    wk2h = CM[wk2h];
-    if (wk2h == 0)
+    wk2h = GETP (wk2h);
+    if ((wk2h == 0) || wk2h == 0100000)
         break;
-    wk2h = wk2h << 1;
     print_word (wk2h, "   2WK", 0000, 2);
     print_word (wk2h, "   2WK", 0002, 2);
     print_word (wk2h, "   2WK", 0004, 2);
@@ -437,45 +463,14 @@ print_word (kh, "KG$SLT", 0042, 1);
 print_word (kh, "KG$TYP", 0043, 1);
 print_word (kh, "KG$VRS", 0044, 2);
 print_word (kh, "KG$FCB", 0046, 2);
-
-wk2h = kh + (0046 >> 1);
-for (;;) {
-    wk2h = CM[wk2h];
-    if (wk2h == 0)
-        break;
-    wk2h = wk2h << 1;
-    print_word (wk2h, "   FCB", 0000, 2);
-    print_word (wk2h, "   FCB", 0002, 2);
-    print_word (wk2h, "   FCB", 0004, 2);
-    print_word (wk2h, "   FCB", 0006, 2);
-    sim_printf ("   ---\n");
-    }
-
 print_word (kh, "KG$FBU", 0050, 2);
-
-wk2h = kh + (0050 >> 1);
-wk2h = CM[wk2h];
-if (wk2h != 0) {
-    wk2h = wk2h << 1;
-    print_word (wk2h, "   FBU", 0000, 2);
-    print_word (wk2h, "   FBU", 0002, 2);
-    print_word (wk2h, "   FBU", 0004, 2);
-    print_word (wk2h, "   FBU", 0006, 2);
-    print_word (wk2h, "   FBU", 0010, 2);
-    print_word (wk2h, "   FBU", 0012, 2);
-    print_word (wk2h, "   FBU", 0014, 2);
-    print_word (wk2h, "   FBU", 0016, 2);
-    print_word (wk2h, "   FBU", 0020, 2);
-}
-
 print_word (kh, "KG$BWS", 0052, 2);
 print_word (kh, "KG$TMR", 0054, 2);
 print_word (kh, "KG$DMP", 0056, 2);
 
-wk2h = kh + (0056 >> 1);
-wk2h = CM[wk2h];
+wk2h = kh + 0056;
+wk2h = GETP (wk2h);
 if (wk2h != 0) {
-    wk2h = wk2h << 1;
     print_word (wk2h, "   DMP", 0000, 2);
     print_word (wk2h, "   DMP", 0002, 2);
     print_word (wk2h, "   DMP", 0004, 2);
@@ -504,10 +499,9 @@ print_word (kh, "KG$KSA", 0140, 0);
 print_word (kh, "KH$D2T", 0140, 2);
 print_word (kh, "KH$CIM", 0142, 2);
 
-wk2h = kh + (0142 >> 1);
-wk2h = CM[wk2h];
+wk2h = kh + 0142;
+wk2h = GETP (wk2h);
 if (wk2h != 0) {
-    wk2h = wk2h << 1;
     print_word (wk2h, "   CIM", 0000, 2);
     print_word (wk2h, "   CIM", 0002, 2);
     print_word (wk2h, "   CIM", 0004, 2);
@@ -533,10 +527,9 @@ print_word (kh, "KH$MXD", 0171, 1);
 print_word (kh, "KH$BSV", 0172, 2);
 print_word (kh, "KH$ABQ", 0174, 2);
 
-wk2h = kh + (0174 >> 1);
-wk2h = CM[wk2h];
+wk2h = kh + 0174;
+wk2h = GETP (wk2h);
 if (wk2h != 0) {
-    wk2h = wk2h << 1;
     print_word (wk2h, "   ABQ", 0000, 2);
     print_word (wk2h, "   ABQ", 0002, 2);
     print_word (wk2h, "   ABQ", 0004, 2);
@@ -551,100 +544,104 @@ if (wk2h != 0) {
 return SCPE_OK;
 }
 
+uint16 get_from_queue (uint16 q)
+{
+uint16 qh;
+
+qh = GETP (q + Q_HEAD);
+if ((qh != 0) && (qh != 0100000)) {                     /* not empty or locked? */
+    PUTP (q + Q_HEAD, GETP (qh));                       /* point queue head to next item */
+    if (GETP (qh) == 0)                                 /* no next item? */
+        PUTP (q + Q_TAIL, 0);                           /* queue now empty */
+    PUTP (qh, 0);                                       /* remove next link from removed item */
+    sim_printf ("Item %06o removed from queue at address %06o\n", qh, q);
+    }
+return qh;
+}
+
+void put_to_queue (uint16 q, uint16 itm)
+{
+uint16 qh, qt, qf, tq, sq, mask;
+
+qh = GETP (q + Q_HEAD);
+if (qh == 0100000) {                                    /* should not happen */
+    sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
+    return;
+    }
+if (qh == 1) {    /* software process waiting on queue */
+    qh = 0;
+    qf = GETB (q - Q_FLGS);                             /* get queue flags */
+    if (qf & FLGS_IQ) {                                 /* interrupt queue */
+        if ((qf & FLGS_INT) == 0) {                     /* no interrupt pending */
+            mask = GETW (q - Q_SRVC);                   /* get interrupt mask */
+            if (mask & 017)
+                qf |= FLGS_INT;
+            if (mask & 010)
+                SET_INT (CB7);
+            if (mask & 04)
+                SET_INT (CB6);
+            if (mask & 02)
+                SET_INT (CB5);
+            if (mask & 01)
+                SET_INT (CB4);
+            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
+            PUTB (q - Q_FLGS, qf);                      /* interrupt now pending */
+            sim_printf ("Interrupt for queue %06o\n", q);
+            }
+        }
+    else {                                              /* transmission queue */
+        tq = q - Q_SRVC;                                /* get base of transmission queue */
+        sq = GETP (tq);                                 /* get service queue pointer */
+        if (sq) {
+            PUTP (tq, 0);                               /* clear service queue pointer */
+            sim_printf ("Sending transmission queue %06o to service queue %06o\n", tq, sq);
+            put_to_queue (sq, tq);                      /* send transmission queue to service queue */
+            }
+        }
+    }
+if (qh == 0) {                                          /* queue empty */
+    PUTP (q + Q_HEAD, itm);                             /* set head */
+    PUTP (q + Q_TAIL, itm);                             /* set tail */
+    }
+else {                                                  /* queue is not empty */
+    qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
+    if (GETW (qt) != 0)                                 /* should not happen */
+        sim_printf ("Queue tail item has non-zero pointer: %06o\n", GETW (qt));
+    else {                                              /* add to end of queue */
+        PUTP (qt, itm);                                 /* add link to item */
+        PUTP (q + Q_TAIL, itm);                         /* update queue tail pointer */
+        }
+    }
+sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
+}
+
 t_stat kci_process (int32 flag, CONST char *ptr)
 {
 uint16 kh = kci_kh;
-uint16 wqh, wqt, tq, tqh, tqt, iq, iqh, iqt, iqf;
+uint16 wq, tq, rsc;
 
+wq = kh + KH_2WK;
 for (;;) {
-    wqh = CM[kh + (0010 >> 1)];                         /* get the 2WK pointer */
-    if (wqh == 0)                                       /* if queue is empty */
+    rsc = GETP (wq + Q_HEAD);                           /* get the resource pointer */
+    if (rsc == 0)                                       /* queue is empty */
         break;
-    if (wqh == 0100000) {                               /* locked */
-        sim_printf ("2WK queue currently locked\n");
+    if (rsc == 0100000) {                               /* queue is locked */
+        sim_printf ("Source queue currently locked\n");
         break;
         }
-    wqh = wqh << 1;                                     /* convert to word offset */
-    wqt = CM[kh + (0012 >> 1)];                         /* get the 2WK pointer */
-    wqt = wqt << 1;                                     /* convert to word offset */
-//    sim_printf ("PRE  2WK H = %o T = %o\n", (wk2h << 1), (wk2t << 1));
-    tq = CM[wqh + (0004 >> 1)];                         /* get transmission queue pointer */
-    if (tq == 0)                                        /* should not happen */
-        sim_printf ("Work item has no transmission queue\n");
-    else {
-        tq = tq << 1;                                   /* convert to word offset */
-//        sim_printf ("     TQ = %o\n", (dst << 1));
-        tqh = CM[tq];                                   /* get transmission queue header */
-        if (tqh == 0100000) {                           /* locked */
-            sim_printf ("Transmission queue currently locked\n");
-            break;
-            }
-        if (tqh == 1) {                                 /* software process waiting on queue */
-            sim_printf ("Software process waiting on queue\n");
-            iq = CM[tq - (0004 >> 1)];                  /* get service queue pointer */
-            iq = iq << 1;
-            iqh = CM[iq];                               /* service queue header */
-            iqf = CM[iq - (0002 >> 1)];                 /* service queue flags */
-            if (iqf & 040000) {                         /* interrupt queue */
-                sim_printf ("Service queue is interrupt queue\n");
-                CM[tq - (0004 >> 1)] = 0;               /* clear service queue pointer */
-                if (iqh == 0 || iqh == 1) {             /* interrupt queue empty */
-                    CM[iq] = (tq >> 1) - 1;             /* point to start of tranmission queue */
-                    CM[iq + (0002 >> 1)] = (tq >> 1) - 1;/* point to start of tranmission queue */
-                    }
-                else {
-                    iqt = CM[iq + (0002>> 1)];          /* last item in queue */
-                    iqt = iqt << 1;
-                    if (CM[iqt] != 0)
-                        sim_printf ("Interrupt queue tail item has non-zero pointer: %06o\n", CM[iqt]);
-                    else {
-                        CM[iqt] = (tq >> 1) - 1;        /* point to start of tranmission queue */
-                        CM[iq + (0002>> 1)] = (tq >> 1) - 1; /* update queue tail */
-                        }
-                    }
-                if ((iqf & 0100000) == 0) {             /* no interrupt pending */
-                    sim_printf ("CB4 INT\n");
-                    SET_INT (CB4);
-                    trap_req = calc_ints (ipl, trap_req); /* recalc int req */
-                    CM[iq - (0002 >> 1)] |= 0100000;    /* interrupt now pending */
-                    }
-                }
-            tqh = 0;                                    /* queue is empty */
-            }
-        else
-            tqh = tqh << 1;                             /* convert to word offset */
-        tqt = CM[tq + (0002 >> 1)];                     /* get transmission queue tail */
-        tqt = tqt << 1;                                 /* convert to word offset */
-//        sim_printf ("PRE  TQ H = %o T = %o\n", (dsth << 1), (dstt << 1));
-        if (tqh != 0) {                                 /* if queue is not empty */
-            if (CM[tqt] != 0)                           /* should not happen */
-                sim_printf ("Queue tail item has non-zero pointer: %06o\n", CM[tqt]);
-            else {                                      /* add to end of queue */
-                CM[tqt] = (wqh >> 1);                   /* add link to 2WK item */
-                CM[tq + (0002 >> 1)] = (wqh >> 1);      /* update queue tail pointer */
-                }
-            }
-        else {                                          /* transmission queue is empty */
-            CM[tq] = (wqh >> 1);                        /* set head */
-            CM[tq + (0002 >> 1)] = (wqh >> 1);          /* set tail */
-            }
-        sim_printf ("Work item at %06o added to queue at address %o\n", (wqh << 1), (tq << 1));
-        CM[kh + (0010 >> 1)] = CM[wqh];                 /* point 2WK queue to next item */
-        if (CM[wqh] == 0)                               /* no next item? */
-            CM[kh + (0012 >> 1)] = 0;                   /* queue now empty */
-        CM[wqh] = 0;                                    /* remove next link from 2WK item */
+    tq = GETP (rsc + 0004);                             /* get destination queue pointer */
+    if (tq == 0) {                                      /* should not happen */
+        sim_printf ("Resource has no desitnation queue\n");
+        break;
+        }
+    if (Q_LOCKED (tq)) {
+        sim_printf ("Desitnation queue currently locked\n");
+        break;
+        }
 
-        wqh = CM[kh + (0010 >> 1)];                     /* get the 2WK pointer */
-        wqh = wqh << 1;                                 /* convert to word offset */
-        wqt = CM[kh + (0012 >> 1)];                     /* get the 2WK pointer */
-        wqt = wqt << 1;                                 /* convert to word offset */
-//        sim_printf ("POST 2WK H = %o T = %o\n", (wk2h << 1), (wk2t << 1));
-        tqh = CM[tq];                                   /* get transmission queue header */
-        tqh = tqh << 1;
-        tqt = CM[tq + (0002 >> 1)];                     /* get transmission queue tail */
-        tqt = tqt << 1;                                 /* convert to word offset */
-//        sim_printf ("POST DST H = %o T = %o\n\n", (dsth << 1), (dstt << 1));
-        }
+    rsc = get_from_queue (wq);                          /* get resource from work queue */
+                                                        /* TODO: process resource */
+    put_to_queue (tq, rsc);                             /* put resource to destination queue */
     }
 
 return SCPE_OK;

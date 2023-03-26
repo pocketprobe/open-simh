@@ -73,6 +73,13 @@ int32 hsc_RdMemB (int32 pa);
 void hsc_WrMemW (int32 pa, int32 d);
 void hsc_WrMemB (int32 pa, int32 d);
 
+#define RdxMemW(x,pa)   (x[(pa) >> 1])
+#define RdxMemB(x,pa)   ((((pa) & 1)? x[(pa) >> 1] >> 8: x[(pa) >> 1]) & 0377)
+#define WrxMemW(x,pa,d) x[(pa) >> 1] = (d)
+#define WrxMemB(x,pa,d) x[(pa) >> 1] = ((pa) & 1)? \
+                            ((x[(pa) >> 1] & 0377) | (((d) & 0377) << 8)): \
+                            ((x[(pa) >> 1] & ~0377) | ((d) & 0377))
+
 extern uint16 *CM;                                      /* Control memory */
 extern uint16 *DM;                                      /* Data memory */
 
