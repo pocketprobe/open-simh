@@ -73,10 +73,16 @@
 #define UNIT_WLK        (1u << UNIT_V_UF)
 #define UNIT_WPRT       (UNIT_WLK | UNIT_RO)            /* write protect */
 
+#define K_PIO           0000
+#define K_CI            0001
+#define K_SDI           0002
+#define K_STI           0203
+#define K_NONE          0377
+
 int32 WADR[128][8];                                     /* window address registers */
 int32 WINDR = 0;                                        /* window index register */
 int32 KINI = 0;                                         /* K init register */
-int32 KSTS[10] = { 0000, 0001, 0002, 0377, 0377, 0377, 0377, 0377, 0377, 0377 };
+int32 KSTS[10] = { K_PIO, K_CI, K_SDI, K_NONE, K_NONE, K_NONE, K_NONE, K_NONE, K_NONE, K_NONE };
 int32 fl_csr = 0;
 int32 fl_madr0 = 0;
 int32 fl_madr1 = 0;
@@ -84,6 +90,7 @@ int32 fl_madr2 = 0;
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
 uint16 kci_kh;
+uint16 ksdi_kh;
 
 extern DIB dli_dib;
 extern DEVICE dli_dev;
@@ -119,15 +126,21 @@ extern int32 ReadW (int32 addr);
 extern int32 calc_ints (int32 nipl, int32 trq);
 
 t_stat kci_show (int32 flag, CONST char *ptr);
+t_stat ksdi_show (int32 flag, CONST char *ptr);
 t_stat kci_process (int32 flag, CONST char *ptr);
+t_stat ksdi_process (int32 flag, CONST char *ptr);
 
 /* Special boot command, overrides regular boot */
 
 CTAB hsc_cmd[] = {
     { "KCI", &kci_show, 0,
       "kci                   dump K.ci structures\n", NULL, NULL },
+    { "KSDI", &ksdi_show, 0,
+      "ksdi                  dump K.sdi structures\n", NULL, NULL },
     { "KPR", &kci_process, 0,
       "kpr                   process K.ci queue\n", NULL, NULL },
+    { "KSR", &ksdi_process, 0,
+      "ksr                   process K.sdi queue\n", NULL, NULL },
     { NULL }
     };
 
@@ -336,11 +349,14 @@ return SCPE_NXM;
 #define KI_CHK          0006                            /* check value */
 
 #define KG_VRS          0044                            /* microcode version */
+#define KG_FBU          0050
 #define KG_RSL          0074
 
 #define KH_LNK          0000
 #define KH_2WK          0010
 #define KH_NAD          0164                            /* node address */
+
+#define KT_S0           0200
 
 /* Search control memory to find the KI structure, or
  * at least that's what it's assumed to be. This starts
@@ -374,11 +390,10 @@ return kh;
 
 void kci_init ()
 {
-uint16 kh = k_init_common ();
-kci_kh = kh;
-sim_printf ("K.ci startup: KH = %06o at %o\n", kh, (uint16)inst_pc);
-PUTW (kh + KH_NAD, 3);                                  /* KH$NAD - CI node address */
-PUTW (kh + KG_VRS, 01400);                              /* KG$VRS - version (major = 3, minor = 0) */
+kci_kh = k_init_common ();
+sim_printf ("K.ci startup: KH = %06o at %o\n", kci_kh, (uint16)inst_pc);
+PUTW (kci_kh + KH_NAD, 3);                              /* KH$NAD - CI node address */
+PUTW (kci_kh + KG_VRS, 01511);                          /* KG$VRS - version (DS = 3, MC = 73) */
 }
 
 /* The software expects the requestor to set location
@@ -389,10 +404,10 @@ PUTW (kh + KG_VRS, 01400);                              /* KG$VRS - version (maj
 
 void ksdi_init (uint32 req)
 {
-uint16 kh = k_init_common ();
-sim_printf ("K.sdi %d startup: KH = %06o at %o\n", req, kh, (uint16)inst_pc);
-PUTW (kh + KG_RSL, 1);                                  /* KG$RSL? */
-PUTW (kh + KG_VRS, 01400);                              /* KG$VRS - version (major = 3, minor = 0) */
+ksdi_kh = k_init_common ();
+sim_printf ("K.sdi %d startup: KH = %06o at %o\n", req, ksdi_kh, (uint16)inst_pc);
+PUTW (ksdi_kh + KG_RSL, 1);                             /* KG$RSL? */
+PUTW (ksdi_kh + KG_VRS, 01452);                         /* KG$VRS - version (DS = 3, MC = 42) */
 }
 
 void print_word (uint16 kh, char *name, uint16 off, uint16 len)
@@ -405,7 +420,7 @@ else if (len == 1) {
 else {
     sim_printf ("%s %06o/", name, kh + off);
     for (int i = 1; i <= (len >> 1); i++) {
-        sim_printf ("  %06o", GETW (kh + off + (i << 1)));
+        sim_printf ("  %06o", GETW (kh + off + ((i - 1) << 1)));
         if (i % 8 == 0)
             sim_printf ("\n              ");
         }
@@ -544,6 +559,59 @@ if (wk2h != 0) {
 return SCPE_OK;
 }
 
+t_stat ksdi_show (int32 flag, CONST char *ptr)
+{
+uint16 kh = ksdi_kh;
+uint16 itm;
+
+for (int i = 0; i < 0040; i += 2)
+    print_word (kh, "??$???", i, 2);
+
+print_word (kh, "KG$TLK", 0040, 2);
+print_word (kh, "KG$SLT", 0042, 1);
+print_word (kh, "KG$TYP", 0043, 1);
+print_word (kh, "KG$VRS", 0044, 2);
+print_word (kh, "KG$FCB", 0046, 2);
+print_word (kh, "KG$FBU", 0050, 2);
+print_word (kh, "KG$BWS", 0052, 2);
+print_word (kh, "KG$TMR", 0054, 2);
+print_word (kh, "KG$DMP", 0056, 2);
+
+itm = kh + 0056;
+itm = GETP (itm);
+if (itm != 0) {
+    print_word (itm, "   DMP", 0000, 2);
+    print_word (itm, "   DMP", 0002, 2);
+    print_word (itm, "   DMP", 0004, 2);
+    print_word (itm, "   DMP", 0006, 2);
+    print_word (itm, "   DMP", 0010, 2);
+    print_word (itm, "   DMP", 0012, 2);
+    print_word (itm, "   DMP", 0014, 2);
+    print_word (itm, "   DMP", 0016, 2);
+    print_word (itm, "   DMP", 0020, 2);
+}
+
+print_word (kh, "KG$DCA", 0060, 2);
+print_word (kh, "KG$TST", 0062, 2);
+print_word (kh, "KG$FRS", 0064, 2);
+print_word (kh, "KG$LAS", 0066, 2);
+print_word (kh, "KG$MDL", 0070, 0);
+print_word (kh, "KG$MTY", 0070, 2);
+print_word (kh, "KG$PFL", 0072, 2);
+print_word (kh, "KG$RSL", 0074, 2);
+print_word (kh, "KG$LTR", 0076, 2);
+print_word (kh, "KG$PSA", 0100, 2);
+print_word (kh, "KG$PSB", 0102, 2);
+print_word (kh, "KG$DSA", 0104, 20);
+print_word (kh, "KG$MC0", 0130, 8);
+print_word (kh, "KG$KSA", 0140, 0);
+
+for (int i = 0140; i < 0466; i += 2)
+    print_word (kh, "??$???", i, 2);
+
+return SCPE_OK;
+}
+
 uint16 get_from_queue (uint16 q)
 {
 uint16 qh;
@@ -641,8 +709,36 @@ for (;;) {
 
     rsc = get_from_queue (wq);                          /* get resource from work queue */
                                                         /* TODO: process resource */
+    for (int i = 0; i < 20; i = i + 2)
+        sim_printf ("   %06o : %06o\n", i, GETW (rsc + i));
     put_to_queue (tq, rsc);                             /* put resource to destination queue */
     }
+
+return SCPE_OK;
+}
+
+t_stat ksdi_process (int32 flag, CONST char *ptr)
+{
+uint16 kh = ksdi_kh;
+uint16 fb, tq, rsc;
+
+fb = GETP (kh + KG_FBU);
+tq = GETP (kh + KT_S0);
+rsc = GETP (fb + Q_HEAD);                           /* get the resource pointer */
+if (rsc == 0)                                       /* queue is empty */
+    return SCPE_OK;
+if (rsc == 0100000) {                               /* queue is locked */
+    sim_printf ("Source queue currently locked\n");
+    return SCPE_OK;
+    }
+if (Q_LOCKED (tq)) {
+    sim_printf ("Desitnation queue currently locked\n");
+    return SCPE_OK;
+    }
+
+rsc = get_from_queue (fb);                          /* get resource from work queue */
+                                                    /* TODO: process resource */
+put_to_queue (tq + 4, rsc);                             /* put resource to destination queue */
 
 return SCPE_OK;
 }
