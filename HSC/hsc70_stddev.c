@@ -74,10 +74,16 @@
 #define UNIT_WPRT       (UNIT_WLK | UNIT_RO)            /* write protect */
 
 #define K_PIO           0000
-#define K_CI            0001
-#define K_SDI           0002
-#define K_STI           0203
-#define K_NONE          0377
+#define K_CI            0001                            /* K.ci host interface */
+#define K_SDI           0002                            /* K.sdi disk data channel */
+#define K_STI           0203                            /* K.sti tape data channel */
+#define K_SI4           0004                            /* K.si 4-port data channel - no microcode loaded */
+#define K_SI4_DISK      0205                            /* K.si 4-port data channel - disk microcode loaded */
+#define K_SI4_TAPE      0206                            /* K.si 4-port data channel - tape microcode loaded */
+#define K_SI8           0212                            /* K.si 8-port data channel - no microcode loaded */
+#define K_SI8_MICRO     0007                            /* K.si 8-port data channel - microcode loaded */
+#define K_SCSI          0015                            /* K.scsi data channel module */
+#define K_NONE          0377                            /* No requestor present */
 
 int32 WADR[128][8];                                     /* window address registers */
 int32 WINDR = 0;                                        /* window index register */
@@ -89,8 +95,6 @@ int32 fl_madr1 = 0;
 int32 fl_madr2 = 0;
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
-uint16 kci_kh;
-uint16 ksdi_kh;
 
 extern DIB dli_dib;
 extern DEVICE dli_dev;
@@ -124,11 +128,14 @@ extern void WriteB (int32 data, int32 addr);
 extern void WriteW (int32 data, int32 addr);
 extern int32 ReadW (int32 addr);
 extern int32 calc_ints (int32 nipl, int32 trq);
+extern void kci_init ();
+extern void ksdi_init (uint32 req);
 
 t_stat kci_show (int32 flag, CONST char *ptr);
 t_stat ksdi_show (int32 flag, CONST char *ptr);
 t_stat kci_process (int32 flag, CONST char *ptr);
 t_stat ksdi_process (int32 flag, CONST char *ptr);
+t_stat hsc_find (int32 flag, CONST char *ptr);
 
 /* Special boot command, overrides regular boot */
 
@@ -141,6 +148,8 @@ CTAB hsc_cmd[] = {
       "kpr                   process K.ci queue\n", NULL, NULL },
     { "KSR", &ksdi_process, 0,
       "ksr                   process K.sdi queue\n", NULL, NULL },
+    { "FIND", &hsc_find, 0,
+      "find                  find datastructures\n", NULL, NULL },
     { NULL }
     };
 
@@ -319,428 +328,6 @@ switch (rg) {                                           /* decode pa<2:1> */
         
 *data = 0;
 return SCPE_NXM;
-}
-
-#define GETW(off)       RdxMemW (CM, off)
-#define GETB(off)       RdxMemB (CM, off)
-#define PUTW(off, val)  WrxMemW (CM, off, val)
-#define PUTB(off, val)  WrxMemB (CM, off, val)
-#define GETP(off)       ((GETW (off) & 0077776) ? (GETW (off) << 2) : GETW (off))
-#define PUTP(off, val)  PUTW (off, (val >> 2))
-
-#define Q_LOCKED(q)     (GETW (q) & 0100000)
-
-/* transmission queue */
-
-#define Q_SRVC          0004                            /* service queue pointer */
-#define Q_PROC          0002
-#define Q_FLGS          0001
-#define Q_HEAD          0000                            /* Resource queue head */
-#define Q_TAIL          0002                            /* Resource queue tail */
-#define Q_WTHD          0004                            /* Waiter queue head */
-#define Q_WTTL          0006                            /* Waiter queue tail */
-
-#define FLGS_IQ         0100                            /* interrupt queue */
-#define FLGS_INT        0200                            /* interrupt pending */
-
-#define KI_C1           0000                            /* check value 1 - 125252 */
-#define KI_C2           0002                            /* check value 2 - 052525 */
-#define KI_KIA          0004                            /* K init address */
-#define KI_CHK          0006                            /* check value */
-
-#define KG_VRS          0044                            /* microcode version */
-#define KG_FBU          0050
-#define KG_RSL          0074
-
-#define KH_LNK          0000
-#define KH_2WK          0010
-#define KH_NAD          0164                            /* node address */
-
-#define KT_S0           0200
-
-/* Search control memory to find the KI structure, or
- * at least that's what it's assumed to be. This starts
- * with an alternating pattern of 1s and 0s. How much
- * of control memory should be searched to find it?
- *
- * The offset to the KH (another assumption) structure
- * can then be found. The following location should
- * be the offset - 1. The software then expects the
- * requestor to negate the offset as some sort of
- * indication that it has been read.
- */
-
-uint16 k_init_common ()
-{
-uint16 ki, kh = 0, chk;
-
-for (ki = 0; ki < 20; ki = ki + 2) {                     /* search for KI structure */
-    if ((GETW (ki) == 0125252) && (GETW (ki + 2) == 052525)) {
-        kh = GETW (ki + KI_KIA);                        /* get offset to KH structure */
-        if (GETW (ki + KI_CHK) != (kh - 1))             /* verify offset */
-            break;                                      /* failed */
-        PUTW (ki + KI_KIA, -kh);
-        kh = kh << 2;                                   /* convert to byte offset */
-        }
-    }
-return kh;
-}
-
-/* The microcode version must be at least 2.44 */
-
-void kci_init ()
-{
-kci_kh = k_init_common ();
-sim_printf ("K.ci startup: KH = %06o at %o\n", kci_kh, (uint16)inst_pc);
-PUTW (kci_kh + KH_NAD, 3);                              /* KH$NAD - CI node address */
-PUTW (kci_kh + KG_VRS, 01511);                          /* KG$VRS - version (DS = 3, MC = 73) */
-}
-
-/* The software expects the requestor to set location
- * 074 to a value of 1 or 2
- *
- * The microcode version must be at least 3.00
- */
-
-void ksdi_init (uint32 req)
-{
-ksdi_kh = k_init_common ();
-sim_printf ("K.sdi %d startup: KH = %06o at %o\n", req, ksdi_kh, (uint16)inst_pc);
-PUTW (ksdi_kh + KG_RSL, 1);                             /* KG$RSL? */
-PUTW (ksdi_kh + KG_VRS, 01452);                         /* KG$VRS - version (DS = 3, MC = 42) */
-}
-
-void print_word (uint16 kh, char *name, uint16 off, uint16 len)
-{
-if (len == 0)
-    sim_printf ("%s %06o\n", name, kh + off);
-else if (len == 1) {
-    sim_printf ("%s %06o\\  %03o\n", name, kh + off, GETB (kh + off));
-    }
-else {
-    sim_printf ("%s %06o/", name, kh + off);
-    for (int i = 1; i <= (len >> 1); i++) {
-        sim_printf ("  %06o", GETW (kh + off + ((i - 1) << 1)));
-        if (i % 8 == 0)
-            sim_printf ("\n              ");
-        }
-    sim_printf ("\n");
-    }
-}
-
-t_stat kci_show (int32 flag, CONST char *ptr)
-{
-uint16 kh = kci_kh;
-uint16 wk2h, wk2t;
-
-print_word (kh, "KH$LNK", KH_LNK, 2);
-
-wk2h = kh + KH_LNK;
-wk2h = GETP (wk2h);
-if (wk2h != 0) {
-    print_word (wk2h, "   LNK", 0000, 2);
-    print_word (wk2h, "   LNK", 0002, 2);
-    print_word (wk2h, "   LNK", 0004, 2);
-    print_word (wk2h, "   LNK", 0006, 2);
-    print_word (wk2h, "   LNK", 0010, 2);
-    print_word (wk2h, "   LNK", 0012, 2);
-    print_word (wk2h, "   LNK", 0014, 2);
-    print_word (wk2h, "   LNK", 0016, 2);
-    print_word (wk2h, "   LNK", 0020, 2);
-}
-
-print_word (kh, "KH$FLG", 0002, 2);
-print_word (kh, "KH$3WK", 0004, 4);
-print_word (kh, "KH$2WK", 0010, 4);
-wk2h = kh + KH_2WK;
-for (;;) {
-    wk2h = GETP (wk2h);
-    if ((wk2h == 0) || wk2h == 0100000)
-        break;
-    print_word (wk2h, "   2WK", 0000, 2);
-    print_word (wk2h, "   2WK", 0002, 2);
-    print_word (wk2h, "   2WK", 0004, 2);
-    print_word (wk2h, "   2WK", 0006, 2);
-    print_word (wk2h, "   2WK", 0010, 2);
-    print_word (wk2h, "   2WK", 0012, 2);
-    print_word (wk2h, "   2WK", 0014, 2);
-    print_word (wk2h, "   2WK", 0016, 2);
-    print_word (wk2h, "   2WK", 0020, 2);
-    sim_printf ("   ---\n");
-    }
-print_word (kh, "KH$1WK", 0014, 4);
-print_word (kh, "KH$0WK", 0020, 4);
-print_word (kh, "KH$EQ ", 0024, 4);
-print_word (kh, "KH$SRR", 0030, 4);
-print_word (kh, "KH$DRR", 0034, 4);
-print_word (kh, "KG$TLK", 0040, 2);
-print_word (kh, "KG$SLT", 0042, 1);
-print_word (kh, "KG$TYP", 0043, 1);
-print_word (kh, "KG$VRS", 0044, 2);
-print_word (kh, "KG$FCB", 0046, 2);
-print_word (kh, "KG$FBU", 0050, 2);
-print_word (kh, "KG$BWS", 0052, 2);
-print_word (kh, "KG$TMR", 0054, 2);
-print_word (kh, "KG$DMP", 0056, 2);
-
-wk2h = kh + 0056;
-wk2h = GETP (wk2h);
-if (wk2h != 0) {
-    print_word (wk2h, "   DMP", 0000, 2);
-    print_word (wk2h, "   DMP", 0002, 2);
-    print_word (wk2h, "   DMP", 0004, 2);
-    print_word (wk2h, "   DMP", 0006, 2);
-    print_word (wk2h, "   DMP", 0010, 2);
-    print_word (wk2h, "   DMP", 0012, 2);
-    print_word (wk2h, "   DMP", 0014, 2);
-    print_word (wk2h, "   DMP", 0016, 2);
-    print_word (wk2h, "   DMP", 0020, 2);
-}
-
-print_word (kh, "KG$DCA", 0060, 2);
-print_word (kh, "KG$TST", 0062, 2);
-print_word (kh, "KG$FRS", 0064, 2);
-print_word (kh, "KG$LAS", 0066, 2);
-print_word (kh, "KG$MDL", 0070, 0);
-print_word (kh, "KG$MTY", 0070, 2);
-print_word (kh, "KG$PFL", 0072, 2);
-print_word (kh, "KG$RSL", 0074, 2);
-print_word (kh, "KG$LTR", 0076, 2);
-print_word (kh, "KG$PSA", 0100, 2);
-print_word (kh, "KG$PSB", 0102, 2);
-print_word (kh, "KG$DSA", 0104, 20);
-print_word (kh, "KG$MC0", 0130, 8);
-print_word (kh, "KG$KSA", 0140, 0);
-print_word (kh, "KH$D2T", 0140, 2);
-print_word (kh, "KH$CIM", 0142, 2);
-
-wk2h = kh + 0142;
-wk2h = GETP (wk2h);
-if (wk2h != 0) {
-    print_word (wk2h, "   CIM", 0000, 2);
-    print_word (wk2h, "   CIM", 0002, 2);
-    print_word (wk2h, "   CIM", 0004, 2);
-    print_word (wk2h, "   CIM", 0006, 2);
-    print_word (wk2h, "   CIM", 0010, 2);
-    print_word (wk2h, "   CIM", 0012, 2);
-    print_word (wk2h, "   CIM", 0014, 2);
-    print_word (wk2h, "   CIM", 0016, 2);
-    print_word (wk2h, "   CIM", 0020, 2);
-}
-
-print_word (kh, "KH$D1T", 0144, 2);
-print_word (kh, "KH$VA ", 0146, 2);
-print_word (kh, "KH$D0T", 0150, 2);
-print_word (kh, "KH$CVS", 0152, 2);
-print_word (kh, "KH$TMR", 0154, 4);
-print_word (kh, "KH$BFR", 0160, 4);
-print_word (kh, "KH$NAD", 0164, 2);
-print_word (kh, "KH$PDS", 0166, 1);
-print_word (kh, "KH$KDS", 0167, 1);
-print_word (kh, "KH$MBA", 0170, 1);
-print_word (kh, "KH$MXD", 0171, 1);
-print_word (kh, "KH$BSV", 0172, 2);
-print_word (kh, "KH$ABQ", 0174, 2);
-
-wk2h = kh + 0174;
-wk2h = GETP (wk2h);
-if (wk2h != 0) {
-    print_word (wk2h, "   ABQ", 0000, 2);
-    print_word (wk2h, "   ABQ", 0002, 2);
-    print_word (wk2h, "   ABQ", 0004, 2);
-    print_word (wk2h, "   ABQ", 0006, 2);
-    print_word (wk2h, "   ABQ", 0010, 2);
-    print_word (wk2h, "   ABQ", 0012, 2);
-    print_word (wk2h, "   ABQ", 0014, 2);
-    print_word (wk2h, "   ABQ", 0016, 2);
-    print_word (wk2h, "   ABQ", 0020, 2);
-}
-
-return SCPE_OK;
-}
-
-t_stat ksdi_show (int32 flag, CONST char *ptr)
-{
-uint16 kh = ksdi_kh;
-uint16 itm;
-
-for (int i = 0; i < 0040; i += 2)
-    print_word (kh, "??$???", i, 2);
-
-print_word (kh, "KG$TLK", 0040, 2);
-print_word (kh, "KG$SLT", 0042, 1);
-print_word (kh, "KG$TYP", 0043, 1);
-print_word (kh, "KG$VRS", 0044, 2);
-print_word (kh, "KG$FCB", 0046, 2);
-print_word (kh, "KG$FBU", 0050, 2);
-print_word (kh, "KG$BWS", 0052, 2);
-print_word (kh, "KG$TMR", 0054, 2);
-print_word (kh, "KG$DMP", 0056, 2);
-
-itm = kh + 0056;
-itm = GETP (itm);
-if (itm != 0) {
-    print_word (itm, "   DMP", 0000, 2);
-    print_word (itm, "   DMP", 0002, 2);
-    print_word (itm, "   DMP", 0004, 2);
-    print_word (itm, "   DMP", 0006, 2);
-    print_word (itm, "   DMP", 0010, 2);
-    print_word (itm, "   DMP", 0012, 2);
-    print_word (itm, "   DMP", 0014, 2);
-    print_word (itm, "   DMP", 0016, 2);
-    print_word (itm, "   DMP", 0020, 2);
-}
-
-print_word (kh, "KG$DCA", 0060, 2);
-print_word (kh, "KG$TST", 0062, 2);
-print_word (kh, "KG$FRS", 0064, 2);
-print_word (kh, "KG$LAS", 0066, 2);
-print_word (kh, "KG$MDL", 0070, 0);
-print_word (kh, "KG$MTY", 0070, 2);
-print_word (kh, "KG$PFL", 0072, 2);
-print_word (kh, "KG$RSL", 0074, 2);
-print_word (kh, "KG$LTR", 0076, 2);
-print_word (kh, "KG$PSA", 0100, 2);
-print_word (kh, "KG$PSB", 0102, 2);
-print_word (kh, "KG$DSA", 0104, 20);
-print_word (kh, "KG$MC0", 0130, 8);
-print_word (kh, "KG$KSA", 0140, 0);
-
-for (int i = 0140; i < 0466; i += 2)
-    print_word (kh, "??$???", i, 2);
-
-return SCPE_OK;
-}
-
-uint16 get_from_queue (uint16 q)
-{
-uint16 qh;
-
-qh = GETP (q + Q_HEAD);
-if ((qh != 0) && (qh != 0100000)) {                     /* not empty or locked? */
-    PUTP (q + Q_HEAD, GETP (qh));                       /* point queue head to next item */
-    if (GETP (qh) == 0)                                 /* no next item? */
-        PUTP (q + Q_TAIL, 0);                           /* queue now empty */
-    PUTP (qh, 0);                                       /* remove next link from removed item */
-    sim_printf ("Item %06o removed from queue at address %06o\n", qh, q);
-    }
-return qh;
-}
-
-void put_to_queue (uint16 q, uint16 itm)
-{
-uint16 qh, qt, qf, tq, sq, mask;
-
-qh = GETP (q + Q_HEAD);
-if (qh == 0100000) {                                    /* should not happen */
-    sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
-    return;
-    }
-if (qh == 1) {    /* software process waiting on queue */
-    qh = 0;
-    qf = GETB (q - Q_FLGS);                             /* get queue flags */
-    if (qf & FLGS_IQ) {                                 /* interrupt queue */
-        if ((qf & FLGS_INT) == 0) {                     /* no interrupt pending */
-            mask = GETW (q - Q_SRVC);                   /* get interrupt mask */
-            if (mask & 017)
-                qf |= FLGS_INT;
-            if (mask & 010)
-                SET_INT (CB7);
-            if (mask & 04)
-                SET_INT (CB6);
-            if (mask & 02)
-                SET_INT (CB5);
-            if (mask & 01)
-                SET_INT (CB4);
-            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
-            PUTB (q - Q_FLGS, qf);                      /* interrupt now pending */
-            sim_printf ("Interrupt for queue %06o\n", q);
-            }
-        }
-    else {                                              /* transmission queue */
-        tq = q - Q_SRVC;                                /* get base of transmission queue */
-        sq = GETP (tq);                                 /* get service queue pointer */
-        if (sq) {
-            PUTP (tq, 0);                               /* clear service queue pointer */
-            sim_printf ("Sending transmission queue %06o to service queue %06o\n", tq, sq);
-            put_to_queue (sq, tq);                      /* send transmission queue to service queue */
-            }
-        }
-    }
-if (qh == 0) {                                          /* queue empty */
-    PUTP (q + Q_HEAD, itm);                             /* set head */
-    PUTP (q + Q_TAIL, itm);                             /* set tail */
-    }
-else {                                                  /* queue is not empty */
-    qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
-    if (GETW (qt) != 0)                                 /* should not happen */
-        sim_printf ("Queue tail item has non-zero pointer: %06o\n", GETW (qt));
-    else {                                              /* add to end of queue */
-        PUTP (qt, itm);                                 /* add link to item */
-        PUTP (q + Q_TAIL, itm);                         /* update queue tail pointer */
-        }
-    }
-sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
-}
-
-t_stat kci_process (int32 flag, CONST char *ptr)
-{
-uint16 kh = kci_kh;
-uint16 wq, tq, rsc;
-
-wq = kh + KH_2WK;
-for (;;) {
-    rsc = GETP (wq + Q_HEAD);                           /* get the resource pointer */
-    if (rsc == 0)                                       /* queue is empty */
-        break;
-    if (rsc == 0100000) {                               /* queue is locked */
-        sim_printf ("Source queue currently locked\n");
-        break;
-        }
-    tq = GETP (rsc + 0004);                             /* get destination queue pointer */
-    if (tq == 0) {                                      /* should not happen */
-        sim_printf ("Resource has no desitnation queue\n");
-        break;
-        }
-    if (Q_LOCKED (tq)) {
-        sim_printf ("Desitnation queue currently locked\n");
-        break;
-        }
-
-    rsc = get_from_queue (wq);                          /* get resource from work queue */
-                                                        /* TODO: process resource */
-    for (int i = 0; i < 20; i = i + 2)
-        sim_printf ("   %06o : %06o\n", i, GETW (rsc + i));
-    put_to_queue (tq, rsc);                             /* put resource to destination queue */
-    }
-
-return SCPE_OK;
-}
-
-t_stat ksdi_process (int32 flag, CONST char *ptr)
-{
-uint16 kh = ksdi_kh;
-uint16 fb, tq, rsc;
-
-fb = GETP (kh + KG_FBU);
-tq = GETP (kh + KT_S0);
-rsc = GETP (fb + Q_HEAD);                           /* get the resource pointer */
-if (rsc == 0)                                       /* queue is empty */
-    return SCPE_OK;
-if (rsc == 0100000) {                               /* queue is locked */
-    sim_printf ("Source queue currently locked\n");
-    return SCPE_OK;
-    }
-if (Q_LOCKED (tq)) {
-    sim_printf ("Desitnation queue currently locked\n");
-    return SCPE_OK;
-    }
-
-rsc = get_from_queue (fb);                          /* get resource from work queue */
-                                                    /* TODO: process resource */
-put_to_queue (tq + 4, rsc);                             /* put resource to destination queue */
-
-return SCPE_OK;
 }
 
 t_stat ioc_wr (int32 data, int32 pa, int32 access)

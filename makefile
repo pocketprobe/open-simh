@@ -1521,7 +1521,8 @@ HSC70 = ${PDP11D}/pdp11_fp.c ${PDP11D}/pdp11_cpu.c ${PDP11D}/pdp11_dz.c \
 	${PDP11D}/pdp11_cis.c ${PDP11D}/pdp11_stddev.c ${PDP11D}/pdp11_sys.c \
 	${PDP11D}/pdp11_cpumod.c ${PDP11D}/pdp11_dl.c \
 	${PDP11D}/pdp11_io_lib.c ${HSCD}/hsc70_syslist.c ${HSCD}/hsc70_io.c \
-	${HSCD}/hsc70_mem.c ${HSCD}/hsc70_stddev.c
+	${HSCD}/hsc70_mem.c ${HSCD}/hsc70_stddev.c ${HSCD}/hsc70_kreq.c \
+	${HSCD}/hsc70_kci.c ${HSCD}/hsc70_ksdi.c
 HSC70_OPT = -DVM_PDP11 -DHSC -I ${HSCD} -I ${PDP11D} ${NETWORK_OPT}
 
 
