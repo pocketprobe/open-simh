@@ -77,8 +77,14 @@
 #define KT_S2           0200
 #define KT_S3           0220
 
+/* debugging bitmaps */
+
+#define KREQ_DBG_TRC    0x0001                          /* trace routine calls */
+
 extern uint16 k_init_common ();
-extern void print_word (uint16 kh, char *name, uint16 off, uint16 len);
+extern t_stat k_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+extern t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+extern void print_word (FILE *st, uint16 kh, char *name, uint16 off, uint16 len);
 extern uint16 get_from_queue (uint16 q);
 extern void put_to_queue (uint16 q, uint16 itm);
 extern t_stat hsc_find (int32 flag, CONST char *ptr);

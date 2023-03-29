@@ -57,21 +57,73 @@ for (ki = 0; ki < 20; ki = ki + 2) {                     /* search for KI struct
 return kh;
 }
 
-void print_word (uint16 kh, char *name, uint16 off, uint16 len)
+t_stat k_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+DEVICE *dptr;
+DIB *dibp;
+
+if (uptr == NULL)
+    return SCPE_IERR;
+dptr = find_dev_from_unit (uptr);
+if (dptr == NULL)
+    return SCPE_IERR;
+dibp = (DIB *) dptr->ctxt;
+if (dibp == NULL)
+    return SCPE_IERR;
+fprintf (st, "address=");
+fprint_val (st, (t_value) dibp->ba + CMEMBASE, DEV_RDX, 32, PV_LEFT);
+return SCPE_OK;
+}
+
+t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+DEVICE *dptr;
+DIB *dibp;
+uint16 qh;
+
+if (uptr == NULL)
+    return SCPE_IERR;
+dptr = find_dev_from_unit (uptr);
+if (dptr == NULL)
+    return SCPE_IERR;
+dibp = (DIB *) dptr->ctxt;
+if (dibp == NULL)
+    return SCPE_IERR;
+
+qh = dibp->ba + val;
+for (;;) {
+    qh = GETP (qh);
+    if ((qh == 0) || qh == 0100000)
+        break;
+    print_word (st, qh, "", 0000, 2);
+    print_word (st, qh, "", 0002, 2);
+    print_word (st, qh, "", 0004, 2);
+    print_word (st, qh, "", 0006, 2);
+    print_word (st, qh, "", 0010, 2);
+    print_word (st, qh, "", 0012, 2);
+    print_word (st, qh, "", 0014, 2);
+    print_word (st, qh, "", 0016, 2);
+    print_word (st, qh, "", 0020, 2);
+    fprintf (st, "   ---\n");
+    }
+return SCPE_OK;
+}
+
+void print_word (FILE *st, uint16 kh, char *name, uint16 off, uint16 len)
 {
 if (len == 0)
-    sim_printf ("%s %06o\n", name, kh + off);
+    fprintf (st, "%s %06o\n", name, kh + off);
 else if (len == 1) {
-    sim_printf ("%s %06o\\  %03o\n", name, kh + off, GETB (kh + off));
+    fprintf (st, "%s %06o\\  %03o\n", name, kh + off, GETB (kh + off));
     }
 else {
-    sim_printf ("%s %06o/", name, kh + off);
+    fprintf (st, "%s %06o/", name, kh + off);
     for (int i = 1; i <= (len >> 1); i++) {
-        sim_printf ("  %06o", GETW (kh + off + ((i - 1) << 1)));
+        fprintf (st, "  %06o", GETW (kh + off + ((i - 1) << 1)));
         if (i % 8 == 0)
-            sim_printf ("\n              ");
+            fprintf (st, "\n              ");
         }
-    sim_printf ("\n");
+    fprintf (st, "\n");
     }
 }
 
@@ -99,7 +151,7 @@ if (qh == 0100000) {                                    /* should not happen */
     sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
     return;
     }
-if (qh == 1) {    /* software process waiting on queue */
+if (qh == 1) {                                          /* software process waiting on queue */
     qh = 0;
     qf = GETB (q - Q_FLGS);                             /* get queue flags */
     pcb = GETW (q + Q_WTHD);
@@ -145,37 +197,4 @@ else {                                                  /* queue is not empty */
         }
     }
 sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
-}
-
-t_stat hsc_find (int32 flag, CONST char *ptr)
-{
-uint32 i, j;
-uint16 p[12] = {
-    0000035,
-    0035316,
-    0001444,
-    0140010,
-    0000024,
-    0001064,
-    0160100,
-    0006775,
-    0167770,
-    0177777,
-    0177750,
-    0177710
-    };
-
-for (i = 0; i < (CMEMSIZE >> 1); i++) {
-    for (j = 0; j < 12; j++) {
-        if (CM[i + j] != p[j]) {
-            i = i + j;
-            break;
-            }
-        }
-    if (j == 12) {
-        sim_printf ("Pattern found at %06o\n", (i << 1));
-        break;
-        }
-    }
-return SCPE_OK;
 }
