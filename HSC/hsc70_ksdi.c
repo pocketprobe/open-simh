@@ -27,10 +27,13 @@
 #include "pdp11_defs.h"
 #include "hsc70_kreq.h"
 
+extern int32 tmxr_poll;                                 /* calibrated delay */
+
 t_stat ksdi_svc (UNIT *uptr);
 t_stat ksdi_reset (DEVICE *dptr);
 t_stat ksdi_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat ksdi_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat ksdi_init (uint16 req, uint16 act);
 
 /* debugging bitmaps */
 
@@ -41,9 +44,10 @@ DEBTAB ksdi_debug[] = {
     { 0 }
 };
 
-DIB ksdi_dib = {
-    0, 0, NULL, NULL,
-    0, 0, 0, { NULL }
+HDIB ksdi_dib = {
+    { 0, 0, NULL, NULL,
+      0, 0, 0, { NULL } },
+    K_SDI, 0, &ksdi_init
     };
 
 UNIT ksdi_unit = { UDATA (&ksdi_svc, 0, 0) };
@@ -53,6 +57,8 @@ REG ksdi_reg[] = {
     };
 
 MTAB ksdi_mod[] = {
+    { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
+      NULL, &k_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
       NULL, &k_show_addr, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "CONTROL", "CONTROL",
@@ -67,24 +73,33 @@ DEVICE ksdi_dev = {
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
     NULL, NULL, &ksdi_reset,
     NULL, NULL, NULL,
-    &ksdi_dib, DEV_DEBUG,
+    &ksdi_dib, DEV_DEBUG | DEV_HSC,
     0, ksdi_debug
     };
 
 
 /* The version must be at least DS = 3, MC = 00 */
 
-void ksdi_init (uint32 req)
+t_stat ksdi_init (uint16 req, uint16 act)
 {
-ksdi_dib.ba = k_init_common ();
-sim_debug (DBG_TRC, &ksdi_dev, "K.sdi %d startup: KH = %06o at %o\n", req, ksdi_dib.ba, (uint16)inst_pc);
-PUTW (ksdi_dib.ba + KG_RSL, 1);                         /* KG$RSL - result of self test */
-PUTW (ksdi_dib.ba + KG_VRS, 01452);                     /* KG$VRS - version (DS = 3, MC = 42) */
+if (act) {
+    ksdi_dib.cma = k_init_common ();
+    sim_debug (DBG_TRC, &ksdi_dev, "K.sdi %d startup: KH = %06o at %o\n", req, ksdi_dib.cma, (uint16)inst_pc);
+    PUTW (ksdi_dib.cma + KG_RSL, 1);                        /* KG$RSL - result of self test */
+    PUTW (ksdi_dib.cma + KG_VRS, 01452);                    /* KG$VRS - version (DS = 3, MC = 42) */
+    sim_clock_coschedule (&ksdi_unit, tmxr_poll);           /* activate */
+    }
+else {
+    sim_debug (DBG_TRC, &ksdi_dev, "K.sdi %d halt at %o\n", req, (uint16)inst_pc);
+    sim_cancel (&ksdi_unit);
+    ksdi_dib.cma = 0;
+    }
+return SCPE_OK;
 }
 
 t_stat ksdi_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-uint16 kh = ksdi_dib.ba;
+uint16 kh = ksdi_dib.cma;
 uint16 itm;
 
 print_word (st, kh, "KT$BAS", 0000, 0);
@@ -150,64 +165,16 @@ return ksdi_svc (uptr);
 
 t_stat ksdi_svc (UNIT *uptr)
 {
-uint16 kh = ksdi_dib.ba;
-uint16 fb, tq, rsc;
+uint16 kh = ksdi_dib.cma;
+uint16 tq, rsc;
 
-//rsc = GETP (kh + KT_S0 + 004);                         /* get the resource pointer */
-
-#if 0
-if (GETW (kh + KT_S0 + 004) == 0) {
-    tq = GETP (kh + KT_S0);
-    if (Q_LOCKED (tq)) {
-        sim_printf ("Desitnation queue currently locked\n");
-        return SCPE_OK;
-        }
-    put_to_queue (tq, kh + KT_S0);                      /* put resource to destination queue */
-    return SCPE_OK;
+if (GETW (kh + KG_RSL) == 0) {                          /* test started? */
+    PUTW (kh + KG_RSL, 1);                              /* KG$RSL - result of self test */
+    rsc = get_from_queue (kh + KT_S0 + 004);            /* get DCB from drive service area */
+    tq = GETP (rsc + 014);                              /* get destination queue */
+    put_to_queue (tq, rsc);                             /* put DCB to destination */
     }
-//PUTW (kh + KT_S0 + 016, 3);
-#endif
-
-if (GETW (kh + KT_S1 + 004) == 0) {
-    tq = GETP (kh + KT_S1);
-    if (Q_LOCKED (tq)) {
-        sim_printf ("Desitnation queue currently locked\n");
-        return SCPE_OK;
-        }
-    put_to_queue (tq, kh + KT_S1);                      /* put resource to destination queue */
-    return SCPE_OK;
-    }
-else {
-    rsc = GETP (kh + KT_S1 + 004);
-    tq = GETP (rsc + 014);
-    if (Q_LOCKED (tq)) {
-        sim_printf ("Desitnation queue currently locked\n");
-        return SCPE_OK;
-        }
-    rsc = get_from_queue (kh + KT_S1 + 004);
-    put_to_queue (tq, rsc);
-    }
-
-#if 0
-if (GETW (kh + KT_S2 + 004) == 0) {
-    tq = GETP (kh + KT_S2);
-    if (Q_LOCKED (tq)) {
-        sim_printf ("Desitnation queue currently locked\n");
-        return SCPE_OK;
-        }
-    put_to_queue (tq, kh + KT_S2);                      /* put resource to destination queue */
-    return SCPE_OK;
-    }
-
-if (GETW (kh + KT_S3 + 004) == 0) {
-    tq = GETP (kh + KT_S3);
-    if (Q_LOCKED (tq)) {
-        sim_printf ("Desitnation queue currently locked\n");
-        return SCPE_OK;
-        }
-    put_to_queue (tq, kh + KT_S3);                      /* put resource to destination queue */
-    }
-#endif    
+sim_clock_coschedule (uptr, tmxr_poll);                 /* reactivate */
 return SCPE_OK;
 }
 

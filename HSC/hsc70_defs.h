@@ -63,6 +63,20 @@
 #define IOBA_DL         (IOPAGEBASE + 017520)
 #define VEC_DL          0300
 
+#define DEV_V_HSC       DEV_V_FFUF
+#define DEV_HSC         (1u << DEV_V_HSC)
+
+/* HSC Device information block */
+
+struct hsc_dib {
+    DIB                 dib;                            /* PDP-11 device information block */
+    uint16              sts;                            /* status code */
+    uint16              cma;                            /* control memory address */
+    t_stat              (*init)(uint16 req, uint16 act);
+    };
+
+typedef struct hsc_dib HDIB;
+
 #define RdMemW(pa)      hsc_RdMemW (pa)
 #define RdMemB(pa)      hsc_RdMemB (pa)
 #define WrMemW(pa,d)    hsc_WrMemW (pa, d)

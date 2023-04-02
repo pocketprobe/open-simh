@@ -27,6 +27,26 @@
 #ifndef _HSC_KREQ_H
 #define _HSC_KREQ_H   0
 
+/* status codes */
+
+#define K_PIO           0000
+#define K_CI            0001                            /* K.ci host interface */
+#define K_SDI           0002                            /* K.sdi disk data channel */
+#define K_STI           0203                            /* K.sti tape data channel */
+#define K_SI4           0004                            /* K.si 4-port data channel - no microcode loaded */
+#define K_SI4_DISK      0205                            /* K.si 4-port data channel - disk microcode loaded */
+#define K_SI4_TAPE      0206                            /* K.si 4-port data channel - tape microcode loaded */
+#define K_SI8           0212                            /* K.si 8-port data channel - no microcode loaded */
+#define K_SI8_MICRO     0007                            /* K.si 8-port data channel - microcode loaded */
+#define K_SCSI          0015                            /* K.scsi data channel module */
+#define K_NONE          0377                            /* No requestor present */
+
+/* actions */
+
+#define K_NOACTION      0000
+#define K_RUN           0001
+#define K_HALT          0002
+
 #define GETW(off)       RdxMemW (CM, off)
 #define GETB(off)       RdxMemB (CM, off)
 #define PUTW(off, val)  WrxMemW (CM, off, val)
@@ -35,6 +55,7 @@
 #define PUTP(off, val)  PUTW (off, (val >> 2))
 
 #define Q_LOCKED(q)     (GETW (q) & 0100000)
+#define Q_EMPTY(q)      (GETW (q) == 0)
 
 /* transmission queue */
 
@@ -83,6 +104,7 @@
 
 extern uint16 k_init_common ();
 extern t_stat k_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+extern t_stat k_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern void print_word (FILE *st, uint16 kh, char *name, uint16 off, uint16 len);
 extern uint16 get_from_queue (uint16 q);

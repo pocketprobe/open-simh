@@ -29,6 +29,7 @@
 
 extern int32 trap_req;
 extern int32 ipl;
+extern HDIB *KSTS[10];
 
 extern int32 calc_ints (int32 nipl, int32 trq);
 
@@ -60,25 +61,50 @@ return kh;
 t_stat k_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
-DIB *dibp;
+HDIB *dibp;
 
 if (uptr == NULL)
     return SCPE_IERR;
 dptr = find_dev_from_unit (uptr);
 if (dptr == NULL)
     return SCPE_IERR;
-dibp = (DIB *) dptr->ctxt;
+dibp = (HDIB *) dptr->ctxt;
 if (dibp == NULL)
     return SCPE_IERR;
 fprintf (st, "address=");
-fprint_val (st, (t_value) dibp->ba + CMEMBASE, DEV_RDX, 32, PV_LEFT);
+fprint_val (st, (t_value) dibp->cma + CMEMBASE, DEV_RDX, 32, PV_LEFT);
+return SCPE_OK;
+}
+
+t_stat k_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+DEVICE *dptr;
+HDIB *dibp;
+uint32 slot, i;
+
+if (uptr == NULL)
+    return SCPE_IERR;
+dptr = find_dev_from_unit (uptr);
+if (dptr == NULL)
+    return SCPE_IERR;
+dibp = (HDIB *) dptr->ctxt;
+if (dibp == NULL)
+    return SCPE_IERR;
+for (i = 0; i < 10; i++) {
+    if (KSTS[i] == dibp) {
+        slot = i;
+        break;
+        }
+    }
+fprintf (st, "slot=");
+fprint_val (st, (t_value) slot, 10, 32, PV_LEFT);
 return SCPE_OK;
 }
 
 t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
-DIB *dibp;
+HDIB *dibp;
 uint16 qh;
 
 if (uptr == NULL)
@@ -86,11 +112,11 @@ if (uptr == NULL)
 dptr = find_dev_from_unit (uptr);
 if (dptr == NULL)
     return SCPE_IERR;
-dibp = (DIB *) dptr->ctxt;
+dibp = (HDIB *) dptr->ctxt;
 if (dibp == NULL)
     return SCPE_IERR;
 
-qh = dibp->ba + val;
+qh = dibp->cma + val;
 for (;;) {
     qh = GETP (qh);
     if ((qh == 0) || qh == 0100000)
@@ -129,28 +155,30 @@ else {
 
 uint16 get_from_queue (uint16 q)
 {
-uint16 qh;
+uint16 itm;
 
-qh = GETP (q + Q_HEAD);
-if ((qh != 0) && (qh != 0100000)) {                     /* not empty or locked? */
-    PUTP (q + Q_HEAD, GETP (qh));                       /* point queue head to next item */
-    if (GETP (qh) == 0)                                 /* no next item? */
-        PUTP (q + Q_TAIL, 0);                           /* queue now empty */
-    PUTP (qh, 0);                                       /* remove next link from removed item */
-    sim_printf ("Item %06o removed from queue at address %06o\n", qh, q);
-    }
-return qh;
+if (Q_LOCKED (q + Q_HEAD))                              /* check if queue locked */
+    return 0;
+if (Q_EMPTY (q + Q_HEAD))                               /* check if queue empty */
+    return 0;
+itm = GETP (q + Q_HEAD);
+PUTP (q + Q_HEAD, GETP (itm));                          /* point queue head to next item */
+if (GETP (itm) == 0)                                    /* no next item? */
+    PUTP (q + Q_TAIL, 0);                               /* queue now empty */
+PUTP (itm, 0);                                          /* remove next link from removed item */
+//sim_printf ("Item %06o removed from queue at address %06o\n", itm, q);
+return itm;
 }
 
 void put_to_queue (uint16 q, uint16 itm)
 {
 uint16 qh, qt, qf, tq, sq, mask, pcb;
 
-qh = GETP (q + Q_HEAD);
-if (qh == 0100000) {                                    /* should not happen */
-    sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
+if (Q_LOCKED (q + Q_HEAD)) {
+//    sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
     return;
     }
+qh = GETP (q + Q_HEAD);
 if (qh == 1) {                                          /* software process waiting on queue */
     qh = 0;
     qf = GETB (q - Q_FLGS);                             /* get queue flags */
@@ -170,7 +198,7 @@ if (qh == 1) {                                          /* software process wait
                 SET_INT (CB4);
             trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
             PUTB (q - Q_FLGS, qf);                      /* interrupt now pending */
-            sim_printf ("Interrupt for queue %06o, PCB = %06o\n", q, pcb);
+//            sim_printf ("Interrupt for queue %06o, PCB = %06o\n", q, pcb);
             }
         }
     else {                                              /* transmission queue */
@@ -178,7 +206,7 @@ if (qh == 1) {                                          /* software process wait
         sq = GETP (tq);                                 /* get service queue pointer */
         if (sq) {
             PUTP (tq, 0);                               /* clear service queue pointer */
-            sim_printf ("Sending transmission queue %06o to service queue %06o, PCB = %06o\n", tq, sq, pcb);
+//            sim_printf ("Sending transmission queue %06o to service queue %06o, PCB = %06o\n", tq, sq, pcb);
             put_to_queue (sq, tq);                      /* send transmission queue to service queue */
             }
         }
@@ -189,12 +217,41 @@ if (qh == 0) {                                          /* queue empty */
     }
 else {                                                  /* queue is not empty */
     qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
-    if (GETW (qt) != 0)                                 /* should not happen */
-        sim_printf ("Queue tail item has non-zero pointer: %06o\n", GETW (qt));
-    else {                                              /* add to end of queue */
-        PUTP (qt, itm);                                 /* add link to item */
-        PUTP (q + Q_TAIL, itm);                         /* update queue tail pointer */
+    while (GETW (qt) != 0)                              /* find the real end of the queue */
+        qt = GETP (qt);
+    PUTP (qt, itm);                                     /* add link to item */
+    PUTP (q + Q_TAIL, itm);                             /* update queue tail pointer */
+    }
+//sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
+}
+
+t_stat hsc_build_dib ()
+{
+DEVICE *dptr;
+HDIB *dibp;
+t_stat r;
+uint32 i, j;
+
+for (j = 0; j < 10; j++)
+    KSTS[j] = NULL;                                     /* set all slots empty */
+
+for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* locate all HSC devices */
+    if ((dptr->flags & DEV_HSC) == 0)
+        continue;
+    dibp = (HDIB *)dptr->ctxt;
+    if (dibp->init == NULL)                             /* K.pio? */
+        KSTS[0] = dibp;                                 /* must be in slot 0 */
+    else if (dibp->sts == K_CI)                         /* K.ci? */
+        KSTS[1] = dibp;                                 /* must be in slot 1 */
+    else {
+        for (j = 2; j < 10; j++) {                      /* find a free slot */
+            if (KSTS[j] == NULL) {
+                KSTS[j] = dibp;
+                break;
+                }
+            }
         }
     }
-sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
+
+return SCPE_OK;
 }

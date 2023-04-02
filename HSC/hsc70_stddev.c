@@ -26,6 +26,7 @@
 
 #include "pdp11_defs.h"
 #include "hsc_hsc70_bin.h"
+#include "hsc70_kreq.h"
 
 #define FLCSR_PE        0100000                         /* parity err */
 #define FLCSR_NXM       0040000                         /* non-existant mem err */
@@ -73,24 +74,12 @@
 #define UNIT_WLK        (1u << UNIT_V_UF)
 #define UNIT_WPRT       (UNIT_WLK | UNIT_RO)            /* write protect */
 
-#define K_PIO           0000
-#define K_CI            0001                            /* K.ci host interface */
-#define K_SDI           0002                            /* K.sdi disk data channel */
-#define K_STI           0203                            /* K.sti tape data channel */
-#define K_SI4           0004                            /* K.si 4-port data channel - no microcode loaded */
-#define K_SI4_DISK      0205                            /* K.si 4-port data channel - disk microcode loaded */
-#define K_SI4_TAPE      0206                            /* K.si 4-port data channel - tape microcode loaded */
-#define K_SI8           0212                            /* K.si 8-port data channel - no microcode loaded */
-#define K_SI8_MICRO     0007                            /* K.si 8-port data channel - microcode loaded */
-#define K_SCSI          0015                            /* K.scsi data channel module */
-#define K_NONE          0377                            /* No requestor present */
-
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
 int32 WADR[128][8];                                     /* window address registers */
 int32 WINDR = 0;                                        /* window index register */
 int32 KINI = 0;                                         /* K init register */
-int32 KSTS[10] = { K_PIO, K_CI, K_SDI, K_NONE, K_NONE, K_NONE, K_NONE, K_NONE, K_NONE, K_NONE };
+HDIB *KSTS[10];
 int32 fl_csr = 0;
 int32 fl_madr0 = 0;
 int32 fl_madr1 = 0;
@@ -120,8 +109,6 @@ extern int32 PReadB (int32 pa);
 extern int32 ReadB (int32 va);
 extern void PWriteB (int32 data, int32 addr);
 extern void WriteB (int32 data, int32 addr);
-extern void kci_init ();
-extern void ksdi_init (uint32 req);
 
 t_stat hsc_find (int32 flag, CONST char *ptr);
 
@@ -146,9 +133,10 @@ DEBTAB ioc_debug[] = {
     { 0 }
 };
 
-DIB ioc_dib = {
-    IOBA_IOC, IOLN_IOC, &ioc_rd, &ioc_wr,
-    0, 0, 0, { NULL }
+HDIB ioc_dib = {
+    { IOBA_IOC, IOLN_IOC, &ioc_rd, &ioc_wr,
+      0, 0, 0, { NULL } },
+    K_PIO, 0, NULL
     };
 
 UNIT ioc_unit = { UDATA (NULL, 0, 0) };
@@ -159,6 +147,10 @@ REG ioc_reg[] = {
     };
 
 MTAB ioc_mod[] = {
+    { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
+      NULL, &k_show_req, NULL },
+    { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
+      &set_addr, &show_addr, NULL },
     { 0 }
     };
 
@@ -167,7 +159,7 @@ DEVICE ioc_dev = {
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
     NULL, NULL, NULL,
     NULL, NULL, NULL,
-    NULL, DEV_DEBUG,
+    &ioc_dib, DEV_DEBUG | DEV_UBUS | DEV_HSC,
     0, ioc_debug
     };
 
@@ -277,6 +269,8 @@ return SCPE_OK;
 t_stat ioc_rd (int32 *data, int32 pa, int32 access)
 {
 int32 rg = (pa >> 1) & 037;
+HDIB *dibp;
+
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* WADR0 */
@@ -329,8 +323,12 @@ switch (rg) {                                           /* decode pa<2:1> */
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
-        *data = KSTS[(KINI & 017)];
-        *data = *data | (parity (*data, 1) << 7);       /* odd parity bit */
+        *data = K_NONE;                                 /* assume no requestor */
+        dibp = KSTS[(KINI & 017)];
+        if (dibp) {
+            *data = dibp->sts;
+            *data = *data | (parity (*data, 1) << 7);   /* odd parity bit */
+            }
         sim_debug (DBG_REG, &ioc_dev, "K status rd\n", *data);
         return SCPE_OK;
 
@@ -362,6 +360,10 @@ return SCPE_NXM;
 t_stat ioc_wr (int32 data, int32 pa, int32 access)
 {
 int32 rg = (pa >> 1) & 037;
+HDIB *dibp = NULL;
+uint32 slot = 0;
+uint16 action, mask;
+
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* WADR0 */
@@ -393,26 +395,32 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 022:                                           /* K init reg - NI */
         sim_debug (DBG_REG, &ioc_dev, "K init wr: %o\n", data);
-        if (~KINI & data & 01000)                       /* K.ci run */
-            kci_init ();
-        else if (~KINI & data & 0100)                   /* K.sdi run */
-            ksdi_init (8);
-        else if (~KINI & data & 0200)                   /* K.sdi run */
-            ksdi_init (9);
-        else {
-            for (int i = 10; i < 16; i++) {             /* K.sdi run */
-                if (~KINI & data & (1u << i)) {
-                    ksdi_init (i - 10);
-                    break;
-                    }
+        for (int i = 6; i < 16; i++) {                  /* loop over K init bits */
+            if (i < 8)                                  /* bits 6..7 = slots 8..9 */
+                slot = i + 2;
+            else if (i > 8)                             /* bits 9..16 = slots 1..7 */
+                slot = i - 8;
+            else                                        /* bit 8 = slot 0 */
+                continue;                               /* no init for K.pio */
+            mask = (1u << i);                           /* create a mask for this bit */
+            action = K_NOACTION;                        /* assume no action */
+            if (~KINI & data & mask)                    /* bit being set */
+                action = K_RUN;                         /* action is run */
+            else if (~data & KINI & mask)               /* bit being cleared */
+                action = K_HALT;                        /* action is halt */
+            if (action) {                               /* action required? */
+                dibp = KSTS[slot];                      /* get DIB for this slot */
+                if (dibp)                               /* any requestor present? */
+                    dibp->init (slot, action);          /* send action */
                 }
             }
-        KINI = data;
+        KINI = data;                                    /* update KINI register */
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
         sim_debug (DBG_REG, &ioc_dev, "K status wr: %o\n", data);
-        KSTS[0] = data;                                 /* can only write to req 0 */
+        dibp = KSTS[0];
+        dibp->sts = data;                               /* can only write to req 0 */
         return SCPE_OK;
         }
 
@@ -649,13 +657,11 @@ switch (uptr->CMD >> 5) {
             sim_debug (DBG_REG, &fl_dev, "fl: read multi sector\n");
             fl_read (uptr, da, (FL_NUMSC - sec), ma, FALSE);
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
-            //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | 020;
             }
         else {
             sim_debug (DBG_REG, &fl_dev, "fl: read single sector\n");
             fl_read (uptr, da, 1, ma, FALSE);
             ma = ma + 512;
-            //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (sec + 1);
             }
         fl_madr0 = fl_madr0 & ~FLMA0_A0;
         fl_madr0 = fl_madr0 | ((ma << 8) & FLMA0_A0);
@@ -679,13 +685,11 @@ switch (uptr->CMD >> 5) {
             sim_debug (DBG_REG, &fl_dev, "fl: write multi sector\n");
             fl_write (uptr, da, (FL_NUMSC - sec), ma, FALSE);
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
-            //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | 020;
             }
         else {
             sim_debug (DBG_REG, &fl_dev, "fl: write single sector\n");
             fl_write (uptr, da, 1, ma, FALSE);
             ma = ma + 512;
-            //fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (sec + 1);
             }
         fl_madr0 = fl_madr0 & ~FLMA0_A0;
         fl_madr0 = fl_madr0 | ((ma << 8) & FLMA0_A0);
@@ -775,7 +779,6 @@ return SCPE_OK;
 t_stat rom_rd (int32 *data, int32 pa, int32 access)
 {
 uint16 *rom = (uint16*) hsc_hsc70_bin;
-//uint32 rg = ((pa >> 1) & 01777);                        /* decode PA<1> */
 uint32 rg = ((pa - IOPAGEBASE - 013000) >> 1);
 if (PCSR & PCSR_PG2)                                    /* second page selected? */
     rg = rg + 02000;                                    /* yes, add offset */
@@ -802,8 +805,6 @@ fl_dev.flags |= (DEV_UBUS | DEV_QBUS);
 dli_dev.flags &= ~(DEV_DISABLE | DEV_DIS);
 dli_dib.ba = IOBA_DL;
 dli_dib.vec = VEC_DL;
-if (r = build_ubus_tab (&ioc_dev, &ioc_dib))            /* add to dispatch tab */
-     return r;
 if (r = build_ubus_tab (&ioc_dev, &cwin_dib))           /* add to dispatch tab */
      return r;
 if (CM == NULL) {                                       /* First time init */

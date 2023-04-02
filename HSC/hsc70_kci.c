@@ -27,10 +27,13 @@
 #include "pdp11_defs.h"
 #include "hsc70_kreq.h"
 
+extern int32 tmxr_poll;                                 /* calibrated delay */
+
 t_stat kci_svc (UNIT *uptr);
 t_stat kci_reset (DEVICE *dptr);
 t_stat kci_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kci_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat kci_init (uint16 req, uint16 act);
 
 /* debugging bitmaps */
 
@@ -41,9 +44,10 @@ DEBTAB kci_debug[] = {
     { 0 }
 };
 
-DIB kci_dib = {
-    0, 0, NULL, NULL,
-    0, 0, 0, { NULL }
+HDIB kci_dib = {
+    { 0, 0, NULL, NULL,
+      0, 0, 0, { NULL } },
+    K_CI, 0, &kci_init
     };
 
 UNIT kci_unit = { UDATA (&kci_svc, 0, 0) };
@@ -53,6 +57,8 @@ REG kci_reg[] = {
     };
 
 MTAB kci_mod[] = {
+    { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
+      NULL, &k_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
       NULL, &k_show_addr, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "CONTROL", NULL,
@@ -69,24 +75,33 @@ DEVICE kci_dev = {
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
     NULL, NULL, &kci_reset,
     NULL, NULL, NULL,
-    &kci_dib, DEV_DEBUG,
+    &kci_dib, DEV_DEBUG | DEV_HSC,
     0, kci_debug
     };
 
 
 /* The version must be at least DS = 2, MC = 44 */
 
-void kci_init ()
+t_stat kci_init (uint16 req, uint16 act)
 {
-kci_dib.ba = k_init_common ();
-sim_debug (DBG_TRC, &kci_dev, "K.ci startup: KH = %06o at %o\n", kci_dib.ba, (uint16)inst_pc);
-PUTW (kci_dib.ba + KH_NAD, 3);                          /* KH$NAD - CI node address */
-PUTW (kci_dib.ba + KG_VRS, 01511);                      /* KG$VRS - version (DS = 3, MC = 73) */
+if (act == K_RUN) {
+    kci_dib.cma = k_init_common ();
+    sim_debug (DBG_TRC, &kci_dev, "K.ci startup: KH = %06o at %o\n", kci_dib.cma, (uint16)inst_pc);
+    PUTW (kci_dib.cma + KH_NAD, 3);                         /* KH$NAD - CI node address */
+    PUTW (kci_dib.cma + KG_VRS, 01511);                     /* KG$VRS - version (DS = 3, MC = 73) */
+    sim_clock_coschedule (&kci_unit, tmxr_poll);            /* activate */
+    }
+else {
+    sim_debug (DBG_TRC, &kci_dev, "K.ci halt at %o\n", (uint16)inst_pc);
+    sim_cancel (&kci_unit);
+    kci_dib.cma = 0;
+    }
+return SCPE_OK;
 }
 
 t_stat kci_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-uint16 kh = kci_dib.ba;
+uint16 kh = kci_dib.cma;
 
 print_word (st, kh, "KH$LNK", KH_LNK, 2);
 print_word (st, kh, "KH$FLG", 0002, 2);
@@ -97,6 +112,7 @@ print_word (st, kh, "KH$0WK", 0020, 4);
 print_word (st, kh, "KH$EQ ", 0024, 4);
 print_word (st, kh, "KH$SRR", 0030, 4);
 print_word (st, kh, "KH$DRR", 0034, 4);
+
 print_word (st, kh, "KG$TLK", 0040, 2);
 print_word (st, kh, "KG$SLT", 0042, 1);
 print_word (st, kh, "KG$TYP", 0043, 1);
@@ -120,6 +136,7 @@ print_word (st, kh, "KG$PSB", 0102, 2);
 print_word (st, kh, "KG$DSA", 0104, 20);
 print_word (st, kh, "KG$MC0", 0130, 8);
 print_word (st, kh, "KG$KSA", 0140, 0);
+
 print_word (st, kh, "KH$D2T", 0140, 2);
 print_word (st, kh, "KH$CIM", 0142, 2);
 print_word (st, kh, "KH$D1T", 0144, 2);
@@ -146,35 +163,27 @@ return kci_svc (uptr);
 
 t_stat kci_svc (UNIT *uptr)
 {
-uint16 kh = kci_dib.ba;
-uint16 wq, tq, rsc;
+uint16 kh = kci_dib.cma;
+uint16 wq, tq, rsc, i;
 
-wq = kh + KH_2WK;
-for (;;) {
+wq = kh + KH_2WK;                                       /* process 2WK queue */
+for (i = 0; i < 20; i++) {                              /* process maximum of 20 items */
+    if (Q_LOCKED (wq + Q_HEAD))                         /* source queue locked */
+        break;
+    if (Q_EMPTY (wq + Q_HEAD))                          /* source queue empty */
+        break;
     rsc = GETP (wq + Q_HEAD);                           /* get the resource pointer */
-    if (rsc == 0)                                       /* queue is empty */
-        break;
-    if (rsc == 0100000) {                               /* queue is locked */
-        sim_printf ("Source queue currently locked\n");
-        break;
-        }
     tq = GETP (rsc + 0004);                             /* get destination queue pointer */
-    if (tq == 0) {                                      /* should not happen */
-        sim_printf ("Resource has no desitnation queue\n");
+    if (tq == 0)                                        /* resource has no destination */
         break;
-        }
-    if (Q_LOCKED (tq)) {
-        sim_printf ("Desitnation queue currently locked\n");
+    if (Q_LOCKED (tq))                                  /* destination queue locked */
         break;
-        }
 
     rsc = get_from_queue (wq);                          /* get resource from work queue */
                                                         /* TODO: process resource */
-//    for (int i = 0; i < 20; i = i + 2)
-//        sim_printf ("   %06o : %06o\n", i, GETW (rsc + i));
     put_to_queue (tq, rsc);                             /* put resource to destination queue */
     }
-
+sim_clock_coschedule (uptr, tmxr_poll);                 /* reactivate */
 return SCPE_OK;
 }
 

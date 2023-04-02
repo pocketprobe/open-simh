@@ -43,6 +43,7 @@ extern int32 EADR;
 int32 calc_ints (int32 nipl, int32 trq);
 
 extern t_stat cpu_build_dib (void);
+extern t_stat hsc_build_dib (void);
 extern t_stat ioc_build_dib (void);
 extern t_stat build_mbus_tab (DEVICE *dptr, DIB *dibp);
 
@@ -177,6 +178,8 @@ int_vec[IPL_CB6][INT_V_CB6] = VEC_CB6;
 int_vec[IPL_CB5][INT_V_CB5] = VEC_CB5;
 int_vec[IPL_CB4][INT_V_CB4] = VEC_CB4;
 if ((r = cpu_build_dib ()))                             /* build CPU entries */
+    return r;
+if ((r = hsc_build_dib ()))                             /* build HSC entries */
     return r;
 if ((r = ioc_build_dib ()))                             /* build IOC entries */
     return r;
