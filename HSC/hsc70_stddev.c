@@ -39,6 +39,9 @@
 #define FLCSR_SEL       0000400
 #define FLCSR_CS        0000377                         /* command/status */
 #define FLCSR_RW        0037400
+#define FLSTS_NRDY      0000200                         /* not ready */
+#define FLSTS_TRK0      0000004                         /* track 0 */
+#define FLSTS_BSY       0000001                         /* busy */
 
 #define FLMA0_V_A0      8                               /* mem addr 0-7 */
 #define FLMA0_M_A0      0377
@@ -104,6 +107,7 @@ t_stat fl_wr (int32 data, int32 pa, int32 access);
 t_stat fl_svc (UNIT *uptr);
 t_stat fl_reset (DEVICE *dptr);
 t_stat fl_boot (int32 unitno, DEVICE *dptr);
+void fl_setint ();
 
 extern int32 PReadB (int32 pa);
 extern int32 ReadB (int32 va);
@@ -190,6 +194,11 @@ DEVICE rom_dev = {
 
 /* Floppy disk device */
 
+DEBTAB fl_debug[] = {
+    { "REG",  DBG_REG,   "register access" },
+    { 0 }
+};
+
 DIB fl_dib = {
     IOBA_FL, IOLN_FL, &fl_rd, &fl_wr,
     1, IVCL (FL), VEC_FL, { NULL }
@@ -221,7 +230,8 @@ DEVICE fl_dev = {
     2, DEV_RDX, 20, 1, DEV_RDX, 8,
     NULL, NULL, &fl_reset,
     &fl_boot, NULL, NULL,
-    &fl_dib, 0 //DEV_UBUS | DEV_QBUS
+    &fl_dib, DEV_DEBUG,
+    0, fl_debug
     };
 
 int32 parity (int32 val, int32 odd)
@@ -474,6 +484,8 @@ int32 ln = sz * 512;
 int32 i;
 uint8 *fbuf = uptr->filebuf;
 
+if (fl_csr & FLCSR_DIS)                                 /* disable DMA request? */
+    return;
 sim_debug (DBG_REG, &fl_dev, "Boot device write, %o -> %X, %d\n", ma, da, sz);
 if (mapen) {                                            /* use reloc? */
     for (i = 0; i < ln; i++)
@@ -492,6 +504,8 @@ int32 ln = sz * 512;
 int32 i;
 uint8 *fbuf = uptr->filebuf;
 
+if (fl_csr & FLCSR_DIS)                                 /* disable DMA request? */
+    return;
 sim_debug (DBG_REG, &fl_dev, "Boot device read, %X, %d -> %o\n", da, sz, ma);
 if (mapen) {                                            /* use reloc? */
     for (i = 0; i < ln; i++)
@@ -506,7 +520,7 @@ else {
 t_stat fl_rd (int32 *data, int32 pa, int32 access)
 {
 int32 rg = (pa >> 1) & 03;
-int32 unitno = (fl_csr >> FLCSR_V_SEL) & 1;
+int32 unitno = (fl_csr >> FLCSR_V_SEL) & 1;             /* get drive select */
 
 if ((fl_csr & FLCSR_ME) == 0) {                         /* motor not enabled? */
     *data = 0;                                          /* controller held in reset state */
@@ -541,7 +555,7 @@ t_stat fl_wr (int32 data, int32 pa, int32 access)
 {
 int32 cmd;
 int32 rg = (pa >> 1) & 03;
-int32 unitno;
+int32 unitno = (fl_csr >> FLCSR_V_SEL) & 1;             /* get drive select */
 switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
@@ -549,19 +563,20 @@ switch (rg) {                                           /* decode pa<2:1> */
         fl_csr = data & FLCSR_RW;
         if (fl_csr & FLCSR_ME) {                        /* motor enabled */
             cmd = data & FLCSR_CS;
-            unitno = (data >> FLCSR_V_SEL) & 1;         /* get drive select */
             if ((cmd >> 4) == 015) {                    /* force interrupt? */
                 sim_cancel (&fl_unit[unitno]);
-                fl_csr = fl_csr & ~1;                   /* set not busy */
-                if (cmd & 05) {
+                fl_csr = fl_csr & ~FLSTS_BSY;           /* set not busy */
+                if (cmd & 05) {                         /* I2 or I0 */
                     fl_unit[unitno].CMD = cmd;
-                    fl_csr = fl_csr | 1;                /* set busy */
+                    fl_csr = fl_csr | FLSTS_BSY;        /* set busy */
                     sim_activate (&fl_unit[unitno], FL_WAIT);
                     }
+                if (cmd & 010)                          /* I3 */
+                    fl_setint ();                       /* immediate interrupt */
                 }
-            else if ((fl_csr & 1) == 0) {               /* not busy? */
+            else if ((fl_csr & FLSTS_BSY) == 0) {       /* not busy? */
                 fl_unit[unitno].CMD = cmd;
-                fl_csr = fl_csr | 1;                    /* set busy */
+                fl_csr = fl_csr | FLSTS_BSY;            /* set busy */
                 sim_activate (&fl_unit[unitno], FL_WAIT);
                 }
             }
@@ -570,6 +585,7 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 001:                                           /* MADR0 */
         sim_debug (DBG_REG, &fl_dev, "fl_madr0 wr: %o\n", data);
         fl_madr0 = data & FLMA0_RW;
+        fl_unit[unitno].TRK = data & FLMA0_CT;
         return SCPE_OK;
 
     case 002:                                           /* MADR1 */
@@ -596,7 +612,7 @@ t_stat fl_svc (UNIT *uptr)
 int32 ma, da, sec;
 
 if ((uptr->flags & UNIT_ATT) == 0) {
-    fl_csr = fl_csr | 0200;                             /* not ready */
+    fl_csr = fl_csr | FLSTS_NRDY;                       /* not ready */
     fl_setint ();
     return SCPE_OK;
     }
@@ -605,17 +621,16 @@ switch (uptr->CMD >> 5) {
         if (uptr->CMD & 020) {                          /* seek */
             uptr->TRK = fl_madr2 & FLMA2_DT;
             sim_debug (DBG_REG, &fl_dev, "fl: seek track %d\n", uptr->TRK);
-            fl_csr = fl_csr & ~1;                       /* set not busy */
-            fl_csr = fl_csr | 04;
-            fl_setint ();
             }
         else {                                          /* restore */
             uptr->TRK = 0;
             sim_debug (DBG_REG, &fl_dev, "fl: restore\n");
-            fl_csr = fl_csr & ~1;                       /* set not busy */
-            fl_csr = fl_csr | 04;
-            fl_setint ();
             }
+        fl_csr = fl_csr & ~FLSTS_TRK0;
+        if (uptr->TRK == 0)                             /* now on track 0? */
+            fl_csr = fl_csr | FLSTS_TRK0;               /* set flag */
+        fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
+        fl_setint ();
         break;
 
     case 1:                                             /* step */
@@ -627,7 +642,7 @@ switch (uptr->CMD >> 5) {
             uptr->TRK--;
             sim_debug (DBG_REG, &fl_dev, "fl: step out\n");
             }
-        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
 
@@ -635,7 +650,7 @@ switch (uptr->CMD >> 5) {
         uptr->DIR = 1;
         uptr->TRK++;
         sim_debug (DBG_REG, &fl_dev, "fl: step in\n");
-        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
 
@@ -643,7 +658,7 @@ switch (uptr->CMD >> 5) {
         uptr->DIR = 0;
         uptr->TRK--;
         sim_debug (DBG_REG, &fl_dev, "fl: step out\n");
-        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
 
@@ -669,7 +684,7 @@ switch (uptr->CMD >> 5) {
         fl_madr1 = fl_madr1 | (ma & FLMA1_A8);
         fl_madr2 = fl_madr2 & ~FLMA2_A16;
         fl_madr2 = fl_madr2 | ((ma >> 8) & FLMA2_A16);
-        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
 
@@ -697,14 +712,14 @@ switch (uptr->CMD >> 5) {
         fl_madr1 = fl_madr1 | (ma & FLMA1_A8);
         fl_madr2 = fl_madr2 & ~FLMA2_A16;
         fl_madr2 = fl_madr2 | ((ma >> 8) & FLMA2_A16);
-        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
 
     case 6:
         if (uptr->CMD & 020) {                          /* force interrupt */
             sim_debug (DBG_REG, &fl_dev, "fl: force interrupt\n");
-            fl_csr = fl_csr & ~1;                       /* set not busy */
+            fl_csr = fl_csr & ~FLSTS_BSY;               /* set not busy */
             if (uptr->CMD & 017)
                 fl_setint ();
             }
@@ -736,7 +751,7 @@ switch (uptr->CMD >> 5) {
         fl_madr1 = fl_madr1 | (ma & FLMA1_A8);
         fl_madr2 = fl_madr2 & ~FLMA2_A16;
         fl_madr2 = fl_madr2 | ((ma >> 8) & FLMA2_A16);
-        fl_csr = fl_csr & ~1;                           /* set not busy */
+        fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
         }
