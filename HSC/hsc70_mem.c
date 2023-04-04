@@ -49,11 +49,16 @@ int32 CDATA = 0;                                        /* control memory data *
 int32 CCYCLE = 0;                                       /* control memory cycle */
 int32 DADR = 0;                                         /* data memory address */
 int32 EADR = 0;                                         /* error address */
+uint32 pe_addr = 0;                                     /* parity error address */
 
 int32 hsc_RdMemW (int32 pa)
 {
 int32 data;
 
+if (pe_addr && (pe_addr == pa)) {                       /* parity error? */
+    EADR = pa;
+    ABORT (TRAP_PAR);
+    }
 if (ADDR_IS_DMEM (pa)) {
     pa = pa & DMEMMASK;
     DADR = pa;
@@ -172,6 +177,12 @@ ABORT (TRAP_NXM);
 
 void hsc_WrMemW (int32 pa, int32 data)
 {
+if (PCSR & (PCSR_HIP | PCSR_LOP)) {                     /* setting wrong parity? */
+    pe_addr = pa;
+    PCSR = PCSR & ~(PCSR_HIP | PCSR_LOP);               /* reset test bits */
+    }
+else if (pe_addr && (pe_addr == pa))                    /* clearing wrong parity? */
+    pe_addr = 0;
 if (ADDR_IS_DMEM (pa)) {
     pa = pa & DMEMMASK;
     DADR = pa;
