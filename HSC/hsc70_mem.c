@@ -71,15 +71,14 @@ if (ADDR_IS_DMEM (pa)) {
 if (ADDR_IS_CMEM (pa)) {
     pa = pa & CMEMMASK;
     CADR = (pa >> 1);                                   /* save address */
+    if (PCSR & PCSR_CBK)                                /* bank swap? */
+        pa = pa + (CMEMSIZE >> 1);                      /* select upper half of memory */
     if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
         CCYCLE = 07;
         data = CDATA;
         }
     else {
-        if (PCSR & PCSR_CBK)                            /* bank swap? */
-            data = RdxMemW (CM, pa + (CMEMSIZE >> 1));  /* select upper half of memory */
-        else
-            data = RdxMemW (CM, pa);
+        data = RdxMemW (CM, pa);
         if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
             CCYCLE = 02;
             if (data & 010)
@@ -131,15 +130,14 @@ if (ADDR_IS_DMEM (pa)) {
 if (ADDR_IS_CMEM (pa)) {
     pa = pa & CMEMMASK;
     CADR = (pa >> 1);                                   /* save address */
+    if (PCSR & PCSR_CBK)                                /* bank swap? */
+        pa = pa + (CMEMSIZE >> 1);                      /* select upper half of memory */
     if (PCSR & PCSR_NMA) {                              /* non-memory access cycle */
         CCYCLE = 07;
         data = CDATA;
         }
     else {
-        if (PCSR & PCSR_CBK)                            /* bank swap? */
-            data = RdxMemB (CM, pa + (CMEMSIZE >> 1));  /* select upper half of memory */
-        else
-            data = RdxMemB (CM, pa);
+        data = RdxMemB (CM, pa);
         if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
             CCYCLE = 02;
             if (data & 010)
@@ -196,30 +194,29 @@ if (ADDR_IS_CMEM (pa)) {
     pa = pa & CMEMMASK;
     CADR = (pa >> 1);                                   /* save address */
     CDATA = data;                                       /* data history */
+    if (PCSR & PCSR_CBK)                                /* bank swap? */
+        pa = pa + (CMEMSIZE >> 1);                      /* select upper half of memory */
     if (PCSR & PCSR_NMA)                                /* non-memory access cycle */
         CCYCLE = 07;
+    else if (PCSR & PCSR_CIE) {                         /* interrupt cycle */
+        CCYCLE = 02;
+        if (data & 010)
+            SET_INT (CB7);
+        if (data & 04)
+            SET_INT (CB6);
+        if (data & 02)
+            SET_INT (CB5);
+        if (data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    else if (PCSR & PCSR_LCK) {                         /* lock cycle */
+        CCYCLE = 04;
+        WrxMemW (CM, pa, 0100000);                      /* indicate locked */
+        }
     else {
-        if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
-            CCYCLE = 02;
-            if (data & 010)
-                SET_INT (CB7);
-            if (data & 04)
-                SET_INT (CB6);
-            if (data & 02)
-                SET_INT (CB5);
-            if (data & 01)
-                SET_INT (CB4);
-            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
-            }
-        else if (PCSR & PCSR_LCK) {                     /* lock cycle */
-            CCYCLE = 04;
-            WrxMemW (CM, pa, 0100000);                  /* indicate locked */
-            }
-        else CCYCLE = 01;                               /* read/write cycle */
-        if (PCSR & PCSR_CBK)                            /* bank swap? */
-            WrxMemW (CM, pa + (CMEMSIZE >> 1), data);   /* select upper half of memory */
-        else
-            WrxMemW (CM, pa, data);
+        CCYCLE = 01;                                    /* read/write cycle */
+        WrxMemW (CM, pa, data);
         }
     if (sim_log)
         fprintf (sim_log, "CMEM wr (%s): %07o = %06o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
@@ -253,30 +250,29 @@ if (ADDR_IS_CMEM (pa)) {
     pa = pa & CMEMMASK;
     CADR = (pa >> 1);                                   /* save address */
     CDATA = data;                                       /* data history */
+    if (PCSR & PCSR_CBK)                                /* bank swap? */
+        pa = pa + (CMEMSIZE >> 1);                      /* select upper half of memory */
     if (PCSR & PCSR_NMA)                                /* non-memory access cycle */
         CCYCLE = 07;
+    else if (PCSR & PCSR_CIE) {                         /* interrupt cycle */
+        CCYCLE = 02;
+        if (data & 010)
+            SET_INT (CB7);
+        if (data & 04)
+            SET_INT (CB6);
+        if (data & 02)
+            SET_INT (CB5);
+        if (data & 01)
+            SET_INT (CB4);
+        trap_req = calc_ints (ipl, trap_req);           /* recalc int req */
+        }
+    else if (PCSR & PCSR_LCK) {                         /* lock cycle */
+        CCYCLE = 04;
+        WrxMemW (CM, pa, 0100000);                      /* indicate locked */
+        }
     else {
-        if (PCSR & PCSR_CIE) {                          /* interrupt cycle */
-            CCYCLE = 02;
-            if (data & 010)
-                SET_INT (CB7);
-            if (data & 04)
-                SET_INT (CB6);
-            if (data & 02)
-                SET_INT (CB5);
-            if (data & 01)
-                SET_INT (CB4);
-            trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
-            }
-        else if (PCSR & PCSR_LCK) {                     /* lock cycle */
-            CCYCLE = 04;
-            WrxMemW (CM, pa, 0100000);                  /* indicate locked */
-            }
-        else CCYCLE = 01;                               /* read/write cycle */
-        if (PCSR & PCSR_CBK)                            /* bank swap? */
-            WrxMemB (CM, pa + (CMEMSIZE >> 1), data);   /* select upper half of memory */
-        else
-            WrxMemB (CM, pa, data);
+        CCYCLE = 01;                                    /* read/write cycle */
+        WrxMemB (CM, pa, data);
         }
     if (sim_log)
         fprintf (sim_log, "CMEM wr (%s): %07o = %03o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
