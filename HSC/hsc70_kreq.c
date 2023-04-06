@@ -236,7 +236,9 @@ for (j = 0; j < 10; j++)
     KSTS[j] = NULL;                                     /* set all slots empty */
 
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* locate all HSC devices */
-    if ((dptr->flags & DEV_HSC) == 0)
+    if ((dptr->flags & DEV_HSC) == 0)                   /* only HSC devices */
+        continue;
+    if (dptr->flags & DEV_DIS)                          /* skip if disabled */
         continue;
     dibp = (HDIB *)dptr->ctxt;
     if (dibp->init == NULL)                             /* K.pio? */
