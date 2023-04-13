@@ -70,7 +70,7 @@
 /* queue flags */
 
 #define FLGS_IQ         0100                            /* interrupt queue */
-#define FLGS_INT        0200                            /* interrupt pending */
+#define FLGS_SVC        0200                            /* service pending */
 
 /* K initialisation structure */
 

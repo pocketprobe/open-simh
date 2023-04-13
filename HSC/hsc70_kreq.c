@@ -184,10 +184,10 @@ if (qh == 1) {                                          /* software process wait
     qf = GETB (q - Q_FLGS);                             /* get queue flags */
     pcb = GETW (q + Q_WTHD);
     if (qf & FLGS_IQ) {                                 /* interrupt queue */
-        if ((qf & FLGS_INT) == 0) {                     /* no interrupt pending */
+        if ((qf & FLGS_SVC) == 0) {                     /* no interrupt pending? */
             mask = GETW (q - Q_SRVC);                   /* get interrupt mask */
             if (mask & 017)
-                qf |= FLGS_INT;
+                qf |= FLGS_SVC;
             if (mask & 010)
                 SET_INT (CB7);
             if (mask & 04)
@@ -204,9 +204,11 @@ if (qh == 1) {                                          /* software process wait
     else {                                              /* transmission queue */
         tq = q - Q_SRVC;                                /* get base of transmission queue */
         sq = GETP (tq);                                 /* get service queue pointer */
-        if (sq) {
+        if (((qf & FLGS_SVC) == 0) && (sq)) {           /* not on service queue and queue valid? */
             PUTP (tq, 0);                               /* clear service queue pointer */
 //            sim_printf ("Sending transmission queue %06o to service queue %06o, PCB = %06o\n", tq, sq, pcb);
+            qf |= FLGS_SVC;
+            PUTB (q - Q_FLGS, qf);                      /* now on service queue */
             put_to_queue (sq, tq);                      /* send transmission queue to service queue */
             }
         }

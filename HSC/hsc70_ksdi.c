@@ -82,7 +82,7 @@ DEVICE ksdi_dev = {
 
 t_stat ksdi_init (uint16 req, uint16 act)
 {
-if (act) {
+if (act == K_RUN) {
     ksdi_dib.cma = k_init_common ();
     sim_debug (DBG_TRC, &ksdi_dev, "K.sdi %d startup: KH = %06o at %o\n", req, ksdi_dib.cma, (uint16)inst_pc);
     PUTW (ksdi_dib.cma + KG_RSL, 1);                        /* KG$RSL - result of self test */
@@ -171,6 +171,7 @@ if (GETW (kh + KT_S0 + 004) == 0) {                     /* no work item? */
         sim_printf ("Desitnation queue currently locked\n");
         return SCPE_OK;
         }
+    PUTW (kh + KT_S0, 0);                               /* clear service queue pointer */
     put_to_queue (tq, kh + KT_S0);                      /* send drive state area to service queue */
     sim_printf ("Drive state area sent to service queue\n");
     }
@@ -222,141 +223,230 @@ return SCPE_OK;
 
 /* Online */
 
-void ksdi_online (uint16 cmd, uint16 rsp)
+uint16 ksdi_online (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: ONLINE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 online = TRUE;
+return 002;
 }
 
 /* Disconnect */
 
-void ksdi_disc (uint16 cmd, uint16 rsp)
+uint16 ksdi_disc (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: DISCONNECT\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 online = FALSE;
+return 002;
 }
 
 /* Diagnose */
 
-void ksdi_diag (uint16 cmd, uint16 rsp)
+uint16 ksdi_diag (uint16 cmd, uint16 rsp)
 {
 uint8 test = GETW (cmd + 002);                          /* drive resident test to run */
 sim_printf ("SDI level 2 command: DIAGNOSE, test = %02X\n", test);
 PUTW (rsp, 0xFC);                                       /* response opcode */
+return 004;
 }
 
 /* Drive clear */
 
-void ksdi_clear (uint16 cmd, uint16 rsp)
+uint16 ksdi_clear (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: DRIVE CLEAR\n");
 PUTW (rsp, 0);
 online = FALSE;
+return 002;
 }
 
 /* Get common characteristics */
 
-void ksdi_getchar (uint16 cmd, uint16 rsp)
+uint16 ksdi_getchar (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: GET COMMON CHARACTERISTICS\n");
-PUTW (rsp, 0x78);                                       /* response opcode */
+PUTW (rsp + 000, 0x7100 | 0x78);                        /* response opcode */
+PUTW (rsp + 002, 0xD400 | 0x31);                        /* short TO / SDI version */
+PUTW (rsp + 004, 0xD400 | 0x05);                        /* transfer rate */
+PUTW (rsp + 006, 0xD400 | 0x45);                        /* long TO / retry # */
+PUTW (rsp + 010, 0xD400 | 0x06);                        /* RCT copies / reserved */
+PUTW (rsp + 012, 0xD400 | 0x07);                        /* error recovery levels */
+PUTW (rsp + 014, 0xD400 | 0x08);                        /* ECC error threshold */
+PUTW (rsp + 016, 0xD400 | 0x09);                        /* software revision */
+PUTW (rsp + 020, 0xD400 | 0x0A);                        /* hardware revision */
+PUTW (rsp + 022, 0xD400 | 0x0B);                        /* unique drive ID #1 */
+PUTW (rsp + 024, 0xD400 | 0x0C);
+PUTW (rsp + 026, 0xD400 | 0x0D);                        /* unique drive ID #2 */
+PUTW (rsp + 030, 0xD400 | 0x0E);
+PUTW (rsp + 032, 0xD400 | 0x0F);                        /* unique drive ID #3 */
+PUTW (rsp + 034, 0xD400 | 0x10);
+PUTW (rsp + 036, 0xD400 | 0x11);                        /* drive type identifier */
+PUTW (rsp + 040, 0xD400 | 0x12);                        /* drive revs/s */
+PUTW (rsp + 042, 0xD400 | 0x13);
+PUTW (rsp + 044, 0xD400 | 0x14);
+PUTW (rsp + 046, 0xD400 | 0x15);
+PUTW (rsp + 050, 0xD400 | 0x16);
+PUTW (rsp + 052, 0xD400 | 0x17);
+PUTW (rsp + 054, 0xD400 | 0x18);
+PUTW (rsp + 056, 0xB200 | 0x00);
+return 030;
+}
+
+/* Get subunit characteristics */
+
+uint16 ksdi_getsubchar (uint16 cmd, uint16 rsp)
+{
+sim_printf ("SDI level 2 command: GET SUBUNIT CHARACTERISTICS\n");
+PUTW (rsp + 000, 0x7100 | 0x77);                        /* response opcode */
+PUTW (rsp + 002, 0xD400 | 0x00);                        /* low order LBN space in cylinder */
+PUTW (rsp + 004, 0xD400 | 0x00);
+PUTW (rsp + 006, 0xD400 | 0x00);                        /* high order LBN space in cylinder */
+PUTW (rsp + 010, 0xD400 | 0x00);
+PUTW (rsp + 012, 0xD400 | 0x00);                        /* groups/cylinder */
+PUTW (rsp + 014, 0xD400 | 0x00);
+PUTW (rsp + 016, 0xD400 | 0x00);                        /* tracks/group */
+PUTW (rsp + 020, 0xD400 | 0x00);
+PUTW (rsp + 022, 0xD400 | 0x00);                        /* RBNs/track */
+PUTW (rsp + 024, 0xD400 | 0x00);
+PUTW (rsp + 026, 0xD400 | 0x00);                        /* data preamble size */
+PUTW (rsp + 030, 0xD400 | 0x00);                        /* header preamble size */
+PUTW (rsp + 032, 0xD400 | 0x51);                        /* media type low */
+PUTW (rsp + 034, 0xD400 | 0x10);
+PUTW (rsp + 036, 0xD400 | 0x64);                        /* media type high */
+PUTW (rsp + 040, 0xD400 | 0x25);
+PUTW (rsp + 042, 0xD400 | 0x00);                        /* FCT copy size in XBNs */
+PUTW (rsp + 044, 0xD400 | 0x00);
+PUTW (rsp + 046, 0xD400 | 0x00);                        /* LBNs/track */
+PUTW (rsp + 050, 0xD400 | 0x00);                        /* group offset */
+PUTW (rsp + 052, 0xD400 | 0x00);                        /* LBNs in host area low */
+PUTW (rsp + 054, 0xD400 | 0x00);
+PUTW (rsp + 056, 0xD400 | 0x00);                        /* LBNs in host area high */
+PUTW (rsp + 060, 0xD400 | 0x00);
+PUTW (rsp + 062, 0xD400 | 0x00);                        /* RCT size in LBNs  */
+PUTW (rsp + 064, 0xD400 | 0x00);
+PUTW (rsp + 066, 0xD400 | 0x00);
+PUTW (rsp + 070, 0xD400 | 0x00);
+PUTW (rsp + 072, 0xD400 | 0x00);
+PUTW (rsp + 074, 0xD400 | 0x00);
+PUTW (rsp + 076, 0xD400 | 0x00);
+PUTW (rsp + 100, 0xD400 | 0x00);
+PUTW (rsp + 102, 0xD400 | 0x00);
+PUTW (rsp + 104, 0xD400 | 0x00);
+PUTW (rsp + 106, 0xD400 | 0x00);
+PUTW (rsp + 110, 0xD400 | 0x00);
+PUTW (rsp + 112, 0xD400 | 0x00);
+PUTW (rsp + 114, 0xD400 | 0x00);
+PUTW (rsp + 116, 0xB200 | 0x00);
+return 050;
 }
 
 /* Get status */
 
-void ksdi_getsts (uint16 cmd, uint16 rsp)
+uint16 ksdi_getsts (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: GET STATUS\n");
-PUTW (rsp + 000, 0xF6);                                 /* response opcode */
-PUTW (rsp + 002, 0);                                    /* unused? */
-PUTW (rsp + 004, UMSK_U1);                              /* subunit mask */
-PUTW (rsp + 006, REQ_SR | REQ_PS | REQ_RU);             /* request byte */
-PUTW (rsp + 010, 0);                                    /* mode byte */
-PUTW (rsp + 012, 0);                                    /* error byte */
-PUTW (rsp + 014, 0);                                    /* controller byte */
-PUTW (rsp + 016, 0);                                    /* retry-fail code */
-PUTW (rsp + 020, 0);                                    /* extended drive status */
-PUTW (rsp + 022, 0);                                    /* extended drive status */
-PUTW (rsp + 024, 0);                                    /* extended drive status */
-PUTW (rsp + 026, 0);                                    /* extended drive status */
-PUTW (rsp + 030, 0);                                    /* extended drive status */
-PUTW (rsp + 032, 0);                                    /* extended drive status */
-PUTW (rsp + 034, 0);                                    /* extended drive status */
+PUTW (rsp + 000, 0x7100 | 0xF6);                        /* response opcode */
+PUTW (rsp + 002, 0xD400 | 0x00);                        /* unit number (low) */
+PUTW (rsp + 004, 0xD400 | UMSK_U1);                     /* unit number (high) / subunit mask */
+PUTW (rsp + 006, 0xD400 | REQ_SR | REQ_PS | REQ_RU);    /* request byte */
+PUTW (rsp + 010, 0xD400 | 0x00);                        /* mode byte */
+PUTW (rsp + 012, 0xD400 | 0x00);                        /* error byte */
+PUTW (rsp + 014, 0xD400 | 0x00);                        /* controller byte */
+PUTW (rsp + 016, 0xD400 | 0x00);                        /* retry-fail code */
+PUTW (rsp + 020, 0xD400 | 0x00);                        /* extended drive status */
+PUTW (rsp + 022, 0xD400 | 0x00);                        /* extended drive status */
+PUTW (rsp + 024, 0xD400 | 0x00);                        /* extended drive status */
+PUTW (rsp + 026, 0xD400 | 0x00);                        /* extended drive status */
+PUTW (rsp + 030, 0xD400 | 0x00);                        /* extended drive status */
+PUTW (rsp + 032, 0xD400 | 0x00);                        /* extended drive status */
+PUTW (rsp + 034, 0xD400 | 0x00);                        /* extended drive status */
+PUTW (rsp + 036, 0xB200 | 0x00);                        /* end of frame */
+return 020;
 }
 
 /* Read memory */
 
-void ksdi_rdmem (uint16 cmd, uint16 rsp)
+uint16 ksdi_rdmem (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: READ MEMORY\n");
 PUTW (rsp, 0x72);                                       /* response opcode */
+return 030;
 }
 
 /* Recalibrate */
 
-void ksdi_recal (uint16 cmd, uint16 rsp)
+uint16 ksdi_recal (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: RECALIBRATE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
+return 002;
 }
 
 /* Seek */
 
-void ksdi_seek (uint16 cmd, uint16 rsp)
+uint16 ksdi_seek (uint16 cmd, uint16 rsp)
 {
 sim_printf ("SDI level 2 command: SEEK\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
+return 002;
 }
 
 /* SDI level 2 command */
 
-void ksdi_l2cmd (uint16 cmd, uint16 rsp)
+uint16 ksdi_l2cmd (uint16 cmd, uint16 rsp)
 {
 uint16 opc = GETB (cmd);                                /* get SDI opcode */
+uint16 rsz = 0;
+
 switch (opc) {
     case 0x03:                                          /* DIAGNOSE */
-        ksdi_diag (cmd, rsp);
+        rsz = ksdi_diag (cmd, rsp);
         break;
 
     case 0x84:                                          /* DISCONNECT */
-        ksdi_disc (cmd, rsp);
+        rsz = ksdi_disc (cmd, rsp);
         break;
 
     case 0x05:                                          /* DRIVE CLEAR */
-        ksdi_clear (cmd, rsp);
+        rsz = ksdi_clear (cmd, rsp);
         break;
 
     case 0x87:                                          /* GET COMMON CHARACTERISTICS */
-        ksdi_getchar (cmd, rsp);
+        rsz = ksdi_getchar (cmd, rsp);
+        break;
+
+    case 0x88:                                          /* GET SUBUNIT CHARACTERISTICS */
+        rsz = ksdi_getsubchar (cmd, rsp);
         break;
 
     case 0x09:                                          /* GET STATUS */
-        ksdi_getsts (cmd, rsp);
+        rsz = ksdi_getsts (cmd, rsp);
         break;
 
     case 0x0A:                                          /* SEEK */
-        ksdi_seek (cmd, rsp);
+        rsz = ksdi_seek (cmd, rsp);
         break;
 
     case 0x8B:                                          /* ONLINE drive */
-        ksdi_online (cmd, rsp);
+        rsz = ksdi_online (cmd, rsp);
         break;
 
     case 0x8D:                                          /* READ MEMORY */
-        ksdi_rdmem (cmd, rsp);
+        rsz = ksdi_rdmem (cmd, rsp);
         break;
 
     case 0x8E:                                          /* RECALIBRATE */
-        ksdi_recal (cmd, rsp);
+        rsz = ksdi_recal (cmd, rsp);
         break;
 
     default:
         sim_printf ("SDI level 2 command: opc = 0x%02X\n", opc);
         PUTW (rsp, 0x7E);                               /* response opcode */
+        rsz = 2;
         break;
         }
+return rsz;
 }
 
 /* Get realtime drive status */
@@ -375,7 +465,7 @@ PUTW (rsp, sts);
 t_stat ksdi_process ()
 {
 uint16 kh = ksdi_dib.cma;
-uint16 tq, rsc, opc, cmd, rsp;
+uint16 tq, rsc, opc, cmd, rsp, rsz, tmp;
 
 for (int j = 0; j < 20; j++) {
     rsc = GETP (kh + KT_S0 + 004);                      /* get work resource */
@@ -389,9 +479,6 @@ for (int j = 0; j < 20; j++) {
     if (Q_LOCKED (tq))                                  /* destination queue locked? */
         return SCPE_OK;
 
-    if (GETB (rsc + 006) != 030)                        /* FIXME: valid packet? */
-        return SCPE_OK;
-
     rsc = get_from_queue (kh + KT_S0 + 004);            /* dequeue from drive state area */
 
     for (int i = 0; i < 17; i++)
@@ -399,10 +486,13 @@ for (int j = 0; j < 20; j++) {
 
     rsp = GETP (rsc + 004);                             /* get response */
     opc = GETW (rsc + 010);
+    rsz = 0;
     switch (opc & 0177400) {
+        case 0100400:
+        case 004400:
         case 000400:                                    /* level 2 SDI command */
             cmd = GETP (rsc + 002);                     /* get command */
-            ksdi_l2cmd (cmd, rsp);
+            rsz = ksdi_l2cmd (cmd, rsp);
             break;
         case 014400:                                    /* ECHO DATA */
             sim_printf ("ECHO DATA\n");
@@ -417,7 +507,9 @@ for (int j = 0; j < 20; j++) {
             PUTW (rsp, 0);                              /* write response word */
             break;
         }
-    PUTW (rsc + 006, 0);                                /* FIXME: clear byte count? */
+    tmp = GETW (rsc + 006);
+    tmp = tmp - rsz;
+    PUTW (rsc + 006, tmp);                              /* set response length */
     sim_printf ("----\n");
 
     put_to_queue (tq, rsc);                             /* send to service queue */
