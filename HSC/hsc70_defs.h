@@ -71,7 +71,7 @@
 struct hsc_dib {
     DIB                 dib;                            /* PDP-11 device information block */
     uint16              sts;                            /* status code */
-    uint16              cma;                            /* control memory address */
+    uint32              cma;                            /* control memory address */
     t_stat              (*init)(uint16 req, uint16 act);
     };
 

@@ -99,8 +99,8 @@ return SCPE_OK;
 
 t_stat ksdi_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-uint16 kh = ksdi_dib.cma;
-uint16 itm;
+uint32 kh = ksdi_dib.cma;
+uint32 itm;
 
 print_word (st, kh, "KT$BAS", 0000, 0);
 print_word (st, kh, "KT$IPQ", 0000, 4);
@@ -162,8 +162,8 @@ t_bool online = FALSE;
 
 t_stat ksdi_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-uint16 kh = ksdi_dib.cma;
-uint16 tq;
+uint32 kh = ksdi_dib.cma;
+uint32 tq;
 
 if (GETW (kh + KT_S0 + 004) == 0) {                     /* no work item? */
     tq = GETP (kh + KT_S0);                             /* get service queue pointer */
@@ -223,7 +223,7 @@ return SCPE_OK;
 
 /* Online */
 
-uint16 ksdi_online (uint16 cmd, uint16 rsp)
+uint16 ksdi_online (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: ONLINE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -233,7 +233,7 @@ return 002;
 
 /* Disconnect */
 
-uint16 ksdi_disc (uint16 cmd, uint16 rsp)
+uint16 ksdi_disc (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: DISCONNECT\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -243,7 +243,7 @@ return 002;
 
 /* Diagnose */
 
-uint16 ksdi_diag (uint16 cmd, uint16 rsp)
+uint16 ksdi_diag (uint32 cmd, uint32 rsp)
 {
 uint8 test = GETW (cmd + 002);                          /* drive resident test to run */
 sim_printf ("SDI level 2 command: DIAGNOSE, test = %02X\n", test);
@@ -253,78 +253,78 @@ return 004;
 
 /* Drive clear */
 
-uint16 ksdi_clear (uint16 cmd, uint16 rsp)
+uint16 ksdi_clear (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: DRIVE CLEAR\n");
-PUTW (rsp, 0);
+PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 online = FALSE;
 return 002;
 }
 
 /* Get common characteristics */
 
-uint16 ksdi_getchar (uint16 cmd, uint16 rsp)
+uint16 ksdi_getchar (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: GET COMMON CHARACTERISTICS\n");
 PUTW (rsp + 000, 0x7100 | 0x78);                        /* response opcode */
-PUTW (rsp + 002, 0xD400 | 0x31);                        /* short TO / SDI version */
-PUTW (rsp + 004, 0xD400 | 0x05);                        /* transfer rate */
-PUTW (rsp + 006, 0xD400 | 0x45);                        /* long TO / retry # */
-PUTW (rsp + 010, 0xD400 | 0x06);                        /* RCT copies / reserved */
-PUTW (rsp + 012, 0xD400 | 0x07);                        /* error recovery levels */
-PUTW (rsp + 014, 0xD400 | 0x08);                        /* ECC error threshold */
-PUTW (rsp + 016, 0xD400 | 0x09);                        /* software revision */
-PUTW (rsp + 020, 0xD400 | 0x0A);                        /* hardware revision */
-PUTW (rsp + 022, 0xD400 | 0x0B);                        /* unique drive ID #1 */
-PUTW (rsp + 024, 0xD400 | 0x0C);
-PUTW (rsp + 026, 0xD400 | 0x0D);                        /* unique drive ID #2 */
-PUTW (rsp + 030, 0xD400 | 0x0E);
-PUTW (rsp + 032, 0xD400 | 0x0F);                        /* unique drive ID #3 */
-PUTW (rsp + 034, 0xD400 | 0x10);
-PUTW (rsp + 036, 0xD400 | 0x11);                        /* drive type identifier */
-PUTW (rsp + 040, 0xD400 | 0x12);                        /* drive revs/s */
-PUTW (rsp + 042, 0xD400 | 0x13);
-PUTW (rsp + 044, 0xD400 | 0x14);
-PUTW (rsp + 046, 0xD400 | 0x15);
-PUTW (rsp + 050, 0xD400 | 0x16);
-PUTW (rsp + 052, 0xD400 | 0x17);
-PUTW (rsp + 054, 0xD400 | 0x18);
+PUTW (rsp + 002, 0xD400 | 0x33);                        /* short TO / SDI version */
+PUTW (rsp + 004, 0xD400 | 0x61);                        /* transfer rate */
+PUTW (rsp + 006, 0xD400 | 0x57);                        /* long TO / retry # */
+PUTW (rsp + 010, 0xD400 | 4);                           /* RCT copies / reserved */
+PUTW (rsp + 012, 0xD400 | 0x00);                        /* error recovery levels */
+PUTW (rsp + 014, 0xD400 | 0x02);                        /* ECC error threshold */
+PUTW (rsp + 016, 0xD400 | 0x0A);                        /* software revision */
+PUTW (rsp + 020, 0xD400 | 0x00);                        /* hardware revision */
+PUTW (rsp + 022, 0xD400 | 0x7A);                        /* unique drive ID #1 */
+PUTW (rsp + 024, 0xD400 | 0x0A);
+PUTW (rsp + 026, 0xD400 | 0x00);                        /* unique drive ID #2 */
+PUTW (rsp + 030, 0xD400 | 0x00);
+PUTW (rsp + 032, 0xD400 | 0x00);                        /* unique drive ID #3 */
+PUTW (rsp + 034, 0xD400 | 0x00);
+PUTW (rsp + 036, 0xD400 | 1);                           /* drive type identifier */
+PUTW (rsp + 040, 0xD400 | 0x24);                        /* drive revs/s */
+PUTW (rsp + 042, 0xD400 | 0x00);
+PUTW (rsp + 044, 0xD400 | 0x00);
+PUTW (rsp + 046, 0xD400 | 0x00);
+PUTW (rsp + 050, 0xD400 | 0x00);
+PUTW (rsp + 052, 0xD400 | 0x00);
+PUTW (rsp + 054, 0xD400 | 0x00);
 PUTW (rsp + 056, 0xB200 | 0x00);
 return 030;
 }
 
 /* Get subunit characteristics */
 
-uint16 ksdi_getsubchar (uint16 cmd, uint16 rsp)
+uint16 ksdi_getsubchar (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: GET SUBUNIT CHARACTERISTICS\n");
 PUTW (rsp + 000, 0x7100 | 0x77);                        /* response opcode */
-PUTW (rsp + 002, 0xD400 | 0x00);                        /* low order LBN space in cylinder */
-PUTW (rsp + 004, 0xD400 | 0x00);
+PUTW (rsp + 002, 0xD400 | 0x13);                        /* low order LBN space in cylinder */
+PUTW (rsp + 004, 0xD400 | 0x01);
 PUTW (rsp + 006, 0xD400 | 0x00);                        /* high order LBN space in cylinder */
-PUTW (rsp + 010, 0xD400 | 0x00);
-PUTW (rsp + 012, 0xD400 | 0x00);                        /* groups/cylinder */
-PUTW (rsp + 014, 0xD400 | 0x00);
-PUTW (rsp + 016, 0xD400 | 0x00);                        /* tracks/group */
-PUTW (rsp + 020, 0xD400 | 0x00);
-PUTW (rsp + 022, 0xD400 | 0x00);                        /* RBNs/track */
-PUTW (rsp + 024, 0xD400 | 0x00);
-PUTW (rsp + 026, 0xD400 | 0x00);                        /* data preamble size */
-PUTW (rsp + 030, 0xD400 | 0x00);                        /* header preamble size */
-PUTW (rsp + 032, 0xD400 | 0x51);                        /* media type low */
+PUTW (rsp + 010, 0xD400 | 0x00);                            /* cyl # */
+PUTW (rsp + 012, 0xD400 | 2);                           /* groups/cylinder */
+PUTW (rsp + 014, 0xD400 | 0x00);                            /* start LBN / start XBN */
+PUTW (rsp + 016, 0xD400 | 14);                          /* tracks/group */
+PUTW (rsp + 020, 0xD400 | 0x00);                            /* start RBN / start DBN */
+PUTW (rsp + 022, 0xD400 | 1);                           /* RBNs/track */
+PUTW (rsp + 024, 0xD400 | 0x00);                            /* reserved */
+PUTW (rsp + 026, 0xD400 | 11);                          /* data preamble size */
+PUTW (rsp + 030, 0xD400 | 4);                           /* header preamble size */
+PUTW (rsp + 032, 0xD400 | 0x50);                        /* media type low */
 PUTW (rsp + 034, 0xD400 | 0x10);
 PUTW (rsp + 036, 0xD400 | 0x64);                        /* media type high */
 PUTW (rsp + 040, 0xD400 | 0x25);
-PUTW (rsp + 042, 0xD400 | 0x00);                        /* FCT copy size in XBNs */
-PUTW (rsp + 044, 0xD400 | 0x00);
-PUTW (rsp + 046, 0xD400 | 0x00);                        /* LBNs/track */
-PUTW (rsp + 050, 0xD400 | 0x00);                        /* group offset */
-PUTW (rsp + 052, 0xD400 | 0x00);                        /* LBNs in host area low */
-PUTW (rsp + 054, 0xD400 | 0x00);
-PUTW (rsp + 056, 0xD400 | 0x00);                        /* LBNs in host area high */
+PUTW (rsp + 042, 0xD400 | 0xE0);                        /* FCT copy size in XBNs */
+PUTW (rsp + 044, 0xD400 | 0x01);
+PUTW (rsp + 046, 0xD400 | 31);                          /* LBNs/track */
+PUTW (rsp + 050, 0xD400 | 16);                          /* group offset */
+PUTW (rsp + 052, 0xD400 | 0x9C);                        /* LBNs in host area low */
+PUTW (rsp + 054, 0xD400 | 0x9E);
+PUTW (rsp + 056, 0xD400 | 0x03);                        /* LBNs in host area high */
 PUTW (rsp + 060, 0xD400 | 0x00);
-PUTW (rsp + 062, 0xD400 | 0x00);                        /* RCT size in LBNs  */
-PUTW (rsp + 064, 0xD400 | 0x00);
+PUTW (rsp + 062, 0xD400 | 0xD1);                        /* RCT size in LBNs  */
+PUTW (rsp + 064, 0xD400 | 0x01);
 PUTW (rsp + 066, 0xD400 | 0x00);
 PUTW (rsp + 070, 0xD400 | 0x00);
 PUTW (rsp + 072, 0xD400 | 0x00);
@@ -343,14 +343,14 @@ return 050;
 
 /* Get status */
 
-uint16 ksdi_getsts (uint16 cmd, uint16 rsp)
+uint16 ksdi_getsts (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: GET STATUS\n");
 PUTW (rsp + 000, 0x7100 | 0xF6);                        /* response opcode */
 PUTW (rsp + 002, 0xD400 | 0x00);                        /* unit number (low) */
 PUTW (rsp + 004, 0xD400 | UMSK_U1);                     /* unit number (high) / subunit mask */
 PUTW (rsp + 006, 0xD400 | REQ_SR | REQ_PS | REQ_RU);    /* request byte */
-PUTW (rsp + 010, 0xD400 | 0x00);                        /* mode byte */
+PUTW (rsp + 010, 0xD400 | MODE_OB | MODE_FO);           /* mode byte */
 PUTW (rsp + 012, 0xD400 | 0x00);                        /* error byte */
 PUTW (rsp + 014, 0xD400 | 0x00);                        /* controller byte */
 PUTW (rsp + 016, 0xD400 | 0x00);                        /* retry-fail code */
@@ -367,7 +367,7 @@ return 020;
 
 /* Read memory */
 
-uint16 ksdi_rdmem (uint16 cmd, uint16 rsp)
+uint16 ksdi_rdmem (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: READ MEMORY\n");
 PUTW (rsp, 0x72);                                       /* response opcode */
@@ -376,7 +376,7 @@ return 030;
 
 /* Recalibrate */
 
-uint16 ksdi_recal (uint16 cmd, uint16 rsp)
+uint16 ksdi_recal (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: RECALIBRATE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -385,7 +385,7 @@ return 002;
 
 /* Seek */
 
-uint16 ksdi_seek (uint16 cmd, uint16 rsp)
+uint16 ksdi_seek (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI level 2 command: SEEK\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -394,9 +394,9 @@ return 002;
 
 /* SDI level 2 command */
 
-uint16 ksdi_l2cmd (uint16 cmd, uint16 rsp)
+uint16 ksdi_l2cmd (uint32 cmd, uint32 rsp)
 {
-uint16 opc = GETB (cmd);                                /* get SDI opcode */
+uint8 opc = GETB (cmd);                                 /* get SDI opcode */
 uint16 rsz = 0;
 
 switch (opc) {
@@ -451,7 +451,7 @@ return rsz;
 
 /* Get realtime drive status */
 
-void ksdi_rtds (uint16 rsp)
+void ksdi_rtds (uint32 rsp)
 {
 uint16 sts = 0;
 sim_printf ("LINE STATUS\n");
@@ -464,20 +464,44 @@ PUTW (rsp, sts);
 
 t_stat ksdi_process ()
 {
-uint16 kh = ksdi_dib.cma;
-uint16 tq, rsc, opc, cmd, rsp, rsz, tmp;
+uint32 kh = ksdi_dib.cma;
+uint32 sq, eq, tq, rsc, opc, cmd, rsp, rsz, tmp;
+
+for (int j = 0; j < 20; j++) {
+    rsc = GETP (kh + KT_IPQ);                           /* get work resource */
+    if (rsc == 0)
+        break;
+
+    tq = GETP (rsc + 014);                              /* get ?? queue */
+    if (tq == 0)
+        break;
+
+    if (Q_LOCKED (tq))                                  /* ?? queue locked? */
+        break;
+
+    rsc = get_from_queue (kh + KT_IPQ);                 /* dequeue */
+    sim_printf ("IPQ work item processed\n");
+    put_to_queue (tq, rsc);                             /* send to ?? queue */
+    }
 
 for (int j = 0; j < 20; j++) {
     rsc = GETP (kh + KT_S0 + 004);                      /* get work resource */
     if (rsc == 0)
-        return SCPE_OK;
+        break;
 
-    tq = GETP (rsc + 014);                              /* get service queue */
-    if (tq == 0)
-        return SCPE_OK;
+    sq = GETP (rsc + 014);                              /* get success queue */
+    if (sq == 0)
+        break;
 
-    if (Q_LOCKED (tq))                                  /* destination queue locked? */
-        return SCPE_OK;
+    if (Q_LOCKED (sq))                                  /* success queue locked? */
+        break;
+
+    eq = GETP (rsc + 016);                              /* get error queue */
+    if (eq == 0)
+        break;
+
+    if (Q_LOCKED (eq))                                  /* error queue locked? */
+        break;
 
     rsc = get_from_queue (kh + KT_S0 + 004);            /* dequeue from drive state area */
 
@@ -487,6 +511,7 @@ for (int j = 0; j < 20; j++) {
     rsp = GETP (rsc + 004);                             /* get response */
     opc = GETW (rsc + 010);
     rsz = 0;
+    tq = sq;                                            /* target is success queue */
     switch (opc & 0177400) {
         case 0100400:
         case 004400:
@@ -514,12 +539,13 @@ for (int j = 0; j < 20; j++) {
 
     put_to_queue (tq, rsc);                             /* send to service queue */
     }
+return SCPE_OK;
 }
 
 t_stat ksdi_svc (UNIT *uptr)
 {
-uint16 kh = ksdi_dib.cma;
-uint16 tq, rsc;
+uint32 kh = ksdi_dib.cma;
+uint32 tq, rsc;
 
 if (GETW (kh + KG_RSL) == 0) {                          /* test started? */
     PUTW (kh + KG_RSL, 1);                              /* KG$RSL - result of self test */

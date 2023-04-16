@@ -54,7 +54,7 @@
 #define GETP(off)       ((GETW (off) & 0077776) ? (GETW (off) << 2) : GETW (off))
 #define PUTP(off, val)  PUTW (off, (val >> 2))
 
-#define Q_LOCKED(q)     (GETW (q) & 0100000)
+#define Q_LOCKED(q)     (GETW (q) == 0100000)
 #define Q_EMPTY(q)      (GETW (q) == 0)
 
 /* transmission queue */
@@ -93,6 +93,7 @@
 
 /* K.sdi control area */
 
+#define KT_IPQ          0000
 #define KT_S0           0140
 #define KT_S1           0160
 #define KT_S2           0200
@@ -102,13 +103,13 @@
 
 #define KREQ_DBG_TRC    0x0001                          /* trace routine calls */
 
-extern uint16 k_init_common ();
+extern uint32 k_init_common ();
 extern t_stat k_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat k_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern void print_word (FILE *st, uint16 kh, char *name, uint16 off, uint16 len);
-extern uint16 get_from_queue (uint16 q);
-extern void put_to_queue (uint16 q, uint16 itm);
+extern void print_word (FILE *st, uint32 kh, char *name, uint16 off, uint16 len);
+extern uint32 get_from_queue (uint32 q);
+extern void put_to_queue (uint32 q, uint32 itm);
 extern t_stat hsc_find (int32 flag, CONST char *ptr);
 
 extern int16 inst_pc;

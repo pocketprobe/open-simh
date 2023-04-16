@@ -109,7 +109,7 @@ return SCPE_OK;
 
 t_stat kci_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-uint16 kh = kci_dib.cma;
+uint32 kh = kci_dib.cma;
 
 print_word (st, kh, "KH$LNK", KH_LNK, 2);
 print_word (st, kh, "KH$FLG", 0002, 2);
@@ -169,7 +169,7 @@ t_stat kci_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 return kci_svc (uptr);
 }
 
-void kci_counters (uint16 rsc, uint16 node)
+void kci_counters (uint32 rsc, uint16 node)
 {
 PUTW (rsc + 020, 0);                                    /* ACKs path A - low word */
 PUTW (rsc + 022, 0);                                    /* ACKs path A - high word */
@@ -193,7 +193,7 @@ PUTW (rsc + 056, 0);                                    /* Discarded RTNDATs - h
 
 /* Local K.ci commands */
 
-void kci_local_cmd (uint16 rsc, uint16 tq)
+void kci_local_cmd (uint32 rsc, uint16 tq)
 {
 uint16 opc, arg1, arg2;
 
@@ -220,7 +220,7 @@ switch (opc) {
 
 /* Sent to the local node with message "SELF" at offset 020 */
 
-void kci_cmd010 (uint16 rsc, uint16 tq)
+void kci_cmd010 (uint32 rsc, uint32 tq)
 {
 uint16 node, arg1;
 
@@ -234,7 +234,7 @@ arg1 = GETB (rsc + 014);
 
 /* Send a datagram */
 
-void kci_send (uint16 rsc, uint16 tq)
+void kci_send (uint32 rsc, uint32 tq)
 {
 uint16 opc, flgs, node;
 char path = '?';
@@ -256,7 +256,7 @@ switch (opc) {
     }
 }
 
-void kci_process (uint16 rsc, uint16 tq)
+void kci_process (uint32 rsc, uint32 tq)
 {
 uint16 opc = GETB (rsc + 010);
 switch (opc) {
@@ -279,8 +279,8 @@ switch (opc) {
 
 t_stat kci_svc (UNIT *uptr)
 {
-uint16 kh = kci_dib.cma;
-uint16 wq, tq, rsc, i;
+uint32 kh = kci_dib.cma;
+uint32 wq, tq, rsc, i;
 
 wq = kh + KH_2WK;                                       /* process 2WK queue */
 for (i = 0; i < 20; i++) {                              /* process maximum of 20 items */

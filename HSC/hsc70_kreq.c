@@ -42,9 +42,9 @@ extern int32 calc_ints (int32 nipl, int32 trq);
  * has been read.
  */
 
-uint16 k_init_common ()
+uint32 k_init_common ()
 {
-uint16 ki, kh = 0, chk;
+uint32 ki, kh = 0, chk;
 
 for (ki = 0; ki < 20; ki = ki + 2) {                     /* search for KI structure */
     if ((GETW (ki) == 0125252) && (GETW (ki + 2) == 052525)) {
@@ -105,7 +105,7 @@ t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
 HDIB *dibp;
-uint16 qh;
+uint32 qh;
 
 if (uptr == NULL)
     return SCPE_IERR;
@@ -135,7 +135,7 @@ for (;;) {
 return SCPE_OK;
 }
 
-void print_word (FILE *st, uint16 kh, char *name, uint16 off, uint16 len)
+void print_word (FILE *st, uint32 kh, char *name, uint16 off, uint16 len)
 {
 if (len == 0)
     fprintf (st, "%s %06o\n", name, kh + off);
@@ -153,9 +153,9 @@ else {
     }
 }
 
-uint16 get_from_queue (uint16 q)
+uint32 get_from_queue (uint32 q)
 {
-uint16 itm;
+uint32 itm;
 
 if (Q_LOCKED (q + Q_HEAD))                              /* check if queue locked */
     return 0;
@@ -170,12 +170,12 @@ PUTP (itm, 0);                                          /* remove next link from
 return itm;
 }
 
-void put_to_queue (uint16 q, uint16 itm)
+void put_to_queue (uint32 q, uint32 itm)
 {
-uint16 qh, qt, qf, tq, sq, mask, pcb;
+uint32 qh, qt, qf, tq, sq, mask, pcb;
 
 if (Q_LOCKED (q + Q_HEAD)) {
-//    sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
+    //sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
     return;
     }
 qh = GETP (q + Q_HEAD);
@@ -198,7 +198,7 @@ if (qh == 1) {                                          /* software process wait
                 SET_INT (CB4);
             trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
             PUTB (q - Q_FLGS, qf);                      /* interrupt now pending */
-//            sim_printf ("Interrupt for queue %06o, PCB = %06o\n", q, pcb);
+            //sim_printf ("Interrupt for queue %06o, PCB = %06o\n", q, pcb);
             }
         }
     else {                                              /* transmission queue */
@@ -206,7 +206,7 @@ if (qh == 1) {                                          /* software process wait
         sq = GETP (tq);                                 /* get service queue pointer */
         if (((qf & FLGS_SVC) == 0) && (sq)) {           /* not on service queue and queue valid? */
             PUTP (tq, 0);                               /* clear service queue pointer */
-//            sim_printf ("Sending transmission queue %06o to service queue %06o, PCB = %06o\n", tq, sq, pcb);
+            //sim_printf ("Sending transmission queue %06o to service queue %06o, PCB = %06o\n", tq, sq, pcb);
             qf |= FLGS_SVC;
             PUTB (q - Q_FLGS, qf);                      /* now on service queue */
             put_to_queue (sq, tq);                      /* send transmission queue to service queue */
