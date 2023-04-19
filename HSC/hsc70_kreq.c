@@ -172,7 +172,7 @@ return itm;
 
 void put_to_queue (uint32 q, uint32 itm)
 {
-uint32 qh, qt, qf, tq, sq, mask, pcb;
+uint32 qh, qt, qn, qf, tq, sq, mask, pcb;
 
 if (Q_LOCKED (q + Q_HEAD)) {
     //sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
@@ -219,8 +219,12 @@ if (qh == 0) {                                          /* queue empty */
     }
 else {                                                  /* queue is not empty */
     qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
-    while (GETW (qt) != 0)                              /* find the real end of the queue */
-        qt = GETP (qt);
+    while (GETW (qt) != 0) {                            /* find the real end of the queue */
+        qn = GETP (qt);
+        if (qn == qt)                                   /* circular pointer? */
+            break;
+        qt = qn;                                        /* point to next */
+        }
     PUTP (qt, itm);                                     /* add link to item */
     PUTP (q + Q_TAIL, itm);                             /* update queue tail pointer */
     }
