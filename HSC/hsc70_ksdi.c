@@ -143,7 +143,7 @@ print_word (st, ks, "KS$1SC", -010, 2);
 print_word (st, ks, "KS$1FL", -006, 0);
 print_word (st, ks, "KS$1BW", -006, 2);
 print_word (st, ks, "KS$0SM", -004, 0);
-print_word (st, ks, "KS$0SC", -004, 2);
+print_word (st, ks, "KS$0SC", -004, 2);                 /* sector count? */
 print_word (st, ks, "KS$0FL", -002, 0);
 print_word (st, ks, "KS$0BW", -002, 2);
 print_word (st, ks, "KS$BAS", 000, 0);
@@ -378,11 +378,11 @@ PUTW (rsp + 000, 0x7100 | 0x78);                        /* response opcode */
 PUTW (rsp + 002, 0xD400 | 0x33);                        /* short TO / SDI version */
 PUTW (rsp + 004, 0xD400 | 0x61);                        /* transfer rate */
 PUTW (rsp + 006, 0xD400 | 0x57);                        /* long TO / retry # */
-PUTW (rsp + 010, 0xD400 | 4);                           /* RCT copies / reserved */
+PUTW (rsp + 010, 0xD400 | 0x80 | 4);                    /* RCT copies / reserved, 0x80 = 576 byte mode allowed */
 PUTW (rsp + 012, 0xD400 | 0x00);                        /* error recovery levels */
 PUTW (rsp + 014, 0xD400 | 0x02);                        /* ECC error threshold */
 PUTW (rsp + 016, 0xD400 | 0x0A);                        /* software revision */
-PUTW (rsp + 020, 0xD400 | 0x00);                        /* hardware revision */
+PUTW (rsp + 020, 0xD400 | 0x00);                        /* hardware revision, 0x80 = limited diag support */
 PUTW (rsp + 022, 0xD400 | 0x7A);                        /* unique drive ID #1 */
 PUTW (rsp + 024, 0xD400 | 0x0A);
 PUTW (rsp + 026, 0xD400 | 0x00);                        /* unique drive ID #2 */
@@ -390,7 +390,7 @@ PUTW (rsp + 030, 0xD400 | 0x00);
 PUTW (rsp + 032, 0xD400 | 0x00);                        /* unique drive ID #3 */
 PUTW (rsp + 034, 0xD400 | 0x00);
 PUTW (rsp + 036, 0xD400 | 1);                           /* drive type identifier */
-PUTW (rsp + 040, 0xD400 | 0x24);                        /* drive revs/s */
+PUTW (rsp + 040, 0xD400 | 0x74);                        /* drive revs/s */
 PUTW (rsp + 042, 0xD400 | 0x00);
 PUTW (rsp + 044, 0xD400 | 0x00);
 PUTW (rsp + 046, 0xD400 | 0x00);
@@ -407,9 +407,9 @@ uint16 ksdi_getsubchar (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: GET SUBUNIT CHARACTERISTICS\n");
 PUTW (rsp + 0000, 0x7100 | 0x77);                       /* response opcode */
-PUTW (rsp + 0002, 0xD400 | 0x13);                       /* low order LBN space in cylinder */
+PUTW (rsp + 0002, 0xD400 | 0x13);                       /* low order LBN space in cylinders */
 PUTW (rsp + 0004, 0xD400 | 0x01);
-PUTW (rsp + 0006, 0xD400 | 0x00);                       /* high order LBN space in cylinder */
+PUTW (rsp + 0006, 0xD400 | 0x00);                       /* high order LBN space in cylinders */
 PUTW (rsp + 0010, 0xD400 | 0x00);                           /* cyl # */
 PUTW (rsp + 0012, 0xD400 | 2);                          /* groups/cylinder */
 PUTW (rsp + 0014, 0xD400 | 0x00);                           /* start LBN / start XBN */
@@ -441,10 +441,10 @@ PUTW (rsp + 0076, 0xD400 | 0x00);
 PUTW (rsp + 0100, 0xD400 | 0x00);
 PUTW (rsp + 0102, 0xD400 | 0x00);
 PUTW (rsp + 0104, 0xD400 | 0x00);
-PUTW (rsp + 0106, 0xD400 | 0x00);
-PUTW (rsp + 0110, 0xD400 | 0x02);                       /* XBN, DBN cylinders? */
-PUTW (rsp + 0112, 0xD400 | 0x00);
-PUTW (rsp + 0114, 0xD400 | 0x00);
+PUTW (rsp + 0106, 0xD400 | 0x02);                       /* XBN space in cylinders */
+PUTW (rsp + 0110, 0xD400 | 0x00);
+PUTW (rsp + 0112, 0xD400 | 0x01);                       /* DBN readonly groups */
+PUTW (rsp + 0114, 0xD400 | 0x02);                       /* DBN space in cylinders */
 PUTW (rsp + 0116, 0xB200 | 0x00);
 return 050;
 }
