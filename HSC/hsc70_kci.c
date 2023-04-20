@@ -35,7 +35,7 @@ extern int32 tmxr_poll;                                 /* calibrated delay */
 
 t_stat kci_svc (UNIT *uptr);
 t_stat kci_reset (DEVICE *dptr);
-t_stat kci_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat kci_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kci_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat kci_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kci_set_node (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -64,15 +64,15 @@ REG kci_reg[] = {
 
 MTAB kci_mod[] = {
     { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
-      NULL, &k_show_req, NULL },
+      NULL, &kg_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
-      NULL, &k_show_addr, NULL },
+      NULL, &kg_show_addr, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "NODE", "NODE",
       &kci_set_node, &kci_show_node, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "CONTROL", NULL,
-      NULL, &kci_show, NULL },
+      NULL, &kci_show_ctrl, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, KH_2WK, "2WK", NULL,
-      NULL, &k_show_queue, NULL, "Display work queue 2" },
+      NULL, &kg_show_queue, NULL, "Display work queue 2" },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "RUN", "RUN",
       &kci_run, NULL, NULL },
     { 0 }
@@ -93,7 +93,7 @@ DEVICE kci_dev = {
 t_stat kci_init (uint16 req, uint16 act)
 {
 if (act == K_RUN) {
-    kci_dib.cma = k_init_common ();
+    kci_dib.cma = kg_init ();
     sim_debug (DBG_TRC, &kci_dev, "K.ci startup: KH = %06o at %o\n", kci_dib.cma, (uint16)inst_pc);
     PUTW (kci_dib.cma + KH_NAD, kci_node);                  /* KH$NAD - CI node address */
     PUTW (kci_dib.cma + KG_VRS, (3 << 8) | 73);             /* KG$VRS - version (DS = 3, MC = 73) */
@@ -107,9 +107,10 @@ else {
 return SCPE_OK;
 }
 
-t_stat kci_show (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat kci_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 uint32 kh = kci_dib.cma;
+t_stat r;
 
 print_word (st, kh, "KH$LNK", KH_LNK, 2);
 print_word (st, kh, "KH$FLG", 0002, 2);
@@ -121,29 +122,9 @@ print_word (st, kh, "KH$EQ ", 0024, 4);                 /* error queue? */
 print_word (st, kh, "KH$SRR", 0030, 4);
 print_word (st, kh, "KH$DRR", 0034, 4);
 
-print_word (st, kh, "KG$TLK", 0040, 2);
-print_word (st, kh, "KG$SLT", 0042, 1);                 /* structure type? */
-print_word (st, kh, "KG$TYP", 0043, 1);                 /* structure type? */
-print_word (st, kh, "KG$VRS", 0044, 2);                 /* version */
-print_word (st, kh, "KG$FCB", 0046, 2);                 /* free control memory buffers? */
-print_word (st, kh, "KG$FBU", 0050, 2);
-print_word (st, kh, "KG$BWS", 0052, 2);
-print_word (st, kh, "KG$TMR", 0054, 2);
-print_word (st, kh, "KG$DMP", 0056, 2);
-print_word (st, kh, "KG$DCA", 0060, 2);
-print_word (st, kh, "KG$TST", 0062, 2);
-print_word (st, kh, "KG$FRS", 0064, 2);
-print_word (st, kh, "KG$LAS", 0066, 2);
-print_word (st, kh, "KG$MDL", 0070, 0);
-print_word (st, kh, "KG$MTY", 0070, 2);
-print_word (st, kh, "KG$PFL", 0072, 2);
-print_word (st, kh, "KG$RSL", 0074, 2);                 /* microdiagnostic test result */
-print_word (st, kh, "KG$LTR", 0076, 2);
-print_word (st, kh, "KG$PSA", 0100, 2);
-print_word (st, kh, "KG$PSB", 0102, 2);
-print_word (st, kh, "KG$DSA", 0104, 20);
-print_word (st, kh, "KG$MC0", 0130, 8);
-print_word (st, kh, "KG$KSA", 0140, 0);
+r = kg_show_ctrl (st, uptr, val, desc);
+if (r != SCPE_OK)
+    return r;
 
 print_word (st, kh, "KH$D2T", 0140, 2);
 print_word (st, kh, "KH$CIM", 0142, 2);                 /* CI manager queue pointer? */

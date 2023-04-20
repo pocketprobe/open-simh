@@ -62,10 +62,10 @@
 #define Q_SRVC          0004                            /* service queue pointer */
 #define Q_PROC          0002
 #define Q_FLGS          0001
-#define Q_HEAD          0000                            /* Resource queue head */
-#define Q_TAIL          0002                            /* Resource queue tail */
-#define Q_WTHD          0004                            /* Waiter queue head */
-#define Q_WTTL          0006                            /* Waiter queue tail */
+#define Q_HEAD          0000                            /* resource queue head */
+#define Q_TAIL          0002                            /* resource queue tail */
+#define Q_WTHD          0004                            /* waiter queue head */
+#define Q_WTTL          0006                            /* waiter queue tail */
 
 /* queue flags */
 
@@ -93,6 +93,14 @@
 
 /* K.sdi control area */
 
+#define KS_0HD          0000
+#define KS_S0           0140
+#define KS_S1           0160
+#define KS_S2           0200
+#define KS_S3           0220
+
+/* K.sti control area */
+
 #define KT_IPQ          0000
 #define KT_S0           0140
 #define KT_S1           0160
@@ -103,14 +111,14 @@
 
 #define KREQ_DBG_TRC    0x0001                          /* trace routine calls */
 
-extern uint32 k_init_common ();
-extern t_stat k_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern t_stat k_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern void print_word (FILE *st, uint32 kh, char *name, uint16 off, uint16 len);
+extern uint32 kg_init ();
+extern t_stat kg_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+extern t_stat kg_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+extern t_stat kg_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+extern t_stat kg_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+extern void print_word (FILE *st, uint32 kh, char *name, int16 off, uint16 len);
 extern uint32 get_from_queue (uint32 q);
 extern void put_to_queue (uint32 q, uint32 itm);
-extern t_stat hsc_find (int32 flag, CONST char *ptr);
 
 extern int16 inst_pc;
 

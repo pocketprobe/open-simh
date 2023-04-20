@@ -42,23 +42,23 @@ extern int32 calc_ints (int32 nipl, int32 trq);
  * has been read.
  */
 
-uint32 k_init_common ()
+uint32 kg_init ()
 {
-uint32 ki, kh = 0, chk;
+uint32 ki, kg = 0, chk;
 
-for (ki = 0; ki < 20; ki = ki + 2) {                     /* search for KI structure */
+for (ki = 0; ki < 20; ki = ki + 2) {                    /* search for KI structure */
     if ((GETW (ki) == 0125252) && (GETW (ki + 2) == 052525)) {
-        kh = GETW (ki + KI_KIA);                        /* get offset to KH structure */
-        if (GETW (ki + KI_CHK) != (kh - 1))             /* verify offset */
+        kg = GETW (ki + KI_KIA);                        /* get offset to KG structure */
+        if (GETW (ki + KI_CHK) != (kg - 1))             /* verify offset */
             break;                                      /* failed */
-        PUTW (ki + KI_KIA, -kh);
-        kh = kh << 2;                                   /* convert to byte offset */
+        PUTW (ki + KI_KIA, -kg);
+        kg = kg << 2;                                   /* convert to byte offset */
         }
     }
-return kh;
+return kg;
 }
 
-t_stat k_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat kg_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
 HDIB *dibp;
@@ -76,7 +76,7 @@ fprint_val (st, (t_value) dibp->cma + CMEMBASE, DEV_RDX, 32, PV_LEFT);
 return SCPE_OK;
 }
 
-t_stat k_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat kg_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
 HDIB *dibp;
@@ -101,7 +101,7 @@ fprint_val (st, (t_value) slot, 10, 32, PV_LEFT);
 return SCPE_OK;
 }
 
-t_stat k_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat kg_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
 HDIB *dibp;
@@ -135,17 +135,61 @@ for (;;) {
 return SCPE_OK;
 }
 
-void print_word (FILE *st, uint32 kh, char *name, uint16 off, uint16 len)
+t_stat kg_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+DEVICE *dptr;
+HDIB *dibp;
+uint32 kg;
+t_stat r;
+
+if (uptr == NULL)
+    return SCPE_IERR;
+dptr = find_dev_from_unit (uptr);
+if (dptr == NULL)
+    return SCPE_IERR;
+dibp = (HDIB *) dptr->ctxt;
+if (dibp == NULL)
+    return SCPE_IERR;
+kg = dibp->cma;
+
+print_word (st, kg, "KG$TLK", 0040, 2);
+print_word (st, kg, "KG$SLT", 0042, 1);                 /* structure type? */
+print_word (st, kg, "KG$TYP", 0043, 1);                 /* structure type? */
+print_word (st, kg, "KG$VRS", 0044, 2);                 /* version */
+print_word (st, kg, "KG$FCB", 0046, 2);                 /* free control memory buffers? */
+print_word (st, kg, "KG$FBU", 0050, 2);
+print_word (st, kg, "KG$BWS", 0052, 2);
+print_word (st, kg, "KG$TMR", 0054, 2);
+print_word (st, kg, "KG$DMP", 0056, 2);
+print_word (st, kg, "KG$DCA", 0060, 2);
+print_word (st, kg, "KG$TST", 0062, 2);
+print_word (st, kg, "KG$FRS", 0064, 2);
+print_word (st, kg, "KG$LAS", 0066, 2);
+print_word (st, kg, "KG$MDL", 0070, 0);
+print_word (st, kg, "KG$MTY", 0070, 2);
+print_word (st, kg, "KG$PFL", 0072, 2);
+print_word (st, kg, "KG$RSL", 0074, 2);                 /* microdiagnostic test result */
+print_word (st, kg, "KG$LTR", 0076, 2);
+print_word (st, kg, "KG$PSA", 0100, 2);
+print_word (st, kg, "KG$PSB", 0102, 2);
+print_word (st, kg, "KG$DSA", 0104, 20);
+print_word (st, kg, "KG$MC0", 0130, 8);
+print_word (st, kg, "KG$KSA", 0140, 0);
+
+return SCPE_OK;
+}
+
+void print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
 {
 if (len == 0)
-    fprintf (st, "%s %06o\n", name, kh + off);
+    fprintf (st, "%s %06o\n", name, kg + off);
 else if (len == 1) {
-    fprintf (st, "%s %06o\\  %03o\n", name, kh + off, GETB (kh + off));
+    fprintf (st, "%s %06o\\  %03o\n", name, kg + off, GETB (kg + off));
     }
 else {
-    fprintf (st, "%s %06o/", name, kh + off);
+    fprintf (st, "%s %06o/", name, kg + off);
     for (int i = 1; i <= (len >> 1); i++) {
-        fprintf (st, "  %06o", GETW (kh + off + ((i - 1) << 1)));
+        fprintf (st, "  %06o", GETW (kg + off + ((i - 1) << 1)));
         if (i % 8 == 0)
             fprintf (st, "\n              ");
         }

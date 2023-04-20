@@ -152,7 +152,7 @@ REG ioc_reg[] = {
 
 MTAB ioc_mod[] = {
     { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
-      NULL, &k_show_req, NULL },
+      NULL, &kg_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
       &set_addr, &show_addr, NULL },
     { 0 }
