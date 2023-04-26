@@ -400,7 +400,7 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 021:                                           /* switch/display reg */
         sim_debug (DBG_REG, &ioc_dev, "SDR wr: %o\n", data);
-        SDR = data & 07777;
+        SDR = (SDR & ~0377) | (data & 0377);
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
