@@ -54,6 +54,11 @@
 #define GETP(off)       ((GETW (off) & 0077776) ? (GETW (off) << 2) : GETW (off))
 #define PUTP(off, val)  PUTW (off, (val >> 2))
 
+#define GETDW(off)      RdxMemW (DM, off)
+#define GETDB(off)      RdxMemB (DM, off)
+#define PUTDW(off, val) WrxMemW (DM, off, val)
+#define PUTDB(off, val) WrxMemB (DM, off, val)
+
 #define Q_LOCKED(q)     (GETW (q) == 0100000)
 #define Q_EMPTY(q)      (GETW (q) == 0)
 
@@ -82,30 +87,17 @@
 /* K generic control area */
 
 #define KG_VRS          0044                            /* microcode version */
-#define KG_FBU          0050
-#define KG_RSL          0074
-
-/* K.ci control area */
-
-#define KH_LNK          0000
-#define KH_2WK          0010
-#define KH_NAD          0164                            /* node address */
-
-/* K.sdi control area */
-
-#define KS_0HD          0000
-#define KS_S0           0140
-#define KS_S1           0160
-#define KS_S2           0200
-#define KS_S3           0220
+#define KG_FCB          0046                            /* free control memory buffers */
+#define KG_FBU          0050                            /* free data memory buffers */
+#define KG_RSL          0074                            /* microdiagnostic result? */
 
 /* K.sti control area */
 
 #define KT_IPQ          0000
-#define KT_S0           0140
-#define KT_S1           0160
-#define KT_S2           0200
-#define KT_S3           0220
+#define KT_S0           0140                            /* drive state area (port 0) */
+#define KT_S1           0160                            /* drive state area (port 1) */
+#define KT_S2           0200                            /* drive state area (port 2) */
+#define KT_S3           0220                            /* drive state area (port 3) */
 
 /* debugging bitmaps */
 

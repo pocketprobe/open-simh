@@ -27,7 +27,76 @@
 #include "pdp11_defs.h"
 #include "hsc70_kreq.h"
 
+/* K.sdi control area */
+
+#define KS_0HD          0000                            /* DRAT queue (port 0) */
+#define KS_KSA          0140                            /* drive state area */
+#define KS_S0           0140                            /* drive state area (port 0) */
+#define KS_S1           0160                            /* drive state area (port 1) */
+#define KS_S2           0200                            /* drive state area (port 2) */
+#define KS_S3           0220                            /* drive state area (port 3) */
+
+/* Drive state area */
+
+#define KSA_SRVC        0000                            /* service queue pointer */
+#define KSA_FLGS        0002                            /* flags */
+#define KSA_HEAD        0004                            /* work queue head */
+#define KSA_TAIL        0006                            /* work queue tail */
+#define KSA_CTX         0012                            /* software context */
+#define KSA_LOCK        0016                            /* drive state area lock */
+#define KSA_LEN         0020                            /* size of drive state area */
+
+/* Realtime drive status */
+
+#define RTDS_RWR        0001                            /* read/write ready */
+#define RTDS_RR         0002                            /* receiver ready */
+#define RTDS_ATN        0010                            /* attention */
+#define RTDS_AVL        0020                            /* available */
+
+/* Drive status - Unit mask */
+
+#define UMSK_U1         0020                            /* subunit 1 present */
+#define UMSK_U2         0040                            /* subunit 2 present */
+#define UMSK_U3         0100                            /* subunit 3 present */
+#define UMSK_U4         0200                            /* subunit 4 present */
+
+/* Drive status - Request byte */
+
+#define REQ_RU          0001                            /* run/stop switch in */
+#define REQ_PS          0002                            /* port switch in */
+#define REQ_EL          0010                            /* send log packet */
+#define REQ_SR          0020                            /* spindle at speed */
+#define REQ_DR          0040                            /* diagnostic load required */
+#define REQ_RR          0100                            /* readjustment required */
+#define REQ_OA          0200                            /* online to other port */
+
+/* Drive status - Mode byte */
+
+#define MODE_S7         0001                            /* 0 = 512 bytes/sector, 1 = 576 bytes/sector */
+#define MODE_OB         0002                            /* diag cylinder access */
+#define MODE_FO         0004                            /* formatting enabled */
+#define MODE_DD         0010                            /* drive disabled for diagnostics */
+#define MODE_W1         0020                            /* write protect subunit 1 */
+#define MODE_W2         0040                            /* write protect subunit 2 */
+#define MODE_W3         0100                            /* write protect subunit 3 */
+#define MODE_W4         0200                            /* write protect subunit 4 */
+
+/* Drive status - Error byte */
+
+#define ERR_WE          0010                            /* write lock error */
+#define ERR_DF          0020                            /* init diag failure */
+#define ERR_PE          0040                            /* protocol error */
+#define ERR_RE          0100                            /* retryable error */
+#define ERR_DE          0200                            /* drive error */
+
+/* Format code for FCT */
+
+#define FMT_512         0126736                         /* 512 bytes/sector */
+#define FMT_576         074161                          /* 576 bytes/sector */
+
 extern int32 tmxr_poll;                                 /* calibrated delay */
+
+uint8 ksdi_mode = 0;
 
 t_stat ksdi_svc (UNIT *uptr);
 t_stat ksdi_reset (DEVICE *dptr);
@@ -73,7 +142,7 @@ DEVICE ksdi_dev = {
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
     NULL, NULL, &ksdi_reset,
     NULL, NULL, NULL,
-    &ksdi_dib, DEV_DEBUG | DEV_HSC,
+    &ksdi_dib, DEV_DEBUG | DEV_HSC | DEV_DISABLE,
     0, ksdi_debug
     };
 
@@ -277,58 +346,6 @@ if (GETW (ks + port) != 0) {                            /* service queue valid? 
 return SCPE_OK;
 }
 
-/* Drive state area */
-
-#define KSA_SRVC        0000                            /* service queue pointer */
-#define KSA_FLGS        0002                            /* flags */
-#define KSA_HEAD        0004                            /* work queue head */
-#define KSA_TAIL        0006                            /* work queue tail */
-#define KSA_CTX         0012                            /* software context */
-#define KSA_LOCK        0016                            /* drive state area lock */
-
-/* Realtime drive status */
-
-#define RTDS_RWR        0001                            /* read/write ready */
-#define RTDS_RR         0002                            /* receiver ready */
-#define RTDS_ATN        0010                            /* attention */
-#define RTDS_AVL        0020                            /* available */
-
-/* Drive status - Unit mask */
-
-#define UMSK_U1         0020                            /* subunit 1 present */
-#define UMSK_U2         0040                            /* subunit 2 present */
-#define UMSK_U3         0100                            /* subunit 3 present */
-#define UMSK_U4         0200                            /* subunit 4 present */
-
-/* Drive status - Request byte */
-
-#define REQ_RU          0001                            /* run/stop switch in */
-#define REQ_PS          0002                            /* port switch in */
-#define REQ_EL          0010                            /* send log packet */
-#define REQ_SR          0020                            /* spindle at speed */
-#define REQ_DR          0040                            /* diagnostic load required */
-#define REQ_RR          0100                            /* readjustment required */
-#define REQ_OA          0200                            /* online to other port */
-
-/* Drive status - Mode byte */
-
-#define MODE_S7         0001                            /* 0 = 512 bytes/sector, 1 = 576 bytes/sector */
-#define MODE_OB         0002                            /* diag cylinder access */
-#define MODE_FO         0004                            /* formatting enabled */
-#define MODE_DD         0010                            /* drive disabled for diagnostics */
-#define MODE_W1         0020                            /* write protect subunit 1 */
-#define MODE_W2         0040                            /* write protect subunit 2 */
-#define MODE_W3         0100                            /* write protect subunit 3 */
-#define MODE_W4         0200                            /* write protect subunit 4 */
-
-/* Drive status - Error byte */
-
-#define ERR_WE          0010                            /* write lock error */
-#define ERR_DF          0020                            /* init diag failure */
-#define ERR_PE          0040                            /* protocol error */
-#define ERR_RE          0100                            /* retryable error */
-#define ERR_DE          0200                            /* drive error */
-
 /* Online */
 
 uint16 ksdi_online (uint32 cmd, uint32 rsp)
@@ -458,7 +475,7 @@ PUTW (rsp + 000, 0x7100 | 0xF6);                        /* response opcode */
 PUTW (rsp + 002, 0xD400 | 0x00);                        /* unit number (low) */
 PUTW (rsp + 004, 0xD400 | UMSK_U1);                     /* unit number (high) / subunit mask */
 PUTW (rsp + 006, 0xD400 | REQ_SR | REQ_PS | REQ_RU);    /* request byte */
-PUTW (rsp + 010, 0xD400 | MODE_OB | MODE_FO);           /* mode byte */
+PUTW (rsp + 010, 0xD400 | ksdi_mode);                   /* mode byte */
 PUTW (rsp + 012, 0xD400 | 0x00);                        /* error byte */
 PUTW (rsp + 014, 0xD400 | 0x00);                        /* controller byte */
 PUTW (rsp + 016, 0xD400 | 0x00);                        /* retry-fail code */
@@ -495,13 +512,22 @@ return 002;
 
 uint16 ksdi_seek (uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: SEEK\n");
+uint32 cyl, grp;
+cyl = GETB (cmd + 004);
+cyl = cyl << 8;
+cyl = cyl | GETB (cmd + 002);
+grp = GETB (cmd + 006);
+sim_printf ("SDI command: SEEK, cyl = %d, grp = %d\n", cyl, grp);
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
 uint16 ksdi_chmode (uint32 cmd, uint32 rsp)
 {
+uint8 msk, val;
+val = GETB (cmd + 002);                                 /* new mode value */
+msk = GETB (cmd + 004);                                 /* mask */
+ksdi_mode = (ksdi_mode & ~msk) | (val & msk);
 sim_printf ("SDI command: CHANGE MODE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
@@ -598,13 +624,10 @@ else
 PUTW (rsp, sts);
 }
 
-uint32 ksdi_state = 0;
-
-t_stat ksdi_process (uint32 port)
+void ksdi_process_dsa (uint32 ksa)
 {
-uint32 ksa, ksh, sq, eq, tq, rsc, opc, cmd, rsp, rsz, tmp, frb;
+uint32 rsc, sq, eq, rsp, opc, rsz, tq, cmd, tmp;
 
-ksa = ksdi_dib.cma + KS_S0 + (port * 16);               /* drive state area */
 for (int j = 0; j < 20; j++) {
     rsc = GETP (ksa + KSA_HEAD);                        /* get work resource */
     if (rsc == 0)
@@ -642,20 +665,15 @@ for (int j = 0; j < 20; j++) {
         case 010400:                                    /* LINE STATUS */
             ksdi_rtds (rsp);
             break;
-//        case 0100400:
-//        case 004400:
-//        case 000400:                                    /* level 2 SDI command */
         default:
             cmd = GETP (rsc + 002);                     /* get command */
             if (cmd)
                 rsz = ksdi_cmd (cmd, rsp);
-            else
-                PUTW (rsp, 0x7E);                              /* write response word */
+            else {
+                sim_printf ("No command pointer\n");
+                PUTW (rsp, 0x7E);                       /* write response word */
+                }
             break;
-//        default:
-//            sim_printf ("Unknown\n");
-//            PUTW (rsp, 0x7E);                              /* write response word */
-//            break;
         }
     tmp = GETW (rsc + 006);
     tmp = tmp - rsz;
@@ -664,59 +682,201 @@ for (int j = 0; j < 20; j++) {
 
     put_to_queue (tq, rsc);                             /* send to service queue */
     }
+}
 
-ksh = ksdi_dib.cma + KS_0HD + (port * 4);               /* ?? queue */
-#if 0
-for (int j = 0; j < 20; j++) {
-    rsc = GETP (ksh + Q_HEAD);                          /* get work resource */
-    if (rsc == 0)
-        break;
+void read_fct (uint32 dma)
+{
+PUTDW (dma + 0040, FMT_512);                            /* bytes/sector */
+PUTDW (dma + 0042, 6);                                  /* format instance */
+PUTDW (dma + 0044, 0xCD15);                             /* volume serial (low) */
+PUTDW (dma + 0046, 0x075B);                             /* volume serial (high) */
+PUTDW (dma + 0050, 0x00);
+PUTDW (dma + 0052, 0x00);
+PUTDW (dma + 0054, 0x00);                               /* first formatted */
+PUTDW (dma + 0056, 0x00);
+PUTDW (dma + 0060, 0xFF);
+PUTDW (dma + 0062, 0xFF);
+PUTDW (dma + 0064, 0x00);                               /* date formatted */
+PUTDW (dma + 0066, 0x00);
+PUTDW (dma + 0070, 0xFF);
+PUTDW (dma + 0072, 0xFF);
+PUTDW (dma + 0074, 0x00);                               /* bad PBNs in FCT (512 - low) */
+PUTDW (dma + 0076, 0x00);                               /* bad PBNs in FCT (512 - high) */
+PUTDW (dma + 0100, 0x00);                               /* bad PBNs in FCT (576 - low) */
+PUTDW (dma + 0102, 0x00);                               /* bad PBNs in FCT (576 - high) */
+PUTDW (dma + 0104, 63);                                 /* scratch area offset */
+PUTDW (dma + 0106, 417);                                /* size (not last) */
+PUTDW (dma + 0110, 289);                                /* size (last) */
+PUTDW (dma + 0112, 0);                                  /* flags */
+PUTDW (dma + 0114, 0);                                  /* format version */
+}
 
-    tq = GETP (rsc + 014);                              /* get ?? queue */
-    if (tq == 0)
-        break;
+void read_rct (uint32 dma)
+{
+PUTDW (dma + 0040, 0xCD15);                             /* serial number (low) */
+PUTDW (dma + 0042, 0x075B);                             /* serial number (high) */
+PUTDW (dma + 0044, 0);
+PUTDW (dma + 0046, 0);
+PUTDW (dma + 0050, 0);                                  /* flags */
+PUTDW (dma + 0052, 0);
+PUTDW (dma + 0054, 1000);                               /* LBN being replaced (low) */
+PUTDW (dma + 0056, 0);
+PUTDW (dma + 0060, 0);                                  /* LBN being replaced (high) */
+PUTDW (dma + 0062, 33);                                 /* replacement RBN (low) */
+PUTDW (dma + 0064, 0);                                  /* replacement RBN (high) */
+PUTDW (dma + 0066, 32);                                 /* bad RBN (low) */
+PUTDW (dma + 0070, 0);                                  /* bad RBN (high) */
+PUTDW (dma + 0072, 0);                                  /* cache ID */
+PUTDW (dma + 0074, 0);
+PUTDW (dma + 0076, 0);
+PUTDW (dma + 0100, 0);                                  /* cache incarnation (low) */
+PUTDW (dma + 0102, 0);                                  /* cache incarnation (high) */
+PUTDW (dma + 0104, 0);                                  /* incarnation date */
+PUTDW (dma + 0106, 0);
+PUTDW (dma + 0110, 0);
+PUTDW (dma + 0112, 0);
+}
 
-    if (Q_LOCKED (tq))                                  /* ?? queue locked? */
-        break;
+void process_frb (uint32 frb, uint32 cyl, uint32 sct)
+{
+uint32 fbu, scnt, tmp, dma, lbn, trk, rte, dst, ctr, flg;
 
-    rsc = get_from_queue (ksh + Q_HEAD);                /* dequeue */
+lbn = GETB (frb + 022);                                 /* high LBN */
+lbn = lbn << 16;
+lbn = lbn | GETW (frb + 016);                           /* low LBN */
+trk = GETW (frb + 026);                                 /* track */
+scnt = GETB (frb + 034);                                /* sector count */
 
-    for (int i = 0; i < 24; i++)
-        sim_printf ("%07o: %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
+for (int i = 0; i < 37; i++)
+    sim_printf ("%07o: %06o\n", frb + (i << 1), GETW (frb + (i << 1)));
+sim_printf ("FRB: %07o, LBN: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d\n", frb, lbn, cyl, trk, sct, scnt);
+fbu = GETP (frb + 040);
+if (fbu == 0) {                                         /* no data buffer? */
+    for (int i = 0; i < scnt; i++) {
+        fbu = GETP (ksdi_dib.cma + KG_FBU);             /* get a free data memory buffer */
+        fbu = get_from_queue (fbu);
+        dma = GETW (fbu + 002);
+        dma = (dma << 6) & DMEMMASK;
+        sim_printf ("DMEM addr = %o\n", dma);
 
-    sim_printf ("IPQ work item\n");
-    sim_printf ("----\n");
+        for (int j = 0; j < 288; j++) {                 /* clear buffer */
+            PUTDW (dma + (j << 1), 0);
+            }
 
-    put_to_queue (tq, rsc);                             /* send to ?? queue */
+        PUTDW (dma + 020, lbn & 0177777);               /* header */
+        PUTDW (dma + 022, lbn >> 16);
+        PUTDW (dma + 024, lbn & 0177777);
+        PUTDW (dma + 026, lbn >> 16);
+        PUTDW (dma + 030, lbn & 0177777);
+        PUTDW (dma + 032, lbn >> 16);
+        PUTDW (dma + 034, lbn & 0177777);
+        PUTDW (dma + 036, lbn >> 16);
+
+        if ((cyl == 275) && (trk == 0) && (sct == 31)) {  /* FCT */
+            read_fct (dma);
+            }
+        else if ((cyl == 273) && (trk == 8) && (sct == 31)) { /* RCT */
+            read_rct (dma);
+            }
+
+        put_to_queue (frb + 040, fbu);                  /* queue buffer to the FRB */
+//        sim_printf ("FBU: %07o (new)\n", fbu);
+        }
     }
-#endif
-
-switch (ksdi_state) {
-    case 0:
-        rsc = GETP (ksh + Q_HEAD);                          /* get work resource */
-        if (rsc == 0)
+else {
+    /* This is used for writing */
+    for (int k = 0; k < scnt; k++) {
+        if (fbu == 0)
             break;
-
-        tq = GETP (rsc + 016);                              /* get ?? queue */
-        if (tq == 0)
+        sim_printf ("FBU: %07o (old)\n", fbu);
+        tmp = GETP (fbu);
+        if (tmp == fbu) {
+            sim_printf ("Circular FBU reference at %07o\n", fbu);
             break;
-
-        if (Q_LOCKED (tq))                                  /* ?? queue locked? */
-            break;
-
-        rsc = get_from_queue (ksh + Q_HEAD);                /* dequeue */
-
-        for (int i = 0; i < 24; i++)
-            sim_printf ("%07o: %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
-
-        sim_printf ("IPQ work item\n");
-        sim_printf ("----\n");
-        
-        frb = get_from_queue (rsc - 004);
-
-        put_to_queue (tq, frb);                             /* send to ?? queue */
-        break;
+            }
+        fbu = tmp;
+        }
     }
+
+ctr = GETP (frb + 002);
+for (int i = 0; i < 24; i++)
+    sim_printf ("%07o: %06o\n", ctr + (i << 1), GETW (ctr + (i << 1)));
+sim_printf ("CTR: %07o\n", ctr);
+
+rte = GETP (frb + 004);
+for (int i = 0; i < 10; i++)
+    sim_printf ("%07o: %06o\n", rte + (i << 1), GETW (rte + (i << 1)));
+sim_printf ("RTE: %07o\n", rte);
+
+flg = GETW (rte);                                       /* get opcode/flags from route */
+sim_printf ("OPC: %o\n", (flg >> 8));
+rte = rte + 010;                                        /* advance route pointer */
+PUTP (frb + 004, rte);
+dst = GETW (rte + 002);                                 /* get success destination */
+if (dst & 0177400)
+    dst = dst << 2;                                     /* direct address */
+else {
+    dst = frb + (dst << 2);                             /* offset into FRB */
+    dst = GETP (dst);
+    }
+sim_printf ("FRB dest = %07o\n", dst);
+put_to_queue (dst, frb);                                /* send FRB to completion queue */
+
+if (flg & 02) {
+    dst = GETW (ctr + 002);                             /* get counter value */
+    dst = dst - 1;                                      /* another operation completed */
+    PUTW (ctr + 002, dst);                              /* update counter value */
+    if (dst == 0) {                                     /* all operations complete? */
+        dst = GETP (ctr);
+        sim_printf ("CTR dest = %07o\n", dst);
+        PUTP (ctr, 0);                                  /* clear service queue pointer */
+        put_to_queue (dst, ctr);                        /* send to service queue */
+        }
+    }
+}
+
+void ksdi_process_drat (uint32 ksh)
+{
+uint32 rsc, cyl, fq, cnt, cq, frb;
+
+rsc = get_from_queue (ksh + Q_HEAD);                    /* dequeue DRAT */
+if (rsc == 0)
+    return;
+
+for (int i = 0; i < 24; i++)
+    sim_printf ("%07o: %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
+sim_printf ("DRAT: %07o\n", rsc);
+
+cyl = GETW (rsc + 044);                                 /* get current cylinder */
+fq = rsc - (32 * 4);                                    /* 32 sectors/track, 4 bytes for queue head/tail */
+
+for (int k = 0; k < 32; k++) {                          /* for each sector */
+    for (int j = 0; j < 50; j++) {                      /* prevent endless loop */
+        frb = get_from_queue (fq + (k << 2));           /* get next FRB */
+        if (frb == 0)
+            break;
+        process_frb (frb, cyl, k);
+        cnt = GETW (rsc + 024);
+        cnt = cnt - 1;
+        sim_printf ("DRAT count %d -> %d\n", (cnt + 1), cnt);
+        PUTW (rsc + 024, cnt);
+        }
+    }
+
+cq = GETP (rsc + 014);                                  /* get DRAT completion queue */
+put_to_queue (cq, rsc);                                 /* send DRAT to completion queue */
+sim_printf ("----\n");
+}
+
+t_stat ksdi_process (uint32 port)
+{
+uint32 ksa, ksh;
+
+ksa = ksdi_dib.cma + KS_S0 + (port * 16);               /* drive state area */
+ksdi_process_dsa (ksa);
+
+ksh = ksdi_dib.cma + KS_0HD + (port * 4);               /* DRAT queue? */
+ksdi_process_drat (ksh);
 
 return SCPE_OK;
 }
