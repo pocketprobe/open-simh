@@ -29,6 +29,27 @@
 
 #define CI_MAX_NODES    32
 
+/* K.ci control area */
+
+#define KH_LNK          0000
+#define KH_2WK          0010
+#define KH_DRR          0034
+#define KH_CIM          0142                            /* CI manager queue pointer */
+#define KH_NAD          0164                            /* node address */
+
+/* host message block */
+
+#define HM_LNK          0000                            /* link to next */
+#define HM_DUO          0002
+#define HM_CTX          0002
+#define HM_CQ           0004                            /* completion queue */
+#define HM_DX           0004
+#define HM_ERR          0006
+#define HM_LOF          0010                            /* length, opcode, flags */
+#define HM_CB           0012
+#define HM_MSG          0014                            /* CI message */
+
+
 uint32 kci_node = 0;                                    /* local node address */
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
@@ -115,26 +136,26 @@ t_stat r;
 print_word (st, kh, "KH$LNK", KH_LNK, 2);
 print_word (st, kh, "KH$FLG", 0002, 2);
 print_word (st, kh, "KH$3WK", 0004, 4);                 /* work queue 3 */
-print_word (st, kh, "KH$2WK", 0010, 4);                 /* work queue 2 */
+print_word (st, kh, "KH$2WK", KH_2WK, 4);               /* work queue 2 */
 print_word (st, kh, "KH$1WK", 0014, 4);                 /* work queue 1 */
 print_word (st, kh, "KH$0WK", 0020, 4);                 /* work queue 0 */
 print_word (st, kh, "KH$EQ ", 0024, 4);                 /* error queue? */
 print_word (st, kh, "KH$SRR", 0030, 4);
-print_word (st, kh, "KH$DRR", 0034, 4);
+print_word (st, kh, "KH$DRR", KH_DRR, 4);
 
 r = kg_show_ctrl (st, uptr, val, desc);
 if (r != SCPE_OK)
     return r;
 
 print_word (st, kh, "KH$D2T", 0140, 2);
-print_word (st, kh, "KH$CIM", 0142, 2);                 /* CI manager queue pointer? */
+print_word (st, kh, "KH$CIM", KH_CIM, 2);               /* CI manager queue pointer? */
 print_word (st, kh, "KH$D1T", 0144, 2);
 print_word (st, kh, "KH$VA ", 0146, 2);
 print_word (st, kh, "KH$D0T", 0150, 2);
 print_word (st, kh, "KH$CVS", 0152, 2);
 print_word (st, kh, "KH$TMR", 0154, 4);                 /* timer */
 print_word (st, kh, "KH$BFR", 0160, 4);
-print_word (st, kh, "KH$NAD", 0164, 2);                 /* node address */
+print_word (st, kh, "KH$NAD", KH_NAD, 2);               /* node address */
 print_word (st, kh, "KH$PDS", 0166, 1);
 print_word (st, kh, "KH$KDS", 0167, 1);
 print_word (st, kh, "KH$MBA", 0170, 1);
@@ -147,7 +168,28 @@ return SCPE_OK;
 
 t_stat kci_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-return kci_svc (uptr);
+uint32 kh = kci_dib.cma;
+uint32 rsc, dma, cq;
+rsc = get_from_queue (kh + KH_DRR);
+
+PUTW (rsc + HM_LOF, 0044000 | 077);
+PUTW (rsc + HM_CB, 0175404);
+
+dma = GETW (rsc + HM_MSG + 004);                        /* data mem addr */
+dma = (dma << 6) & DMEMMASK;
+dma = dma >> 1;
+
+for (int i = 0; i < 20; i++) {                          /* clear buffer */
+    DM[dma + i] = 0;
+    }
+
+DM[dma + 000] = 013;                                    /* IDREC */
+DM[dma + 013] = 02000;                                  /* port enabled */
+
+cq = GETP (kh + KH_CIM);
+put_to_queue (cq, rsc);
+
+return SCPE_OK;
 }
 
 void kci_counters (uint32 rsc, uint16 node)
@@ -174,83 +216,82 @@ PUTW (rsc + 056, 0);                                    /* Discarded RTNDATs - h
 
 /* Local K.ci commands */
 
-void kci_local_cmd (uint32 rsc, uint16 tq)
+void kci_local_cmd (uint32 rsc, uint16 cq)
 {
 uint16 opc, arg1, arg2;
 
-opc = GETB (rsc + 014);
-arg1 = GETW (rsc + 016);
-arg2 = GETW (rsc + 020);
+opc = GETB (rsc + HM_MSG);
+arg1 = GETW (rsc + HM_MSG + 002);
+arg2 = GETW (rsc + HM_MSG + 004);
 switch (opc) {
     case 001:
-//        sim_printf ("local cmd: opc = %d, node = %06o, tq = %06o\n", opc, arg1, tq);
+//        sim_printf ("local cmd: opc = %d, node = %06o, cq = %06o\n", opc, arg1, cq);
         break;
     case 002:                                           /* show counters */
-//        sim_printf ("show counters: tq = %06o\n", tq);
+//        sim_printf ("show counters: cq = %06o\n", cq);
         kci_counters (rsc, arg1);
         break;
     case 003:
     case 004:
-//        sim_printf ("local cmd: opc = %d, arg1 = %06o, data mem = %08o, tq = %06o\n", opc, arg1, (arg2 << 6), tq);
+//        sim_printf ("local cmd: opc = %d, arg1 = %06o, data mem = %08o, cq = %06o\n", opc, arg1, (arg2 << 6), cq);
         break;
     default:
-//        sim_printf ("local cmd: opc = %d, arg1 = %06o, arg2 = %06o, tq = %06o\n", opc, arg1, arg2, tq);
+//        sim_printf ("local cmd: opc = %d, arg1 = %06o, arg2 = %06o, cq = %06o\n", opc, arg1, arg2, cq);
         break;
     }
-}
-
-/* Sent to the local node with message "SELF" at offset 020 */
-
-void kci_cmd010 (uint32 rsc, uint32 tq)
-{
-uint16 node, arg1;
-
-node = GETB (rsc + 012);
-arg1 = GETB (rsc + 014);
-//sim_printf ("CMD010: node = %d, arg1 = %d, arg2 = ", node, arg1);
-//for (int j = 0; j < 4; j++)
-//    sim_printf ("%c", GETB (rsc + 020 + j));
-//sim_printf (", tq = %06o\n", tq);
 }
 
 /* Send a datagram */
 
-void kci_send (uint32 rsc, uint32 tq)
+void kci_send (uint32 rsc, uint32 cq)
 {
-uint16 opc, flgs, node;
+uint16 opc, len, flgs, node, bda;
 char path = '?';
 
-flgs = GETB (rsc + 011);
-node = GETB (rsc + 012);                                /* destination node */
-opc = GETB (rsc + 014);                                 /* opcode */
-if (flgs & 040)                                         /* path A */
-    path = 'A';
-else if (flgs & 0100)                                   /* path B */
-    path = 'B';
+flgs = GETW (rsc + HM_LOF) & 074000;
+len = GETW (rsc + HM_LOF) & 077;
+node = GETB (rsc + HM_CB);                              /* destination node */
+if (flgs == 034000)
+    path = 'A';                                         /* path A */
+else if (flgs == 054000)
+    path = 'B';                                         /* path B */
+else
+    path = '*';                                         /* path auto? */
+
+if (len == 077) {                                       /* packet in data memory */
+    bda = GETW (rsc + HM_MSG);
+    bda = (bda << 6) & DMEMMASK;
+    bda = bda >> 1;
+
+    opc = DM[bda + 0] & 0377;                           /* opcode */
+    }
+else {
+    opc = GETB (rsc + HM_MSG);                          /* opcode */
+    }
 switch (opc) {
     case 005:                                           /* REQID */
-//        sim_printf ("REQID: node = %d, path = %c, tq = %06o\n", node, path, tq);
+//        sim_printf ("REQID: node = %d, path = %c, cq = %06o\n", node, path, cq);
         break;
     default:
-//        sim_printf ("Send datagram: node = %d, path = %c, opc = %d, tq = %06o\n", node, path, opc, tq);
+//        sim_printf ("Send datagram: node = %d, path = %c, opc = %d, cq = %06o\n", node, path, opc, cq);
         break;
     }
 }
 
-void kci_process (uint32 rsc, uint32 tq)
+void kci_process (uint32 rsc, uint32 cq)
 {
-uint16 opc = GETB (rsc + 010);
+uint16 opc = GETW (rsc + HM_LOF) & 074000;
 switch (opc) {
-    case 000:                                           /* local command */
-        kci_local_cmd (rsc, tq);
+    case 060000:                                        /* local command */
+        kci_local_cmd (rsc, cq);
         break;
-    case 010:                                           /* unknown */
-        kci_cmd010 (rsc, tq);
-        break;
-    case 012:                                           /* send datagram */
-        kci_send (rsc, tq);
+    case 034000:                                        /* send datagram (path A) */
+    case 054000:                                        /* send datagram (path B) */
+    case 074000:                                        /* send datagram (path auto?) */
+        kci_send (rsc, cq);
         break;
     default:
+//        sim_printf ("K.ci unknown opcode: %o\n", opc);
 //        for (int i = 0; i < 10; i++)
 //            sim_printf ("%04o : %06o\n", (i << 1), GETW (rsc + (i << 1)));
 //        sim_printf ("----\n");
@@ -261,7 +302,7 @@ switch (opc) {
 t_stat kci_svc (UNIT *uptr)
 {
 uint32 kh = kci_dib.cma;
-uint32 wq, tq, rsc, i;
+uint32 wq, cq, rsc, i;
 
 wq = kh + KH_2WK;                                       /* process 2WK queue */
 for (i = 0; i < 20; i++) {                              /* process maximum of 20 items */
@@ -270,15 +311,15 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
     if (Q_EMPTY (wq + Q_HEAD))                          /* source queue empty */
         break;
     rsc = GETP (wq + Q_HEAD);                           /* get the resource pointer */
-    tq = GETP (rsc + 0004);                             /* get destination queue pointer */
-    if (tq == 0)                                        /* resource has no destination */
+    cq = GETP (rsc + HM_CQ);                            /* get completion queue pointer */
+    if (cq == 0)                                        /* resource has no completion */
         break;
-    if (Q_LOCKED (tq))                                  /* destination queue locked */
+    if (Q_LOCKED (cq))                                  /* completion queue locked */
         break;
 
     rsc = get_from_queue (wq);                          /* get resource from work queue */
-    kci_process (rsc, tq);                              /* process resource */
-    put_to_queue (tq, rsc);                             /* put resource to destination queue */
+    kci_process (rsc, cq);                              /* process resource */
+    put_to_queue (cq, rsc);                             /* put resource to completion queue */
     }
 sim_clock_coschedule (uptr, tmxr_poll);                 /* reactivate */
 return SCPE_OK;
