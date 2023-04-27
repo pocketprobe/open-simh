@@ -147,6 +147,7 @@ UNIT ioc_unit = { UDATA (NULL, 0, 0) };
 
 REG ioc_reg[] = {
     { ORDATA (SDR, SDR, 16) },
+    { ORDATA (KINI, KINI, 16) },
     { NULL }
     };
 
