@@ -27,8 +27,8 @@
 */
 
 #include "vax_defs.h"
+#include "dec_ci.h"
 #include "vax_ci.h"
-#include "vax_ci_dec.h"
 
 /* CIBCI Registers */
 
@@ -150,7 +150,7 @@ void ci_clr_int (void);
 
 DIB ci_dib = { TR_CI, 0, &ci_rdreg, &ci_wrreg, 0, NVCL (CI) };
 
-UNIT ci_unit = { UDATA (&ci_dec_svc, UNIT_IDLE|UNIT_ATTABLE, 0) };
+UNIT ci_unit = { UDATA (&ci_vax_svc, UNIT_IDLE|UNIT_ATTABLE, 0) };
 
 REG ci_reg[] = {
     { HRDATA (CNFGR, ci_cnfgr, 32) },
@@ -231,7 +231,7 @@ if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
     }
 for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
-        return ci_dec_rd (uptr, val, p->rg, lnt);
+        return ci_vax_rd (uptr, val, p->rg, lnt);
     }
 switch (rg) {                                           /* CIBCI specific registers */
 
@@ -337,7 +337,7 @@ if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
     }
 for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
-        return ci_dec_wr (uptr, val, p->rg, lnt);
+        return ci_vax_wr (uptr, val, p->rg, lnt);
     }
 switch (rg) {                                           /* case on type */
 
@@ -472,6 +472,6 @@ for (i = 0; i < 4; i++)
     ci_dmaf[i] = 0;
 for (i = 0; i < 8192; i++)
     ci_mdatr[i] = 0;
-ci_dec_reset (dptr);
+ci_vax_reset (dptr);
 return SCPE_OK;
 }

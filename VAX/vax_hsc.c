@@ -28,7 +28,7 @@
 
 #include "vax_defs.h"
 #include "pdp11_uqssp.h"
-#include "vax_ci.h"
+#include "dec_ci.h"
 #include "vax_rf.h"
 
 /* Limits */

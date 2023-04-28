@@ -1431,6 +1431,8 @@ SIM = ${SIMHD}/scp.c ${SIMHD}/sim_console.c ${SIMHD}/sim_fio.c \
 	${SIMHD}/sim_serial.c ${SIMHD}/sim_video.c ${SIMHD}/sim_imd.c \
 	${SIMHD}/sim_card.c
 
+DECD = ${SIMHD}/DEC
+
 DISPLAYD = ${SIMHD}/display
 
 SCSI = ${SIMHD}/sim_scsi.c
@@ -1522,8 +1524,8 @@ HSC70 = ${PDP11D}/pdp11_fp.c ${PDP11D}/pdp11_cpu.c ${PDP11D}/pdp11_dz.c \
 	${PDP11D}/pdp11_cpumod.c ${PDP11D}/pdp11_dl.c \
 	${PDP11D}/pdp11_io_lib.c ${HSCD}/hsc70_syslist.c ${HSCD}/hsc70_io.c \
 	${HSCD}/hsc70_mem.c ${HSCD}/hsc70_stddev.c ${HSCD}/hsc70_kreq.c \
-	${HSCD}/hsc70_kci.c ${HSCD}/hsc70_ksdi.c
-HSC70_OPT = -DVM_PDP11 -DHSC -I ${HSCD} -I ${PDP11D} ${NETWORK_OPT}
+	${HSCD}/hsc70_kci.c ${HSCD}/hsc70_ksdi.c ${DECD}/dec_ci.c
+HSC70_OPT = -DVM_PDP11 -DHSC -I ${HSCD} -I ${DECD} -I ${PDP11D} ${NETWORK_OPT}
 
 
 VAXD = ${SIMHD}/VAX
@@ -1532,7 +1534,7 @@ VAX = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c ${VAXD}/vax_io.c \
 	${VAXD}/vax_mmu.c ${VAXD}/vax_stddev.c ${VAXD}/vax_sysdev.c \
 	${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c ${VAXD}/vax_syslist.c \
 	${VAXD}/vax_vc.c ${VAXD}/vax_lk.c ${VAXD}/vax_vs.c ${VAXD}/vax_2681.c \
-	${VAXD}/vax_ciqba.c ${VAXD}/vax_ci.c ${VAXD}/vax_hsc.c \
+	${VAXD}/vax_ciqba.c ${DECD}/dec_ci.c ${VAXD}/vax_hsc.c \
 	${VAXD}/vax_rf.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
@@ -1652,7 +1654,7 @@ VAX750 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_gvp.c ${VAXD}/vax_ci.c ${VAXD}/vax750_stddev.c \
 	${VAXD}/vax750_cmi.c ${VAXD}/vax750_mem.c ${VAXD}/vax750_uba.c \
 	${VAXD}/vax7x0_mba.c ${VAXD}/vax_uw.c ${VAXD}/vax780_ci.c \
-	${VAXD}/vax750_syslist.c ${VAXD}/vax_ci_dec.c ${VAXD}/vax_hsc.c \
+	${VAXD}/vax750_syslist.c ${DECD}/dec_ci.c ${VAXD}/vax_hsc.c \
 	${VAXD}/vax_rf.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
@@ -1661,7 +1663,7 @@ VAX750 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c ${PDP11D}/pdp11_dup.c \
 	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
 	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c
-VAX750_OPT = -DVM_VAX -DVAX_750 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${AIO_CCDEFS}
+VAX750_OPT = -DVM_VAX -DVAX_750 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} -I ${DECD} ${NETWORK_OPT} ${AIO_CCDEFS}
 
 
 VAX780 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
@@ -1670,7 +1672,7 @@ VAX780 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_gvp.c ${VAXD}/vax_ci.c ${VAXD}/vax780_stddev.c \
 	${VAXD}/vax780_sbi.c ${VAXD}/vax780_mem.c ${VAXD}/vax780_uba.c \
 	${VAXD}/vax7x0_mba.c ${VAXD}/vax780_ci.c ${VAXD}/vax780_fload.c \
-	${VAXD}/vax_uw.c ${VAXD}/vax780_syslist.c ${VAXD}/vax_ci_dec.c \
+	${VAXD}/vax_uw.c ${VAXD}/vax780_syslist.c ${DECD}/dec_ci.c \
 	${VAXD}/vax_hsc.c ${VAXD}/vax_rf.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
@@ -1679,7 +1681,7 @@ VAX780 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c ${PDP11D}/pdp11_dup.c \
 	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
 	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c
-VAX780_OPT = -DVM_VAX -DVAX_780 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${AIO_CCDEFS}
+VAX780_OPT = -DVM_VAX -DVAX_780 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} -I ${DECD} ${NETWORK_OPT} ${AIO_CCDEFS}
 
 
 VAX8200 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
@@ -1688,16 +1690,15 @@ VAX8200 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_watch.c ${VAXD}/vax820_stddev.c ${VAXD}/vax820_bi.c \
 	${VAXD}/vax820_mem.c ${VAXD}/vax820_uba.c ${VAXD}/vax820_ka.c \
 	${VAXD}/vax_uw.c ${VAXD}/vax820_syslist.c ${VAXD}/vax_cibci.c \
-	${VAXD}/vaxbi_ci.c \
-	${VAXD}/vax_ci_dec.c ${VAXD}/vax_ci.c ${VAXD}/vax_gvp.c \
-	${VAXD}/vax_hsc.c ${VAXD}/vax_rf.c \
+	${VAXD}/vaxbi_ci.c ${DECD}/dec_ci.c ${VAXD}/vax_ci.c \
+	${VAXD}/vax_gvp.c ${VAXD}/vax_hsc.c ${VAXD}/vax_rf.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
 	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
 	${PDP11D}/pdp11_hk.c ${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c \
 	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
 	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c ${PDP11D}/pdp11_dup.c
-VAX8200_OPT = -DVM_VAX -DVAX_820 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${AIO_CCDEFS}
+VAX8200_OPT = -DVM_VAX -DVAX_820 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} -I ${DECD} ${NETWORK_OPT} ${AIO_CCDEFS}
 
 
 VAX8600 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
@@ -1706,7 +1707,7 @@ VAX8600 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_gvp.c ${VAXD}/vax_ci.c ${VAXD}/vax860_stddev.c \
 	${VAXD}/vax860_sbia.c ${VAXD}/vax860_abus.c ${VAXD}/vax780_uba.c \
 	${VAXD}/vax7x0_mba.c ${VAXD}/vax_uw.c ${VAXD}/vax780_ci.c \
-	${VAXD}/vax860_syslist.c ${VAXD}/vax_ci_dec.c ${VAXD}/vax_hsc.c \
+	${VAXD}/vax860_syslist.c ${DECD}/dec_ci.c ${VAXD}/vax_hsc.c \
 	${VAXD}/vax_rf.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
@@ -1715,7 +1716,7 @@ VAX8600 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_dmc.c ${PDP11D}/pdp11_dup.c \
 	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_tc.c ${PDP11D}/pdp11_rk.c \
 	${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_ch.c
-VAX8600_OPT = -DVM_VAX -DVAX_860 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${AIO_CCDEFS}
+VAX8600_OPT = -DVM_VAX -DVAX_860 -DUSE_INT64 -DUSE_ADDR64 -I ${VAXD} -I ${PDP11D} -I ${DECD} ${NETWORK_OPT} ${AIO_CCDEFS}
 
 
 PDP10D = ${SIMHD}/PDP10

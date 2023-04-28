@@ -27,8 +27,8 @@
 */
 
 #include "vax_defs.h"
+#include "dec_ci.h"
 #include "vax_ci.h"
-#include "vax_ci_dec.h"
 
 /* CIBCA Registers */
 
@@ -222,7 +222,7 @@ if ((rg >= 0x414) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
     }
 for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg) {                              /* mapped? */
-        r = ci_dec_rd (uptr, val, p->rg, lnt);
+        r = ci_vax_rd (uptr, val, p->rg, lnt);
         if (r != SCPE_OK)
             return r;
         if (p->rg == CI_PSR) {
@@ -319,7 +319,7 @@ if ((rg >= 0x414) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
     }
 for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
-        return ci_dec_wr (uptr, val, p->rg, lnt);
+        return ci_vax_wr (uptr, val, p->rg, lnt);
     }
 switch (rg) {                                           /* case on type */
 
@@ -407,7 +407,7 @@ CLR_NEXUS_INT (CI);
 
 t_stat ca_svc (UNIT *uptr)
 {
-return ci_dec_svc (uptr);
+return ci_vax_svc (uptr);
 }
 
 /* Reset CIBCA adapter */
@@ -424,6 +424,6 @@ ca_biic.uiic = BIICR_EXV;
 ca_pmcsr = 0;
 ca_psr_bi = 0;
 ca_madr = 0;
-ci_dec_reset (dptr);
+ci_vax_reset (dptr);
 return SCPE_OK;
 }

@@ -27,6 +27,10 @@
 #ifndef _HSC_DEFS_H
 #define _HSC_DEFS_H   0
 
+#ifndef VM_HSC
+#define VM_HSC          0
+#endif
+
 #define INIMODEL        MOD_HSC70
 #define INIOPTNS        SOP_1173
 #define INIMEMSIZE      004000000                       /* 2**20 */
@@ -63,8 +67,10 @@
 #define IOBA_DL         (IOPAGEBASE + 017520)
 #define VEC_DL          0300
 
-#define DEV_V_HSC       DEV_V_FFUF
+#define DEV_V_HSC       (DEV_V_FFUF + 0)
+#define DEV_V_CI        (DEV_V_FFUF + 1)
 #define DEV_HSC         (1u << DEV_V_HSC)
+#define DEV_CI          (1u << DEV_V_CI)
 
 /* HSC Device information block */
 

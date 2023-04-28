@@ -27,7 +27,7 @@
 */
 
 #include "vax_defs.h"
-#include "vax_ci.h"
+#include "dec_ci.h"
 #include "ciqba_pra0_bin.h"
 
 /* Register offsets */
