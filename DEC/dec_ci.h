@@ -317,8 +317,9 @@
 typedef struct {
     uint32 type;                                        /* adpater specific use */
     uint32 addr;                                        /* associated memory address */
-    size_t size;
+    size_t size;                                        /* associated structure size */
     size_t length;                                      /* packet length */
+    t_offset offset;                                    /* receive/send offset */ 
     uint8 data[CI_MAXFR];                               /* packet data */
 } CI_PKT;
 
