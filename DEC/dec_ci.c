@@ -246,6 +246,12 @@ const char* ci_path_names[] = {
     "B"
     };
 
+const char* ci_link_states[] = {
+    "CLOSED",
+    "STARTING",
+    "OPEN"
+    };
+
 typedef struct {
   CI_PKT      pkt;
 } CI_ITEM;
@@ -1704,6 +1710,22 @@ return uptr->ci_node;
 }
 
 /* Show CI adapter parameters */
+
+t_stat ci_show_links (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+uint32 i;
+
+fprintf (st, "Node   State     Host\n");
+fprintf (st, "----   -----     ----\n");
+for (i = 0; i < CI_MAX_NODES; i++) {
+    if (cp->nodes[i].uptr)
+        fprintf (st, "%02d     %-9s Local\n", i, ci_link_states[cp->nodes[i].conn]);
+    else if (cp->nodes[i].host[0])
+        fprintf (st, "%02d     %-9s %s\n", i, ci_link_states[cp->nodes[i].conn], cp->nodes[i].host);
+    }
+return SCPE_OK;
+}
 
 t_stat ci_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
