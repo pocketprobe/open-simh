@@ -103,12 +103,12 @@
 
 #define KREQ_DBG_TRC    0x0001                          /* trace routine calls */
 
-extern uint32 kg_init ();
+extern uint32 kg_init (t_bool *run);
 extern t_stat kg_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat kg_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat kg_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat kg_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern void print_word (FILE *st, uint32 kh, char *name, int16 off, uint16 len);
+extern void print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len);
 extern uint32 get_from_queue (uint32 q);
 extern void put_to_queue (uint32 q, uint32 itm);
 

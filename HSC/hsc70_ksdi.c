@@ -151,11 +151,14 @@ DEVICE ksdi_dev = {
 
 t_stat ksdi_init (uint16 req, uint16 act)
 {
+t_bool run;
 if (act == K_RUN) {
-    ksdi_dib.cma = kg_init ();
+    ksdi_dib.cma = kg_init (&run);
     sim_debug (DBG_TRC, &ksdi_dev, "K.sdi %d startup: KH = %06o at %o\n", req, ksdi_dib.cma, (uint16)inst_pc);
     PUTW (ksdi_dib.cma + KG_RSL, 1);                        /* KG$RSL - result of self test */
     PUTW (ksdi_dib.cma + KG_VRS, 01452);                    /* KG$VRS - version (DS = 3, MC = 42) */
+    if (!run)
+        return SCPE_OK;
     sim_clock_coschedule (&ksdi_unit, tmxr_poll);           /* activate */
     }
 else {

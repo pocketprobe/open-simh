@@ -42,7 +42,7 @@ extern int32 calc_ints (int32 nipl, int32 trq);
  * has been read.
  */
 
-uint32 kg_init ()
+uint32 kg_init (t_bool *run)
 {
 uint32 ki, kg = 0, chk;
 
@@ -53,6 +53,8 @@ for (ki = 0; ki < 20; ki = ki + 2) {                    /* search for KI structu
             break;                                      /* failed */
         PUTW (ki + KI_KIA, -kg);
         kg = kg << 2;                                   /* convert to byte offset */
+        *run = (ki == 4);                               /* run if not diagnostic startup */
+        break;
         }
     }
 return kg;
