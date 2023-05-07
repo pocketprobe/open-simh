@@ -98,6 +98,8 @@ MTAB shac_mod[] = {
       &ci_set_node, &ci_show_node },
     { MTAB_XTD|MTAB_VDV, 0, "GROUP", "GROUP",
       &ci_set_group, &ci_show_group },
+    { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "LINKS", NULL,
+      NULL, &ci_show_links, NULL },
     { 0 }
     };
 
