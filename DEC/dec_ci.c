@@ -1317,7 +1317,7 @@ while (cp->tx_queue.count > 0) {                        /* process transmit queu
         ciq_remove (&cp->tx_queue);                     /* drop packet */
         continue;
         }
-    sim_debug_unit (DBG_CONN, uptr, "Attempting to send queued packet to node %d, socket: %d\n", port, link->socket);
+    sim_debug_unit (DBG_CONN, uptr, "Sending queued packet to node %d, socket: %d\n", port, link->socket);
     r = sim_write_sock (link->socket, &item->pkt.data[item->pkt.offset], (item->pkt.length - item->pkt.offset));
     if (r < 0) {                                        /* socket error? */
         sim_debug_unit (DBG_CONN, uptr, "Node %d closed VC, socket: %d\n", port, link->socket);
@@ -1354,30 +1354,30 @@ for (i = 0; i < CI_MAX_NODES; i++) {
     do {
         if (cp->rx_queue.count == CI_QUE_MAX)           /* queue full? */
             return SCPE_OK;                             /* yes, don't receive any more */
-        if (pkt->offset == 0)
-            pkt->length = PPD_HDR;
+        if (pkt->offset == 0)                           /* new packet? */
+            pkt->length = PPD_HDR;                      /* yes, get header first */
         r = sim_read_sock (link->socket, &pkt->data[pkt->offset], (pkt->length - pkt->offset));
         if (r < 0) {
             sim_debug_unit (DBG_CONN, uptr, "Node %d closed VC, socket: %d\n", i, link->socket);
             ci_link_fail (uptr, link);                  /* notify VC failure */
+            break;
             }
         pkt->offset = pkt->offset + r;
-        if (pkt->offset < pkt->length)
-            return SCPE_OK;
+        if (pkt->offset < pkt->length)                  /* not all bytes received? */
+            return SCPE_OK;                             /* try again later */
         if (pkt->length == PPD_HDR) {
-            pkt->length = CI_GET16 (pkt->data, 0);
-            continue;/* go round again? */
+            pkt->length = CI_GET16 (pkt->data, 0);      /* get total packet length */
+            if (pkt->offset < pkt->length)              /* more to receive? */
+                continue;                               /* yes, receive packet body */
             }
         pkt->offset = 0;                                /* got whole packet now */
         src = pkt->data[HDR_SOURCE];
         dst = pkt->data[PPD_PORT];
         if (dst != uptr->ci_node) {                     /* not for this node? */
-            sim_debug_unit (DBG_CONN, uptr, "Discarding packet not destined for this node: %d\n", dst);
-    //                sim_printf ("Discarding packet not destined for this node: %d\n", dst);
-            /* FIXME: this should not happen - SCPE_IERR? */
-            continue;                                   /* drop packet */
+            sim_printf ("Received packet not destined for this node: %d\n", dst);
+            return SCPE_IERR;                           /* should not happen */
             }
-        if (cp->nodes[src].conn == LINK_WAIT) {         /* expecting connection? */
+        if ((cp->nodes[src].link == NULL) && (cp->nodes[src].conn < LINK_OPEN)) {
             sim_debug_unit (DBG_CONN, uptr, "Accepting connection from node %d, socket: %d\n", src, link->socket);
             cp->nodes[src].conn = LINK_OPEN;
             cp->nodes[src].link = link;                 /* reassign connection */
@@ -1426,6 +1426,7 @@ if (node->uptr) {                                       /* loopback? */
 
 CI_PUT16 (tpkt.data, HDR_LENGTH, tpkt.length);
 strncpy (&tpkt.data[HDR_VCPORT], cp->tcp_port, 5);      /* VC port */
+tpkt.offset = 0;                                        /* initial send offset */
 
 if (node->conn > LINK_WAIT) {                           /* link established? */
     sim_debug_unit (DBG_CONN, uptr, "using TCP/IP link\n");
