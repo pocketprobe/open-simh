@@ -199,6 +199,14 @@ else {
     }
 }
 
+void print_string (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
+{
+fprintf (st, "%s %06o   ", name, kg + off);
+for (int i = 0; i < len; i++)
+    fprintf (st, "%c", GETB (kg + off + i));
+fprintf (st, "\n");
+}
+
 uint32 get_from_queue (uint32 q)
 {
 uint32 itm;
