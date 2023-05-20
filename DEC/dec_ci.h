@@ -307,7 +307,7 @@
                         p[(w)+3] = ((x) >> 24) & 0xFF
 
 #define CI_MAXFR        1024                            /* max xfer */
-#define CI_MAX_NODES    16
+#define CI_MAX_NODES    32
 
 /* Block transfer constants */
 

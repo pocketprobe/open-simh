@@ -1146,11 +1146,14 @@ return SCPE_OK;
 t_stat ci_open_vc (UNIT *uptr, uint8 port)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
-CI_NODE *node = &cp->nodes[port];
+CI_NODE *node;
 CI_LINK *link = NULL;
 SOCKET newsock;
 uint32 i;
 
+if (port > CI_MAX_NODES)
+    return SCPE_ARG;
+node = &cp->nodes[port];
 sim_debug_unit (DBG_CONN, uptr, "VC Open: Link in state %d\n", node->conn);
 if (node->conn > LINK_CLOSED)                           /* already open? */
     return SCPE_OK;                                     /* yes, done */
@@ -1194,9 +1197,12 @@ return SCPE_OK;
 t_stat ci_close_vc (UNIT *uptr, uint8 port)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
-CI_NODE *node = &cp->nodes[port];
+CI_NODE *node;
 CI_LINK *link;
 
+if (port > CI_MAX_NODES)
+    return SCPE_ARG;
+node = &cp->nodes[port];
 sim_debug_unit (DBG_CONN, uptr, "VC Close: Link in state %d\n", node->conn);
 if (node->conn == LINK_CLOSED)                          /* already closed? */
     return SCPE_OK;                                     /* yes, done */
@@ -1221,7 +1227,10 @@ return SCPE_OK;
 t_stat ci_check_vc (UNIT *uptr, uint8 port)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
-CI_NODE *node = &cp->nodes[port];
+CI_NODE *node;
+if (port > CI_MAX_NODES)
+    return SCPE_ARG;
+node = &cp->nodes[port];
 return (node->conn > LINK_CLOSED) ? TRUE : FALSE;
 }
 
