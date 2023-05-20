@@ -29,6 +29,7 @@
 
 /* K.sdi control area */
 
+#define KS_0FL          0002                            /* flags (port 0) */
 #define KS_0HD          0000                            /* DRAT queue (port 0) */
 #define KS_KSA          0140                            /* drive state area */
 #define KS_S0           0140                            /* drive state area (port 0) */
@@ -45,6 +46,26 @@
 #define KSA_CTX         0012                            /* software context */
 #define KSA_LOCK        0016                            /* drive state area lock */
 #define KSA_LEN         0020                            /* size of drive state area */
+
+/* device control block */
+
+#define DC_LNK          0000                            /* link to next */
+#define DC_CMD          0002                            /* command buffer pointer */
+#define DC_RSB          0004                            /* response buffer pointer */
+#define DC_FCT          0006                            /* function? */
+#define DC_STA          0010
+#define DC_DUC          0012                            /* pointer to DU$ structure */
+#define DC_0CQ          0014                            /* success completion queue */
+#define DC_STC          0016
+#define DC_1CQ          0016                            /* error completion queue */
+#define DC_ICT          0020                            /* inline command buffer */
+#define DC_RTY          0036
+#define DC_RBS          0037
+#define DC_IRT          0040                            /* inline response buffer */
+#define DC_THP          0100
+#define DC_LRB          0102
+#define DC_RSV          0104
+#define DC_PAD          0110
 
 /* Realtime drive status */
 
@@ -93,6 +114,93 @@
 
 #define FMT_512         0126736                         /* 512 bytes/sector */
 #define FMT_576         074161                          /* 576 bytes/sector */
+
+/* Disk Rotational Access Table */
+
+#define DT_LNK          0000
+#define DT_L1C          0002
+#define DT_ERQ          0004
+#define DT_OFF          0006                            /* offset to transfer queues */
+#define DT_STA          0010                            /* low byte is SDI port number? */
+#define DT_DPS          0012                            /* data preamble size */
+#define DT_HPS          0013                            /* header preamble size */
+#define DT_CQ           0014                            /* completion queue */
+#define DT_HST          0014
+#define DT_CNT          0024                            /* remaining operation count */
+#define DT_MSC          0024                            /* MSCP? */
+#define DT_SCT          0034
+#define DT_XXX          0036
+#define DT_HLD          0040
+#define DT_CYL          0044                            /* cylinder */
+#define DT_BFC          0044
+#define DT_LFL          0046
+#define DT_TFC          0050
+#define DT_DU           0052                            /* pointer to DU$ structure in program memory? */
+#define DT_RCC          0054
+#define DT_DTC          0056
+#define DT_PBC          0060
+#define DT_DCB          0062
+#define DT_FLG          0064
+
+/* Fragment Request Block */
+
+#define F_LINK          0000                            /* link to next */
+#define F_PCTR          0002                            /* parent counter pointer */
+#define F_RTE           0004                            /* route pointer */
+#define F_MOD           0006
+#define F_CTRL          0010
+#define F_OFF           0012
+#define F_LLBN          0016                            /* low LBN */
+#define F_RT1           0020                            /* route 1 */
+#define F_HLBN          0022                            /* high LBN */
+#define F_SCT           0024                            /* sector */
+#define F_RT2           0024                            /* route 2 */
+#define F_TRK           0026                            /* track */
+#define F_RT3           0030                            /* route 3 */
+#define F_GRP           0030                            /* group */
+#define F_RSB           0032
+#define F_SCNT          0034                            /* sector count */
+#define F_SRTE          0036                            /* saved route pointer */
+#define F_BFHD          0040                            /* buffer queue head */
+#define F_BFTL          0042                            /* buffer queue tail */
+#define F_RT4           0044                            /* route 4 */
+#define F_CYL           0046                            /* cylinder */
+#define F_SLLB          0050                            /* saved low LBN */
+#define F_SHLB          0052                            /* saved high LBN */
+#define F_SBFH          0054
+#define F_SSCT          0056
+#define F_REMN          0057
+#define F_PRMY          0060
+#define F_SLRB          0062
+#define F_TGDT          0064
+#define F_SNUM          0066
+#define F_SCR           0070
+#define F_TCNT          0070
+#define F_DRAT          0072
+#define F_DSTR          0074
+#define F_ESUM          0076
+#define F_DUCB          0100
+#define F_BPTR          0102
+#define F_SQL           0104
+#define F_FLGS          0106
+#define F_CRUN          0110
+#define F_CFLG          0111
+
+/* data buffer */
+
+#define B_OERR          000000                          /* original error bits */
+#define B_LLBN          000002                          /* LBN (low) */
+#define B_HLBN          000004                          /* LBN (high) */
+#define B_EFLG          000006                          /* error recovery flags */
+#define B_ECCN          000007                          /* ECC symbols corrected */
+#define B_LARC          000010                          /* error retry count A */
+#define B_LBRC          000011                          /* error retry count B */
+#define B_LCRC          000012                          /* error retry count C */
+#define B_ERCL          000013                          /* error recovery command */
+#define B_CMP           000014
+#define B_HDRS          000020                          /* sector headers */
+#define B_DATA          000040                          /* sector data */
+
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
 
@@ -328,6 +436,119 @@ print_word (st, kt, "KT$T4 ", 0464, 2);
 return SCPE_OK;
 }
 
+void print_drat (uint32 dt)
+{
+print_word (NULL, dt, "DT$LNK", DT_LNK, 2);
+print_word (NULL, dt, "DT$L1C", DT_L1C, 2);
+print_word (NULL, dt, "DT$ERQ", DT_ERQ, 2);
+print_word (NULL, dt, "DT$OFF", DT_OFF, 2);
+print_word (NULL, dt, "DT$STA", DT_STA, 2);
+print_word (NULL, dt, "DT$DPS", DT_DPS, 1);
+print_word (NULL, dt, "DT$HPS", DT_HPS, 1);
+print_word (NULL, dt, "DT$CQ ", DT_CQ , 0);
+print_word (NULL, dt, "DT$HST", DT_HST, 8);
+print_word (NULL, dt, "DT$CNT", DT_CNT, 0);
+print_word (NULL, dt, "DT$MSC", DT_MSC, 8);
+print_word (NULL, dt, "DT$SCT", DT_SCT, 2);
+print_word (NULL, dt, "DT$XXX", DT_XXX, 2);
+print_word (NULL, dt, "DT$HLD", DT_HLD, 4);
+print_word (NULL, dt, "DT$CYL", DT_CYL, 0);
+print_word (NULL, dt, "DT$BFC", DT_BFC, 2);
+print_word (NULL, dt, "DT$LFL", DT_LFL, 2);
+print_word (NULL, dt, "DT$TFC", DT_TFC, 2);
+print_word (NULL, dt, "DT$DU ", DT_DU , 2);
+print_word (NULL, dt, "DT$RCC", DT_RCC, 2);
+print_word (NULL, dt, "DT$DTC", DT_DTC, 2);
+print_word (NULL, dt, "DT$PBC", DT_PBC, 2);
+print_word (NULL, dt, "DT$DCB", DT_DCB, 2);
+print_word (NULL, dt, "DT$FLG", DT_FLG, 2);
+print_word (NULL, dt, "UNUSED", 066, 2);
+}
+
+void print_frb (uint32 frb)
+{
+print_word (NULL, frb, "F$LINK", F_LINK, 2);
+print_word (NULL, frb, "F$PCTR", F_PCTR, 2);
+print_word (NULL, frb, "F$RTE ", F_RTE , 2);
+print_word (NULL, frb, "F$MOD ", F_MOD , 2);
+print_word (NULL, frb, "F$CTRL", F_CTRL, 2);
+print_word (NULL, frb, "F$OFF ", F_OFF , 4);
+print_word (NULL, frb, "F$LLBN", F_LLBN, 2);
+print_word (NULL, frb, "F$RT1 ", F_RT1 , 2);
+print_word (NULL, frb, "F$HLBN", F_HLBN, 2);
+print_word (NULL, frb, "F$SCT ", F_SCT , 0);
+print_word (NULL, frb, "F$RT2 ", F_RT2 , 2);
+print_word (NULL, frb, "F$TRK ", F_TRK , 1);
+print_word (NULL, frb, "UNUSED", 027, 1);
+print_word (NULL, frb, "F$GRP ", F_GRP , 0);
+print_word (NULL, frb, "F$RT3 ", F_RT3 , 2);
+print_word (NULL, frb, "F$RSB ", F_RSB , 2);
+print_word (NULL, frb, "F$SCNT", F_SCNT, 1);
+print_word (NULL, frb, "UNUSED", 035, 1);
+print_word (NULL, frb, "F$SRTE", F_SRTE, 2);
+print_word (NULL, frb, "F$BFHD", F_BFHD, 2);
+print_word (NULL, frb, "F$BFTL", F_BFTL, 2);
+print_word (NULL, frb, "F$RT4 ", F_RT4 , 2);
+print_word (NULL, frb, "F$CYL ", F_CYL , 2);
+print_word (NULL, frb, "F$SLLB", F_SLLB, 2);
+print_word (NULL, frb, "F$SHLB", F_SHLB, 2);
+print_word (NULL, frb, "F$SBFH", F_SBFH, 2);
+print_word (NULL, frb, "F$SSCT", F_SSCT, 1);
+print_word (NULL, frb, "F$REMN", F_REMN, 1);
+print_word (NULL, frb, "F$PRMY", F_PRMY, 2);
+print_word (NULL, frb, "F$SLRB", F_SLRB, 2);
+print_word (NULL, frb, "F$TGDT", F_TGDT, 2);
+print_word (NULL, frb, "F$SNUM", F_SNUM, 2);
+print_word (NULL, frb, "F$SCR ", F_SCR , 0);
+print_word (NULL, frb, "F$TCNT", F_TCNT, 2);
+print_word (NULL, frb, "F$DRAT", F_DRAT, 2);
+print_word (NULL, frb, "F$DSTR", F_DSTR, 2);
+print_word (NULL, frb, "F$ESUM", F_ESUM, 2);
+print_word (NULL, frb, "F$DUCB", F_DUCB, 2);
+print_word (NULL, frb, "F$BPTR", F_BPTR, 2);
+print_word (NULL, frb, "F$SQL ", F_SQL , 2);
+print_word (NULL, frb, "F$FLGS", F_FLGS, 2);
+print_word (NULL, frb, "F$CRUN", F_CRUN, 1);
+print_word (NULL, frb, "F$CFLG", F_CFLG, 1);
+print_word (NULL, frb, "UNUSED", 0112, 6);
+}
+
+void print_dcb (uint32 dc)
+{
+print_word (NULL, dc, "DC$LNK", DC_LNK, 2);
+print_word (NULL, dc, "DC$CMD", DC_CMD, 2);
+print_word (NULL, dc, "DC$RSB", DC_RSB, 2);
+print_word (NULL, dc, "DC$FCT", DC_FCT, 2);
+print_word (NULL, dc, "DC$STA", DC_STA, 2);
+print_word (NULL, dc, "DC$DUC", DC_DUC, 2);
+print_word (NULL, dc, "DC$0CQ", DC_0CQ, 2);
+print_word (NULL, dc, "DC$STC", DC_STC, 0);
+print_word (NULL, dc, "DC$1CQ", DC_1CQ, 2);
+print_word (NULL, dc, "DC$ICT", DC_ICT, 14);
+print_word (NULL, dc, "DC$RTY", DC_RTY, 1);
+print_word (NULL, dc, "DC$RBS", DC_RBS, 1);
+print_word (NULL, dc, "DC$IRT", DC_IRT, 32);
+print_word (NULL, dc, "DC$THP", DC_THP, 2);
+print_word (NULL, dc, "DC$LRB", DC_LRB, 2);
+print_word (NULL, dc, "DC$RSV", DC_RSV, 4);
+print_word (NULL, dc, "DC$PAD", DC_PAD, 16);
+}
+
+void print_route (uint32 rt)
+{
+print_word (NULL, rt, "V.FLGS", V_FLGS, 1);
+print_word (NULL, rt, "V.OPCD", V_OPCD, 1);
+print_word (NULL, rt, "V.SUCC", V_SUCC, 2);
+print_word (NULL, rt, "V.CTX ", V_CTX , 2);
+print_word (NULL, rt, "V.AERR", V_AERR, 2);
+}
+
+void print_counter (uint32 ct)
+{
+print_word (NULL, ct, "C.SRVC", C_SRVC, 2);
+print_word (NULL, ct, "C.CNT ", C_CNT , 2);
+}
+
 t_bool online = FALSE;
 
 t_stat ksdi_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
@@ -364,8 +585,9 @@ return 002;
 uint16 ksdi_disc (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: DISCONNECT\n");
-PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
+ksdi_mode = 0;
 online = FALSE;
+PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
@@ -384,8 +606,9 @@ return 004;
 uint16 ksdi_clear (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: DRIVE CLEAR\n");
-PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
+ksdi_mode = 0;
 online = FALSE;
+PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
@@ -445,21 +668,21 @@ PUTW (rsp + 0036, 0xD400 | 0x64);                       /* media type high */
 PUTW (rsp + 0040, 0xD400 | 0x25);
 PUTW (rsp + 0042, 0xD400 | 0xE0);                       /* FCT copy size in XBNs */
 PUTW (rsp + 0044, 0xD400 | 0x01);
-PUTW (rsp + 0046, 0xD400 | 31);                         /* LBNs/track */
-PUTW (rsp + 0050, 0xD400 | 16);                         /* group offset */
-PUTW (rsp + 0052, 0xD400 | 0x9C);                       /* LBNs in host area low */
+PUTW (rsp + 0046, 0xD400 | 31);                         /* LBNs/track (16-bit) */
+PUTW (rsp + 0050, 0xD400 | 16);                         /* group offset (16-bit) */
+PUTW (rsp + 0052, 0xD400 | 0x9C);                       /* LBNs in host area low (16-bit) */
 PUTW (rsp + 0054, 0xD400 | 0x9E);
-PUTW (rsp + 0056, 0xD400 | 0x03);                       /* LBNs in host area high */
+PUTW (rsp + 0056, 0xD400 | 0x03);                       /* LBNs in host area high (16-bit) */
 PUTW (rsp + 0060, 0xD400 | 0x00);
-PUTW (rsp + 0062, 0xD400 | 0xD1);                       /* RCT size in LBNs  */
+PUTW (rsp + 0062, 0xD400 | 0xD1);                       /* RCT size in LBNs (16-bit) */
 PUTW (rsp + 0064, 0xD400 | 0x01);
-PUTW (rsp + 0066, 0xD400 | 0x00);
-PUTW (rsp + 0070, 0xD400 | 0x00);
-PUTW (rsp + 0072, 0xD400 | 0x00);
+PUTW (rsp + 0066, 0xD400 | 0x00);                       /* LBNs/track (18-bit) */
+PUTW (rsp + 0070, 0xD400 | 0x00);                       /* group offset (18-bit) */
+PUTW (rsp + 0072, 0xD400 | 0x00);                       /* LBNs in host area low (18-bit) */
 PUTW (rsp + 0074, 0xD400 | 0x00);
-PUTW (rsp + 0076, 0xD400 | 0x00);
+PUTW (rsp + 0076, 0xD400 | 0x00);                       /* LBNs in host area high (18-bit) */
 PUTW (rsp + 0100, 0xD400 | 0x00);
-PUTW (rsp + 0102, 0xD400 | 0x00);
+PUTW (rsp + 0102, 0xD400 | 0x00);                       /* RCT size in LBNs (18-bit) */
 PUTW (rsp + 0104, 0xD400 | 0x00);
 PUTW (rsp + 0106, 0xD400 | 0x02);                       /* XBN space in cylinders */
 PUTW (rsp + 0110, 0xD400 | 0x00);
@@ -627,49 +850,50 @@ else
 PUTW (rsp, sts);
 }
 
-void ksdi_process_dsa (uint32 ksa)
+void ksdi_process_dcb (uint32 ksa)
 {
-uint32 rsc, sq, eq, rsp, opc, rsz, tq, cmd, tmp;
+uint32 dc, sq, eq, rsp, opc, rsz, tq, cmd, tmp;
 
 for (int j = 0; j < 20; j++) {
-    rsc = GETP (ksa + KSA_HEAD);                        /* get work resource */
-    if (rsc == 0)
+    dc = GETP (ksa + KSA_HEAD);                         /* get DCB */
+    if (dc == 0)
         break;
 
-    sq = GETP (rsc + 014);                              /* get success queue */
+    sq = GETP (dc + DC_0CQ);                            /* get success queue */
     if (sq == 0)
         break;
 
     if (Q_LOCKED (sq))                                  /* success queue locked? */
         break;
 
-    eq = GETP (rsc + 016);                              /* get error queue */
+    eq = GETP (dc + DC_1CQ);                            /* get error queue */
     if (eq == 0)
         break;
 
     if (Q_LOCKED (eq))                                  /* error queue locked? */
         break;
 
-    rsc = get_from_queue (ksa + KSA_HEAD);              /* dequeue from drive state area */
+    dc = get_from_queue (ksa + KSA_HEAD);               /* dequeue from drive state area */
 
-    for (int i = 0; i < 17; i++)
-        sim_printf ("%07o: %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
+    print_dcb (dc);
+//    for (int i = 0; i < 17; i++)
+//        sim_printf ("%07o: %06o\n", dc + (i << 1), GETW (dc + (i << 1)));
 
-    rsp = GETP (rsc + 004);                             /* get response */
-    opc = GETW (rsc + 010);
+    rsp = GETP (dc + DC_RSB);                           /* get response buffer */
+    opc = GETW (dc + DC_STA);
     rsz = 0;
     tq = sq;                                            /* target is success queue */
     switch (opc & 0177400) {
         case 014400:                                    /* ECHO DATA */
             sim_printf ("ECHO DATA\n");
-            cmd = GETW (rsc + 002);                     /* get immediate */
+            cmd = GETW (dc + DC_CMD);                   /* get immediate */
             PUTW (rsp, cmd);                            /* copy to response */
             break;
         case 010400:                                    /* LINE STATUS */
             ksdi_rtds (rsp);
             break;
         default:
-            cmd = GETP (rsc + 002);                     /* get command */
+            cmd = GETP (dc + DC_CMD);                   /* get command buffer */
             if (cmd)
                 rsz = ksdi_cmd (cmd, rsp);
             else {
@@ -678,82 +902,109 @@ for (int j = 0; j < 20; j++) {
                 }
             break;
         }
-    tmp = GETW (rsc + 006);
+    tmp = GETW (dc + DC_FCT);
     tmp = tmp - rsz;
-    PUTW (rsc + 006, tmp);                              /* set response length */
+    PUTW (dc + DC_FCT, tmp);                            /* set response length */
     sim_printf ("----\n");
 
-    put_to_queue (tq, rsc);                             /* send to service queue */
+    put_to_queue (tq, dc);                              /* send to completion queue */
     }
 }
 
 void read_fct (uint32 dma)
 {
-PUTDW (dma + 0040, FMT_512);                            /* bytes/sector */
-PUTDW (dma + 0042, 6);                                  /* format instance */
-PUTDW (dma + 0044, 0xCD15);                             /* volume serial (low) */
-PUTDW (dma + 0046, 0x075B);                             /* volume serial (high) */
-PUTDW (dma + 0050, 0x00);
-PUTDW (dma + 0052, 0x00);
-PUTDW (dma + 0054, 0x00);                               /* first formatted */
-PUTDW (dma + 0056, 0x00);
-PUTDW (dma + 0060, 0xFF);
-PUTDW (dma + 0062, 0xFF);
-PUTDW (dma + 0064, 0x00);                               /* date formatted */
-PUTDW (dma + 0066, 0x00);
-PUTDW (dma + 0070, 0xFF);
-PUTDW (dma + 0072, 0xFF);
-PUTDW (dma + 0074, 0x00);                               /* bad PBNs in FCT (512 - low) */
-PUTDW (dma + 0076, 0x00);                               /* bad PBNs in FCT (512 - high) */
-PUTDW (dma + 0100, 0x00);                               /* bad PBNs in FCT (576 - low) */
-PUTDW (dma + 0102, 0x00);                               /* bad PBNs in FCT (576 - high) */
-PUTDW (dma + 0104, 63);                                 /* scratch area offset */
-PUTDW (dma + 0106, 417);                                /* size (not last) */
-PUTDW (dma + 0110, 289);                                /* size (last) */
-PUTDW (dma + 0112, 0);                                  /* flags */
-PUTDW (dma + 0114, 0);                                  /* format version */
+PUTDW (dma + 0000, FMT_512);                            /* bytes/sector */
+PUTDW (dma + 0002, 6);                                  /* format instance */
+PUTDW (dma + 0004, 0xCD15);                             /* volume serial (low) */
+PUTDW (dma + 0006, 0x075B);                             /* volume serial (high) */
+PUTDW (dma + 0010, 0x00);
+PUTDW (dma + 0012, 0x00);
+PUTDW (dma + 0014, 0x00);                               /* first formatted */
+PUTDW (dma + 0016, 0x00);
+PUTDW (dma + 0020, 0xFF);
+PUTDW (dma + 0022, 0xFF);
+PUTDW (dma + 0024, 0x00);                               /* date formatted */
+PUTDW (dma + 0026, 0x00);
+PUTDW (dma + 0030, 0xFF);
+PUTDW (dma + 0032, 0xFF);
+PUTDW (dma + 0034, 0x00);                               /* bad PBNs in FCT (512 - low) */
+PUTDW (dma + 0036, 0x00);                               /* bad PBNs in FCT (512 - high) */
+PUTDW (dma + 0040, 0x00);                               /* bad PBNs in FCT (576 - low) */
+PUTDW (dma + 0042, 0x00);                               /* bad PBNs in FCT (576 - high) */
+PUTDW (dma + 0044, 63);                                 /* scratch area offset */
+PUTDW (dma + 0046, 417);                                /* size (not last) */
+PUTDW (dma + 0050, 289);                                /* size (last) */
+PUTDW (dma + 0052, 0);                                  /* flags */
+PUTDW (dma + 0054, 0);                                  /* format version */
 }
 
 void read_rct (uint32 dma)
 {
-PUTDW (dma + 0040, 0xCD15);                             /* serial number (low) */
-PUTDW (dma + 0042, 0x075B);                             /* serial number (high) */
-PUTDW (dma + 0044, 0);
+PUTDW (dma + 0000, 0xCD15);                             /* serial number (low) */
+PUTDW (dma + 0002, 0x075B);                             /* serial number (high) */
+PUTDW (dma + 0004, 0);
+PUTDW (dma + 0006, 0);
+PUTDW (dma + 0010, 0);                                  /* flags */
+PUTDW (dma + 0012, 0);
+PUTDW (dma + 0014, 1000);                               /* LBN being replaced (low) */
+PUTDW (dma + 0016, 0);
+PUTDW (dma + 0020, 0);                                  /* LBN being replaced (high) */
+PUTDW (dma + 0022, 33);                                 /* replacement RBN (low) */
+PUTDW (dma + 0024, 0);                                  /* replacement RBN (high) */
+PUTDW (dma + 0026, 32);                                 /* bad RBN (low) */
+PUTDW (dma + 0030, 0);                                  /* bad RBN (high) */
+PUTDW (dma + 0032, 0);                                  /* cache ID */
+PUTDW (dma + 0034, 0);
+PUTDW (dma + 0036, 0);
+PUTDW (dma + 0040, 0);                                  /* cache incarnation (low) */
+PUTDW (dma + 0042, 0);                                  /* cache incarnation (high) */
+PUTDW (dma + 0044, 0);                                  /* incarnation date */
 PUTDW (dma + 0046, 0);
-PUTDW (dma + 0050, 0);                                  /* flags */
+PUTDW (dma + 0050, 0);
 PUTDW (dma + 0052, 0);
-PUTDW (dma + 0054, 1000);                               /* LBN being replaced (low) */
-PUTDW (dma + 0056, 0);
-PUTDW (dma + 0060, 0);                                  /* LBN being replaced (high) */
-PUTDW (dma + 0062, 33);                                 /* replacement RBN (low) */
-PUTDW (dma + 0064, 0);                                  /* replacement RBN (high) */
-PUTDW (dma + 0066, 32);                                 /* bad RBN (low) */
-PUTDW (dma + 0070, 0);                                  /* bad RBN (high) */
-PUTDW (dma + 0072, 0);                                  /* cache ID */
-PUTDW (dma + 0074, 0);
-PUTDW (dma + 0076, 0);
-PUTDW (dma + 0100, 0);                                  /* cache incarnation (low) */
-PUTDW (dma + 0102, 0);                                  /* cache incarnation (high) */
-PUTDW (dma + 0104, 0);                                  /* incarnation date */
-PUTDW (dma + 0106, 0);
-PUTDW (dma + 0110, 0);
-PUTDW (dma + 0112, 0);
+}
+
+/* Diagnostic block pattern */
+
+const uint16 dbn[3] = {
+    0155555,
+    0133333,
+    0066666
+    };
+
+void read_dbn (uint32 dma)
+{
+uint32 ptn = 0;
+
+PUTDW (dma + 0000, 0177777);
+for (int i = 0; i < 256; i++) {
+    PUTDW (dma + 0002 + (i << 1), dbn[ptn++]);
+    if (ptn == 3)
+        ptn = 0;
+    }
+PUTDW (dma + 01000, 030206);                            /* TODO: See ILDISK:51440 for alogrithm */
+}
+
+void read_lbn (uint32 dma)
+{
+PUTDW (dma + 01000, 0105);                              /* TODO: See ILDISK:51440 for alogrithm */
 }
 
 void process_frb (uint32 frb, uint32 cyl, uint32 sct)
 {
 uint32 fbu, scnt, tmp, dma, lbn, trk, rte, dst, ctr, flg;
 
-lbn = GETB (frb + 022);                                 /* high LBN */
+lbn = GETB (frb + F_HLBN);                              /* high LBN */
 lbn = lbn << 16;
-lbn = lbn | GETW (frb + 016);                           /* low LBN */
-trk = GETW (frb + 026);                                 /* track */
-scnt = GETB (frb + 034);                                /* sector count */
+lbn = lbn | GETW (frb + F_LLBN);                        /* low LBN */
+trk = GETW (frb + F_TRK);                               /* track */
+scnt = GETB (frb + F_SCNT);                             /* sector count */
 
-for (int i = 0; i < 37; i++)
-    sim_printf ("%07o: %06o\n", frb + (i << 1), GETW (frb + (i << 1)));
+//for (int i = 0; i < 37; i++)
+//    sim_printf ("%07o: %06o\n", frb + (i << 1), GETW (frb + (i << 1)));
+print_frb (frb);
 sim_printf ("FRB: %07o, LBN: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d\n", frb, lbn, cyl, trk, sct, scnt);
-fbu = GETP (frb + 040);
+fbu = GETP (frb + F_BFHD);
 if (fbu == 0) {                                         /* no data buffer? */
     for (int i = 0; i < scnt; i++) {
         fbu = GETP (ksdi_dib.cma + KG_FBU);             /* get a free data memory buffer */
@@ -766,23 +1017,28 @@ if (fbu == 0) {                                         /* no data buffer? */
             PUTDW (dma + (j << 1), 0);
             }
 
-        PUTDW (dma + 020, lbn & 0177777);               /* header */
-        PUTDW (dma + 022, lbn >> 16);
-        PUTDW (dma + 024, lbn & 0177777);
-        PUTDW (dma + 026, lbn >> 16);
-        PUTDW (dma + 030, lbn & 0177777);
-        PUTDW (dma + 032, lbn >> 16);
-        PUTDW (dma + 034, lbn & 0177777);
-        PUTDW (dma + 036, lbn >> 16);
+        PUTDW (dma + B_HDRS + 000, lbn & 0177777);      /* header */
+        PUTDW (dma + B_HDRS + 002, lbn >> 16);
+        PUTDW (dma + B_HDRS + 004, lbn & 0177777);
+        PUTDW (dma + B_HDRS + 006, lbn >> 16);
+        PUTDW (dma + B_HDRS + 010, lbn & 0177777);
+        PUTDW (dma + B_HDRS + 012, lbn >> 16);
+        PUTDW (dma + B_HDRS + 014, lbn & 0177777);
+        PUTDW (dma + B_HDRS + 016, lbn >> 16);
 
         if ((cyl == 275) && (trk == 0) && (sct == 31)) {  /* FCT */
-            read_fct (dma);
+            read_fct (dma + B_DATA);
             }
         else if ((cyl == 273) && (trk == 8) && (sct == 31)) { /* RCT */
-            read_rct (dma);
+            read_rct (dma + B_DATA);
             }
+        else if (cyl == 278) { /* DBN */
+            read_dbn (dma + B_DATA);
+            }
+        else
+            read_lbn (dma + B_DATA);
 
-        put_to_queue (frb + 040, fbu);                  /* queue buffer to the FRB */
+        put_to_queue (frb + F_BFHD, fbu);               /* queue buffer to the FRB */
 //        sim_printf ("FBU: %07o (new)\n", fbu);
         }
     }
@@ -801,21 +1057,43 @@ else {
         }
     }
 
-ctr = GETP (frb + 002);
-for (int i = 0; i < 24; i++)
-    sim_printf ("%07o: %06o\n", ctr + (i << 1), GETW (ctr + (i << 1)));
+ctr = GETP (frb + F_PCTR);                              /* get counter */
+//for (int i = 0; i < 24; i++)
+//    sim_printf ("%07o: %06o\n", ctr + (i << 1), GETW (ctr + (i << 1)));
+print_counter (ctr);
 sim_printf ("CTR: %07o\n", ctr);
 
-rte = GETP (frb + 004);
-for (int i = 0; i < 10; i++)
-    sim_printf ("%07o: %06o\n", rte + (i << 1), GETW (rte + (i << 1)));
+rte = GETP (frb + F_RTE);                               /* get route */
+//for (int i = 0; i < 10; i++)
+//    sim_printf ("%07o: %06o\n", rte + (i << 1), GETW (rte + (i << 1)));
+print_route (rte);
+print_route (rte + 010);
+print_route (rte + 020);
 sim_printf ("RTE: %07o\n", rte);
 
 flg = GETW (rte);                                       /* get opcode/flags from route */
 sim_printf ("OPC: %o\n", (flg >> 8));
-rte = rte + 010;                                        /* advance route pointer */
-PUTP (frb + 004, rte);
-dst = GETW (rte + 002);                                 /* get success destination */
+if ((cyl == 273) && ((ksdi_mode & MODE_OB) == 0)) {
+    PUTW (frb + F_ESUM, 1);
+    dst = GETW (rte + V_AERR);                          /* get error destination */
+    }
+else {
+    if (flg & 02) {
+        dst = GETW (ctr + C_CNT);                       /* get counter value */
+        dst = dst - 1;                                  /* another operation completed */
+        PUTW (ctr + C_CNT, dst);                        /* update counter value */
+        if (dst == 0) {                                 /* all operations complete? */
+            dst = GETP (ctr);
+            sim_printf ("CTR dest = %07o\n", dst);
+            PUTP (ctr, 0);                              /* clear service queue pointer */
+            put_to_queue (dst, ctr);                    /* send to service queue */
+            }
+        }
+    rte = rte + 010;                                    /* advance route pointer */
+    PUTP (frb + F_RTE, rte);
+    dst = GETW (rte + V_SUCC);                          /* get success destination */
+    }
+
 if (dst & 0177400)
     dst = dst << 2;                                     /* direct address */
 else {
@@ -824,62 +1102,82 @@ else {
     }
 sim_printf ("FRB dest = %07o\n", dst);
 put_to_queue (dst, frb);                                /* send FRB to completion queue */
-
-if (flg & 02) {
-    dst = GETW (ctr + 002);                             /* get counter value */
-    dst = dst - 1;                                      /* another operation completed */
-    PUTW (ctr + 002, dst);                              /* update counter value */
-    if (dst == 0) {                                     /* all operations complete? */
-        dst = GETP (ctr);
-        sim_printf ("CTR dest = %07o\n", dst);
-        PUTP (ctr, 0);                                  /* clear service queue pointer */
-        put_to_queue (dst, ctr);                        /* send to service queue */
-        }
-    }
 }
 
-void ksdi_process_drat (uint32 ksh)
+void ksdi_process_drat (uint32 ksh, uint32 kfl)
 {
-uint32 rsc, cyl, fq, cnt, cq, frb;
+uint32 dt, cyl, fq, cnt, cq, frb, fc, flg;
 
-rsc = get_from_queue (ksh + Q_HEAD);                    /* dequeue DRAT */
-if (rsc == 0)
+dt = GETP (ksh + Q_HEAD);                               /* get DRAT */
+if (dt == 0)
     return;
 
-for (int i = 0; i < 24; i++)
-    sim_printf ("%07o: %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
-sim_printf ("DRAT: %07o\n", rsc);
+//for (int i = 0; i < 24; i++)
+//    sim_printf ("%07o: %06o\n", dt + (i << 1), GETW (dt + (i << 1)));
+//print_drat (dt);
+//sim_printf ("DRAT: %07o\n", dt);
 
-cyl = GETW (rsc + 044);                                 /* get current cylinder */
-fq = rsc - (32 * 4);                                    /* 32 sectors/track, 4 bytes for queue head/tail */
+cyl = GETW (dt + DT_CYL);                               /* get current cylinder */
+fq = dt - (32 * 4);                                     /* 32 sectors/track, 4 bytes for queue head/tail */
+cnt = GETW (dt + DT_CNT);
 
+fc = 0;
+for (int j = 0; j < 50; j++) {                          /* prevent endless loop */
+    frb = get_from_queue (dt + DT_HST + 004);           /* get next FRB */
+    if (frb == 0)
+        break;
+    fc++;
+    cq = GETP (dt + DT_HST + 002);
+    put_to_queue (cq, frb);
+    }
+if (fc > 0)
+    sim_printf ("%d FRBs pre-processed\n", fc);
+
+fc = 0;
 for (int k = 0; k < 32; k++) {                          /* for each sector */
     for (int j = 0; j < 50; j++) {                      /* prevent endless loop */
         frb = get_from_queue (fq + (k << 2));           /* get next FRB */
         if (frb == 0)
             break;
+        PUTP (frb + F_DRAT, dt);
         process_frb (frb, cyl, k);
-        cnt = GETW (rsc + 024);
-        cnt = cnt - 1;
+        fc++;
+        if (cnt > 0)
+            cnt = cnt - 1;
         sim_printf ("DRAT count %d -> %d\n", (cnt + 1), cnt);
-        PUTW (rsc + 024, cnt);
         }
     }
+if (fc > 0)
+    sim_printf ("%d FRBs processed\n", fc);
+//if (cnt < GETW (dt + DT_CNT)) {
+//    for (int i = 0; i < 24; i++)
+//        sim_printf ("%07o: %06o\n", dt + (i << 1), GETW (dt + (i << 1)));
+//    sim_printf ("DRAT: %07o\n", dt);
+//    }
 
-cq = GETP (rsc + 014);                                  /* get DRAT completion queue */
-put_to_queue (cq, rsc);                                 /* send DRAT to completion queue */
-sim_printf ("----\n");
+PUTW (dt + DT_CNT, cnt);                                /* update counter */
+
+if (cnt == 0) {                                         /* all operation complete? */
+    dt = get_from_queue (ksh + Q_HEAD);                 /* dequeue DRAT */
+    cq = GETP (dt + DT_CQ);                             /* get DRAT completion queue */
+    put_to_queue (cq, dt);                              /* send DRAT to completion queue */
+    flg = GETW (kfl);
+    flg = flg | 0100000;                                /* FIXME: This is expected by ILDISK */
+    PUTW (kfl, flg);
+    sim_printf ("DRAT completed\n");
+    }
 }
 
 t_stat ksdi_process (uint32 port)
 {
-uint32 ksa, ksh;
+uint32 ksa, ksh, kfl;
 
 ksa = ksdi_dib.cma + KS_S0 + (port * 16);               /* drive state area */
-ksdi_process_dsa (ksa);
+ksdi_process_dcb (ksa);
 
-ksh = ksdi_dib.cma + KS_0HD + (port * 4);               /* DRAT queue? */
-ksdi_process_drat (ksh);
+ksh = ksdi_dib.cma + KS_0HD + (port * 4);               /* DRAT queue */
+kfl = ksdi_dib.cma - KS_0FL - (port * 4);               /* port flags */
+ksdi_process_drat (ksh, kfl);
 
 return SCPE_OK;
 }
@@ -888,14 +1186,14 @@ t_stat ksdi_svc (UNIT *uptr)
 {
 uint32 ks = ksdi_dib.cma;
 uint32 port = 0;
-uint32 ksa, tq, rsc;
+uint32 ksa, tq, dc;
 
 ksa = ksdi_dib.cma + KS_S0 + (port * 16);               /* drive state area */
 if (GETW (ks + KG_RSL) == 0) {                          /* test started? */
     PUTW (ks + KG_RSL, 1);                              /* KG$RSL - result of self test */
-    rsc = get_from_queue (ksa + KSA_HEAD);              /* get DCB from drive state area */
-    tq = GETP (rsc + 014);                              /* get destination queue */
-    put_to_queue (tq, rsc);                             /* put DCB to destination */
+    dc = get_from_queue (ksa + KSA_HEAD);               /* get DCB from drive state area */
+    tq = GETP (dc + 014);                               /* get destination queue */
+    put_to_queue (tq, dc);                              /* put DCB to destination */
     }
 else if (!Q_LOCKED (ksa + KSA_LOCK)) {                  /* drive state area locked? */
     if ((GETW (ksa + KSA_FLGS) & 0100000) == 0)         /* drive not known to system? */

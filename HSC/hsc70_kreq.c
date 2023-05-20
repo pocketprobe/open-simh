@@ -181,8 +181,30 @@ print_word (st, kg, "KG$KSA", 0140, 0);
 return SCPE_OK;
 }
 
+void sim_print_word (uint32 kg, char *name, int16 off, uint16 len)
+{
+if (len == 0)
+    sim_printf ("%s %06o\n", name, kg + off);
+else if (len == 1) {
+    sim_printf ("%s %06o\\  %03o\n", name, kg + off, GETB (kg + off));
+    }
+else {
+    sim_printf ("%s %06o/", name, kg + off);
+    for (int i = 1; i <= (len >> 1); i++) {
+        sim_printf ("  %06o", GETW (kg + off + ((i - 1) << 1)));
+        if (i % 8 == 0)
+            sim_printf ("\r\n              ");
+        }
+    sim_printf ("\r\n");
+    }
+}
+
 void print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
 {
+if (st == NULL) {
+    sim_print_word (kg, name, off, len);
+    return;
+    }
 if (len == 0)
     fprintf (st, "%s %06o\n", name, kg + off);
 else if (len == 1) {

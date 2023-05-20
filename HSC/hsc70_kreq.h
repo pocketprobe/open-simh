@@ -72,10 +72,23 @@
 #define Q_WTHD          0004                            /* waiter queue head */
 #define Q_WTTL          0006                            /* waiter queue tail */
 
+/* counter queue */
+
+#define C_SRVC          0000                            /* service queue pointer */
+#define C_CNT           0002                            /* counter */
+
 /* queue flags */
 
 #define FLGS_IQ         0100                            /* interrupt queue */
 #define FLGS_SVC        0200                            /* service pending */
+
+/* route vector */
+
+#define V_FLGS          0000                            /* control flags */
+#define V_OPCD          0001                            /* opcode */
+#define V_SUCC          0002                            /* success destination address */
+#define V_CTX           0004                            /* context */
+#define V_AERR          0006                            /* error destination address */
 
 /* K initialisation structure */
 
