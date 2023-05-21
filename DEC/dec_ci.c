@@ -1260,13 +1260,13 @@ if (port < 0) {                                         /* no owner? */
 
 ci_close_vc (uptr, port);                               /* close the VC */
 cp->nodes[port].vcd &= ~VCD_CST;                        /* update descriptor */
-pkt.data[PPD_PORT] = port;                              /* port number */
+pkt.data[HDR_SOURCE] = port;                            /* port number */
 pkt.data[PPD_STATUS] = STS_OK;                          /* status: OK */
 pkt.data[PPD_OPC] = OPC_DGREC;                          /* opcode */
 pkt.data[PPD_FLAGS] = 0;                                /* flags */
 pkt.data[PPD_LENGTH] = 0;                               /* message length */
 // TODO: Should message be HOSTSHUT rather than START?
-pkt.data[PPD_MTYPE] = DG_START;                         /* message type: START */
+pkt.data[PPD_MTYPE] = DG_HOSTSHUT;                      /* message type: START */
 pkt.addr = 0;
 pkt.length = 0x14;                                      // TODO: Need #define for this
 ciq_insert (&cp->rx_queue, &pkt);                       /* put to response queue */
