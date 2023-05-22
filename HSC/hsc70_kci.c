@@ -56,7 +56,7 @@
 
 #define HM_BC           0014                            /* byte count */
 #define HM_CN           0016
-#define HM_BMB          0020                            /* big message buffer? */
+#define HM_BMB          0020                            /* block message buffer? */
 
 /* host message block - virtual circuit */
 
@@ -83,10 +83,10 @@
 #define SB_CBN          0002
 #define SB_CBQ          0004                            /* connection block queue? */
 #define SB_NCB          0010                            /* connection block pointer */
-#define SB_CNT          0012
+#define SB_CNT          0012                            /* connection count */
 #define SB_FL2          0013
-#define SB_SCS          0014
-#define SB_BMB          0016                            /* big message buffer? */
+#define SB_SCS          0014                            /* SCS request message buffer? */
+#define SB_BMB          0016                            /* block message buffer? */
 #define SB_TIM          0022
 #define SB_PAS          0023
 #define SB_VCS          0024                            /* virtual circuit state */
@@ -471,12 +471,42 @@ t_stat ci_receive_data (UNIT *uptr, CI_PKT *pkt)
 return SCPE_OK;
 }
 
+uint32 kci_get_srr (uint32 len)
+{
+uint32 kh = kci_dib.cma;
+uint32 hm, last;
+
+last = GETP (kh + KH_SRR + Q_TAIL);
+for (;;) {
+    hm = get_from_queue (kh + KH_SRR);
+    if (hm == 0)
+        break;
+    if (((GETW (hm + HM_LOF) & 077) == 077) && (len >= 0100)) {
+        sim_printf ("Found buffer for large packet at %07o\n", hm);
+        break;
+        }
+    if (((GETW (hm + HM_LOF) & 077) != 077) && (len < 0100)) {
+        sim_printf ("Found buffer for small packet at %07o\n", hm);
+        break;
+        }
+    if (hm == last) {
+        hm = 0;
+        break;
+        }
+    sim_printf ("Discounting buffer %07o\n", hm);
+    put_to_queue (kh + KH_SRR, hm);
+    }
+if (hm == 0)
+    sim_printf ("No suitable buffer found for packet of length 0%o\n", len);
+return hm;
+}
+
 /* New incoming packet received (internal version) */
 
 t_stat kci_receive_int (UNIT *uptr, CI_PKT *pkt, uint32 cq)
 {
 uint32 kh = kci_dib.cma;
-uint32 rsc, dma, opc, lof, fcb, len;
+uint32 rsc, dma, opc, lof, len, sb;
     uint16 dg_type = CI_GET16 (pkt->data, PPD_MTYPE) & DG_MTYPE;
     uint16 scs_type = CI_GET16 (pkt->data, PPD_STYPE);
 
@@ -487,9 +517,8 @@ if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
 else
     len = pkt->length - PPD_HDR + 2;
 
-try_again:
 if (opc == OPC_SNDMSG) {
-    if ((kci_req) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
+    if ((kci_req) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* SCS response packet? */
         rsc = kci_req;
         lof = GETW (rsc + HM_LOF);
         lof = lof & ~0074000;
@@ -497,15 +526,12 @@ if (opc == OPC_SNDMSG) {
         }
     else {
         lof = 0040000;
-        if (len < 0100) {
-            fcb = GETP (kh + KG_FCB);
-            rsc = get_from_queue (fcb);              /* sequenced message */
-            lof = lof | len;
-            }            
-        else {
-            rsc = get_from_queue (kh + KH_SRR);             /* sequenced message */
+        rsc = kci_get_srr (len);
+//        rsc = get_from_queue (kh + KH_SRR);             /* sequenced message */
+        if (len >= 0100)
             lof = lof | 077;
-            }
+        else
+            lof = lof | len;
         }
     }
 else {
@@ -515,22 +541,16 @@ else {
 
 if (rsc == 0) {
     sim_printf ("No buffer for incoming packet\n");
-//    kci_pkt_pend = TRUE;
     return SCPE_OK;
     }
-//else if (kci_pkt_pend) {
-//    sim_printf ("New buffer available for incoming packet\n");
-//    kci_pkt_pend = FALSE;
-//    }
 
-//PUTW (rsc + HM_CQ, 0);
+PUTW (rsc + HM_CQ, 0);
 PUTW (rsc + HM_LOF, lof);
 PUTB (rsc + HM_CB + 00, pkt->data[PPD_PORT]);           /* source */
 PUTB (rsc + HM_CB + 01, ~(pkt->data[PPD_PORT]));        /* complement */
 
 if (((lof & 077) != 077) && (opc == OPC_SNDMSG)) {
     sim_printf ("Receive packet to control memory\n");
-    PUTP (rsc + HM_CQ, fcb);
     PUTB (rsc + HM_MSG + 000, opc);
     PUTB (rsc + HM_MSG + 001, pkt->data[PPD_FLAGS]);
     if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
@@ -539,18 +559,14 @@ if (((lof & 077) != 077) && (opc == OPC_SNDMSG)) {
         memcpy (&CM[(rsc + HM_MSG + 002) >> 1], &pkt->data[PPD_LENGTH], (pkt->length - PPD_LENGTH));
     }
 else {
-    sim_printf ("Receive packet to data memory\n");
     PUTW (rsc + HM_BC, len);
     dma = GETW (rsc + HM_BMB);                          /* data mem addr */
     dma = (dma << 6) & DMEMMASK;
+    sim_printf ("Receive packet to data memory: %o\n", dma);
 
     if (dma == 0) {
-        sim_printf ("No data memory address in buffer at %07o!\n", rsc);
-        for (int i = 0; i < 12; i++)
-            sim_printf ("X %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
-        fcb = GETP (kh + KG_FCB);
-        put_to_queue (fcb, rsc);
-        goto try_again;
+        sim_printf ("No data memory address in packet!\n");
+        return SCPE_IERR;
         }
     PUTDB (dma + 000, opc);
     PUTDB (dma + 001, pkt->data[PPD_FLAGS]);
@@ -580,7 +596,7 @@ uint32 srccon, dstcon;
 uint32 node = pkt->data[PPD_PORT];
 uint32 kh = kci_dib.cma;
 uint32 sb, cb, cq;
-uint32 rsc, dma, opc, lof, len, fcb, rcc;
+uint32 rsc, dma, opc, lof, len, rcc;
 
 opc = pkt->data[PPD_OPC] & ~OPC_M_RECV;
 
@@ -603,17 +619,10 @@ cq = GETP (cb + CB_SVR);                                /* get server queue */
 if (cq == 0)
     return SCPE_OK;
 
-if (!sim_log) {
-    brk_cmd (SSH_ST, "51046");
-    brk_cmd (SSH_ST, "46726");
-//    sim_set_logon (0, "hsc_ci10.log");
-    }
-
-fcb = GETP (kh + KG_FCB);
-rsc = get_from_queue (fcb);                     /* sequenced message */
+//rsc = get_from_queue (kh + KH_SRR);             /* sequenced message */
 len = pkt->length - SCS_APPL;
-//lof = 0070000 | len;
-lof = 0 | len; //0070000;
+rsc = kci_get_srr (len);
+lof = 0 | len;
 
 if (rsc == 0) {
     sim_printf ("No buffer for incoming packet\n");
@@ -625,24 +634,16 @@ rcc = rcc + CI_GET16 (pkt->data, SCS_CREDIT);
 PUTW (cb + CB_RCC, rcc);
 PUTW (rsc + HM_CTX, GETW (cb + CB_CTX));
 PUTP (rsc + HM_CB, cb);                                 /* save connection block */
-PUTP (rsc + HM_CQ, fcb); //kh + KH_0WK);
+PUTP (rsc + HM_CQ, 0);
 PUTW (rsc + HM_LOF, lof);
-//PUTW (rsc + HM_BC, (pkt->length - PPD_HDR));
 
-memcpy (&CM[(rsc + HM_MSG) >> 1], &pkt->data[SCS_APPL], (pkt->length - SCS_APPL));
+memcpy (&CM[(rsc + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 
-#if 0
-dma = GETW (rsc + HM_BMB);                              /* data mem addr */
-dma = (dma << 6) & DMEMMASK;
-
-memcpy (&DM[dma >> 1], &pkt->data[SCS_APPL], (pkt->length - SCS_APPL));
-#endif
 for (int i = 0; i < 12; i++)
     sim_printf ("R %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
 put_to_queue (cq, rsc);
 
 return SCPE_OK;
-//return kci_receive_int (uptr, pkt, cq);
 }
 
 t_stat kci_scsrec (UNIT *uptr, CI_PKT *pkt)
@@ -763,6 +764,7 @@ switch (opc) {
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
         sim_printf ("local cmd: opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, cq);
+        PUTW (rsc + HM_LOF, 060077);
         break;
     default:
         sim_printf ("local cmd: opc = %d, p1 = %06o, p2 = %06o, p3 = %06o, cq = %06o\n", opc, p1, p2, p3, cq);
@@ -792,6 +794,7 @@ return ci_send_ppd (uptr, pkt);
 void kci_send (uint32 rsc, uint32 cq)
 {
 uint32 len, opc, flgs, node, dma, cb, srccon, dstcon, rcc;
+uint32 kh = kci_dib.cma;
 CI_PKT pkt;
 t_stat r = SCPE_OK;
 
@@ -801,107 +804,109 @@ len = GETW (rsc + HM_LOF) & 077;
 node = GETB (rsc + HM_CB);                              /* destination node */
 
 pkt.data[PPD_PORT] = GETB (rsc + HM_CB);
-#if 0
-for (int i = 0; i < 4; i++) {
-#endif
-    if (len == 077) {                                   /* packet in data memory */
+
+if (len == 077) {                                       /* packet in data memory */
 //        dma = GETW (rsc + HM_BMB + (i << 2));
-        dma = GETW (rsc + HM_BMB);
-        dma = (dma << 6) & DMEMMASK;
+    dma = GETW (rsc + HM_BMB);
+    dma = (dma << 6) & DMEMMASK;
 //        if (dma == 0)
 //            break;
 
-        if ((opc == 020000) || (opc == 070000)) {       /* FIXME: This case possibly not used */
-            if (len == 0)
-                len = 0x24;
-            cb = GETP (rsc + HM_CB);                    /* get connection block */
-            pkt.data[PPD_PORT] = GETB (cb + CB_NOD);
-            srccon = GETW (cb + CB_CID);
-            srccon = srccon | (GETW (cb + CB_CID + 002) << 16);
-            dstcon = GETW (cb + CB_VTI) | (GETW (cb + CB_INC) << 16);
-            pkt.data[PPD_OPC] = OPC_SNDMSG;
-            pkt.data[PPD_FLAGS] = 0;
-            CI_PUT16 (pkt.data, PPD_LENGTH, len + SCS_APPL);
-            CI_PUT16 (pkt.data, PPD_MTYPE, DG_SCSMSG);
-            CI_PUT16 (pkt.data, SCS_MTYPE, SCS_APPMSG);
-            CI_PUT16 (pkt.data, SCS_CREDIT, 1);
-            //conn->credits--;
-            rcc = GETW (cb + CB_RCC);
-            rcc--;
-            PUTW (cb + CB_RCC, rcc);
-            CI_PUT32 (pkt.data, SCS_DSTCON, srccon);
-            CI_PUT32 (pkt.data, SCS_SRCCON, dstcon);
-            memcpy (&pkt.data[SCS_APPL], &DM[dma >> 1], len);
-            len = len + SCS_APPL;
-            }
-        else {
-            len = GETW (rsc + HM_BC);
-            pkt.data[PPD_OPC] = GETDB (dma + 000);             /* opcode */
-            pkt.data[PPD_FLAGS] = GETDB (dma + 001);
-            if ((pkt.data[PPD_OPC] == OPC_SNDDG) || (pkt.data[PPD_OPC] == OPC_SNDMSG)) {
-                memcpy (&pkt.data[PPD_MTYPE], &DM[(dma + 002) >> 1], len - 2);
-                CI_PUT16 (pkt.data, PPD_LENGTH, len - 2);
-                len = len + PPD_HDR;
-                }
-            else {
-                memcpy (&pkt.data[PPD_LENGTH], &DM[(dma + 002) >> 1], len - 2);
-                len = len + PPD_HDR - 2;
-                }
-            }
+    if ((opc == 020000) || (opc == 070000)) {           /* FIXME: This case possibly not used */
+        if (len == 0)
+            len = 0x24;
+        cb = GETP (rsc + HM_CB);                        /* get connection block */
+        pkt.data[PPD_PORT] = GETB (cb + CB_NOD);
+        srccon = GETW (cb + CB_CID);
+        srccon = srccon | (GETW (cb + CB_CID + 002) << 16);
+        dstcon = GETW (cb + CB_VTI) | (GETW (cb + CB_INC) << 16);
+        pkt.data[PPD_OPC] = OPC_SNDMSG;
+        pkt.data[PPD_FLAGS] = 0;
+        CI_PUT16 (pkt.data, PPD_LENGTH, len + SCS_APPL);
+        CI_PUT16 (pkt.data, PPD_MTYPE, DG_SCSMSG);
+        CI_PUT16 (pkt.data, SCS_MTYPE, SCS_APPMSG);
+        CI_PUT16 (pkt.data, SCS_CREDIT, 1);
+        //conn->credits--;
+        rcc = GETW (cb + CB_RCC);
+        rcc--;
+        PUTW (cb + CB_RCC, rcc);
+        CI_PUT32 (pkt.data, SCS_DSTCON, srccon);
+        CI_PUT32 (pkt.data, SCS_SRCCON, dstcon);
+        memcpy (&pkt.data[SCS_APPL], &DM[dma >> 1], len);
+        len = len + SCS_APPL;
         }
     else {
-        if ((opc == 020000) || (opc == 070000)) {
-            if (len == 0)
-                len = 0x24;
-            cb = GETP (rsc + HM_CB);                    /* get connection block */
-            pkt.data[PPD_PORT] = GETB (cb + CB_NOD);
-            srccon = GETW (cb + CB_CID);
-            srccon = srccon | (GETW (cb + CB_CID + 002) << 16);
-            dstcon = GETW (cb + CB_VTI) | (GETW (cb + CB_INC) << 16);
-            pkt.data[PPD_OPC] = OPC_SNDMSG;
-            pkt.data[PPD_FLAGS] = 0;
-            CI_PUT16 (pkt.data, PPD_LENGTH, len + SCS_APPL - PPD_MSGHDR);
-            CI_PUT16 (pkt.data, PPD_MTYPE, DG_SCSMSG);
-            CI_PUT16 (pkt.data, SCS_MTYPE, SCS_APPMSG);
-            CI_PUT16 (pkt.data, SCS_CREDIT, 1);
-            //conn->credits--;
-            rcc = GETW (cb + CB_RCC);
-            rcc--;
-            PUTW (cb + CB_RCC, rcc);
-            CI_PUT32 (pkt.data, SCS_DSTCON, srccon);
-            CI_PUT32 (pkt.data, SCS_SRCCON, dstcon);
-            memcpy (&pkt.data[SCS_APPL], &CM[(rsc + HM_MSG) >> 1], len);
-            len = len + SCS_APPL;
+        len = GETW (rsc + HM_BC);
+        pkt.data[PPD_OPC] = GETDB (dma + 000);          /* opcode */
+        pkt.data[PPD_FLAGS] = GETDB (dma + 001);
+        if ((pkt.data[PPD_OPC] == OPC_SNDDG) || (pkt.data[PPD_OPC] == OPC_SNDMSG)) {
+            memcpy (&pkt.data[PPD_MTYPE], &DM[(dma + 002) >> 1], len - 2);
+            CI_PUT16 (pkt.data, PPD_LENGTH, len - 2);
+            len = len + PPD_HDR;
             }
         else {
-            pkt.data[PPD_OPC] = GETB (rsc + HM_MSG);           /* opcode */
-            pkt.data[PPD_FLAGS] = GETB (rsc + HM_MSG + 001);
-            if ((pkt.data[PPD_OPC] == OPC_SNDDG) || (pkt.data[PPD_OPC] == OPC_SNDMSG)) {
-                memcpy (&pkt.data[PPD_MTYPE], &CM[(rsc + HM_MSG + 002) >> 1], len - 2);
-                CI_PUT16 (pkt.data, PPD_LENGTH, len - 2);
-                len = len + PPD_HDR;
-                }
-            else {
-                memcpy (&pkt.data[PPD_LENGTH], &CM[(rsc + HM_MSG + 002) >> 1], len - 2);
-                len = len + PPD_HDR - 2;
-                }
+            memcpy (&pkt.data[PPD_LENGTH], &DM[(dma + 002) >> 1], len - 2);
+            len = len + PPD_HDR - 2;
             }
         }
-    if (opc == 034000)
-        pkt.data[PPD_FLAGS] |= (PPD_PS0 << PPD_V_PS);       /* path A */
-    else if (opc == 054000)
-        pkt.data[PPD_FLAGS] |= (PPD_PS1 << PPD_V_PS);       /* path B */
-    else
-        pkt.data[PPD_FLAGS] |= (PPD_PSAUTO << PPD_V_PS);    /* path auto? */
-    pkt.length = len;
-    r = kci_send_int (&kci_unit, &pkt);
-#if 0
-    if (len != 077)                                     /* not in data memory */
-        break;
-    if (flgs & 0200)                                    /* sequenced message? */
-        break;
     }
-#endif
+else {
+    if ((opc == 020000) || (opc == 070000)) {
+        if (len == 0)
+            len = 0x24;
+        cb = GETP (rsc + HM_CB);                        /* get connection block */
+        pkt.data[PPD_PORT] = GETB (cb + CB_NOD);
+        srccon = GETW (cb + CB_CID);
+        srccon = srccon | (GETW (cb + CB_CID + 002) << 16);
+        dstcon = GETW (cb + CB_VTI) | (GETW (cb + CB_INC) << 16);
+        pkt.data[PPD_OPC] = OPC_SNDMSG;
+        pkt.data[PPD_FLAGS] = 0;
+        CI_PUT16 (pkt.data, PPD_LENGTH, len + SCS_APPL - PPD_MSGHDR);
+        CI_PUT16 (pkt.data, PPD_MTYPE, DG_SCSMSG);
+        CI_PUT16 (pkt.data, SCS_MTYPE, SCS_APPMSG);
+        CI_PUT16 (pkt.data, SCS_CREDIT, 1);
+        //conn->credits--;
+        rcc = GETW (cb + CB_RCC);
+        rcc--;
+        PUTW (cb + CB_RCC, rcc);
+        CI_PUT32 (pkt.data, SCS_DSTCON, srccon);
+        CI_PUT32 (pkt.data, SCS_SRCCON, dstcon);
+        memcpy (&pkt.data[SCS_APPL], &CM[(rsc + HM_MSG) >> 1], len);
+        len = len + SCS_APPL;
+        }
+    else {
+        pkt.data[PPD_OPC] = GETB (rsc + HM_MSG);        /* opcode */
+        pkt.data[PPD_FLAGS] = GETB (rsc + HM_MSG + 001);
+        if ((pkt.data[PPD_OPC] == OPC_SNDDG) || (pkt.data[PPD_OPC] == OPC_SNDMSG)) {
+            memcpy (&pkt.data[PPD_MTYPE], &CM[(rsc + HM_MSG + 002) >> 1], len - 2);
+            CI_PUT16 (pkt.data, PPD_LENGTH, len - 2);
+            len = len + PPD_HDR;
+            }
+        else {
+            memcpy (&pkt.data[PPD_LENGTH], &CM[(rsc + HM_MSG + 002) >> 1], len - 2);
+            len = len + PPD_HDR - 2;
+            }
+        }
+    }
+if (opc == 034000)
+    pkt.data[PPD_FLAGS] |= (PPD_PS0 << PPD_V_PS);       /* path A */
+else if (opc == 054000)
+    pkt.data[PPD_FLAGS] |= (PPD_PS1 << PPD_V_PS);       /* path B */
+else
+    pkt.data[PPD_FLAGS] |= (PPD_PSAUTO << PPD_V_PS);    /* path auto? */
+pkt.length = len;
+r = kci_send_int (&kci_unit, &pkt);
+
+if (cq == 0) {
+    if (GETW (rsc + HM_CTX) == 0) {
+        if (pkt.data[PPD_OPC] == OPC_SNDMSG)
+            cq = kh + KH_SRR;
+        else
+            cq = kh + KH_DRR;
+        sim_printf ("Returning buffer %07o to queue at %07o\n", rsc, cq);
+        put_to_queue (cq, rsc);
+        }
+    }
 }
 
 void kci_process (uint32 rsc, uint32 cq)
@@ -957,16 +962,18 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
 
     rsc = get_from_queue (wq);                          /* get resource from work queue */
     kci_process (rsc, cq);                              /* process resource */
-//    if (GETW (rsc + HM_CTX) != 0) {
-//        kci_req = rsc;
-//        sim_printf ("K.ci start pending request for %07o\n", kci_req);
-//        }
-//    else
-//        put_to_queue (cq, rsc);                             /* put resource to completion queue */
+#if 0
+    if (GETW (rsc + HM_CTX) != 0) {
+        kci_req = rsc;
+        sim_printf ("K.ci start pending request for %07o\n", kci_req);
+        }
+    else if (cq)
+        put_to_queue (cq, rsc);                             /* put resource to completion queue */
+#endif
 
     if (cq)
         put_to_queue (cq, rsc);                             /* put resource to completion queue */
-    else {
+    else if (GETW (rsc + HM_CTX) != 0) {
         kci_req = rsc;
         sim_printf ("K.ci start pending request for %07o\n", kci_req);
         }
