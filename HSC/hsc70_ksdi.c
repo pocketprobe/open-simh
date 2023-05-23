@@ -186,21 +186,6 @@
 #define F_CRUN          0110
 #define F_CFLG          0111
 
-/* data buffer */
-
-#define B_OERR          000000                          /* original error bits */
-#define B_LLBN          000002                          /* LBN (low) */
-#define B_HLBN          000004                          /* LBN (high) */
-#define B_EFLG          000006                          /* error recovery flags */
-#define B_ECCN          000007                          /* ECC symbols corrected */
-#define B_LARC          000010                          /* error retry count A */
-#define B_LBRC          000011                          /* error retry count B */
-#define B_LCRC          000012                          /* error retry count C */
-#define B_ERCL          000013                          /* error recovery command */
-#define B_CMP           000014
-#define B_HDRS          000020                          /* sector headers */
-#define B_DATA          000040                          /* sector data */
-
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
 
@@ -1072,7 +1057,7 @@ print_route (rte + 020);
 sim_printf ("RTE: %07o\n", rte);
 
 flg = GETW (rte);                                       /* get opcode/flags from route */
-sim_printf ("OPC: %o\n", (flg >> 8));
+sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
 if ((cyl == 273) && ((ksdi_mode & MODE_OB) == 0)) {
     PUTW (frb + F_ESUM, 1);
     dst = GETW (rte + V_AERR);                          /* get error destination */

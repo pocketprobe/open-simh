@@ -77,6 +77,14 @@
 #define HM_DGD          0050                            /* discarded datagrams */
 #define HM_RDR          0054                            /* discarded RTNDATs */
 
+/* host message block - transfers */
+
+#define HM_CR           000000                          /* counter queue */
+#define HM_BCT          000030                          /* byte count */
+#define HM_OFF          000034                          /* buffer offset */
+#define HM_BNM          000040                          /* buffer name */
+#define HM_CON          000044                          /* connection ID */
+
 /* system block */
 
 #define SB_LNK          0000                            /* link to next */
@@ -147,12 +155,47 @@
 #define CB_VCT          0136
 #define CB_DBG          0137
 
+/* fragment request block */
+
+#define F_LINK          0000
+#define F_PCTR          0002
+#define F_RTE           0004
+#define F_MOD           0006
+#define F_CTRL          0010
+#define F_OFF           0012
+#define F_LLBN          0016
+#define F_RT1           0020
+#define F_HLBN          0022
+#define F_SCT           0024
+#define F_RT2           0024
+#define F_TRK           0026
+#define F_GRP           0030
+#define F_RT3           0030
+#define F_RSB           0032
+#define F_SCNT          0034
+#define F_SRTE          0036
+#define F_BFHD          0040
+#define F_BFTL          0042
+#define F_SBFH          0054
+#define F_SFLG          0054
+#define F_SSCT          0056
+#define F_CHO           0056
+#define F_QSLT          0060
+#define F_CB            0064
+#define F_NODE          0066
+#define F_SCR           0070
+#define F_NBFR          0070
+#define F_BFCT          0072
+#define F_DSTR          0074
+#define F_ESUM          0076
+#define F_CRUN          0110
+#define F_CFLG          0111
+
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
 
-uint32 kci_req = 0;
-CI_PKT kci_pkt;
-t_bool kci_pkt_pend = FALSE;
+uint32 kci_req[CI_MAX_NODES];                           /* pending request buffers */
+uint32 kci_vcf[CI_MAX_NODES];                           /* virtual circuit flags */
 
 t_stat kci_svc (UNIT *uptr);
 t_stat kci_reset (DEVICE *dptr);
@@ -411,6 +454,49 @@ while (cb != 0) {
 return SCPE_OK;
 }
 
+void kci_print_frb (uint32 frb)
+{
+print_word (NULL, frb, "F$LINK", F_LINK, 2);
+print_word (NULL, frb, "F$PCTR", F_PCTR, 2);
+print_word (NULL, frb, "F$RTE ", F_RTE , 2);
+print_word (NULL, frb, "F$MOD ", F_MOD , 2);
+print_word (NULL, frb, "F$CTRL", F_CTRL, 2);
+print_word (NULL, frb, "F$OFF ", F_OFF , 4);
+print_word (NULL, frb, "F$LLBN", F_LLBN, 2);
+print_word (NULL, frb, "F$RT1 ", F_RT1 , 2);
+print_word (NULL, frb, "F$HLBN", F_HLBN, 2);
+print_word (NULL, frb, "F$SCT ", F_SCT , 0);
+print_word (NULL, frb, "F$RT2 ", F_RT2 , 2);
+print_word (NULL, frb, "F$TRK ", F_TRK , 1);
+print_word (NULL, frb, "UNUSED", 027, 1);
+print_word (NULL, frb, "F$GRP ", F_GRP , 0);
+print_word (NULL, frb, "F$RT3 ", F_RT3 , 2);
+print_word (NULL, frb, "F$RSB ", F_RSB , 2);
+print_word (NULL, frb, "F$SCNT", F_SCNT, 1);
+print_word (NULL, frb, "UNUSED", 035, 1);
+print_word (NULL, frb, "F$SRTE", F_SRTE, 2);
+print_word (NULL, frb, "F$BFHD", F_BFHD, 2);
+print_word (NULL, frb, "F$BFTL", F_BFTL, 2);
+print_word (NULL, frb, "UNUSED", 044, 8);
+print_word (NULL, frb, "F$SBFH", F_SBFH, 0);
+print_word (NULL, frb, "F$SFLG", F_SFLG, 2);
+print_word (NULL, frb, "F$SSCT", F_SSCT, 0);
+print_word (NULL, frb, "F$CHO ", F_CHO , 2);
+print_word (NULL, frb, "F$QSLT", F_QSLT, 2);
+print_word (NULL, frb, "UNUSED", 062, 2);
+print_word (NULL, frb, "F$CB  ", F_CB  , 2);
+print_word (NULL, frb, "F$NODE", F_NODE, 2);
+print_word (NULL, frb, "F$SCR ", F_SCR , 0);
+print_word (NULL, frb, "F$NBFR", F_NBFR, 2);
+print_word (NULL, frb, "F$BFCT", F_BFCT, 2);
+print_word (NULL, frb, "F$DSTR", F_DSTR, 2);
+print_word (NULL, frb, "F$ESUM", F_ESUM, 2);
+print_word (NULL, frb, "UNUSED", 0100, 8);
+print_word (NULL, frb, "F$CRUN", F_CRUN, 1);
+print_word (NULL, frb, "F$CFLG", F_CFLG, 1);
+print_word (NULL, frb, "UNUSED", 0112, 6);
+}
+
 t_stat ci_request_id (UNIT *uptr, CI_PKT *pkt)
 {
 pkt->data[PPD_STATUS] = 0;                              /* status: OK */
@@ -471,11 +557,12 @@ return hm;
 t_stat kci_receive_int (UNIT *uptr, CI_PKT *pkt, uint32 cq)
 {
 uint32 kh = kci_dib.cma;
-uint32 rsc, dma, opc, lof, len, sb;
+uint32 rsc, dma, opc, lof, len, sb, node;
     uint16 dg_type = CI_GET16 (pkt->data, PPD_MTYPE) & DG_MTYPE;
     uint16 scs_type = CI_GET16 (pkt->data, PPD_STYPE);
 
 opc = pkt->data[PPD_OPC] & ~OPC_M_RECV;
+node = pkt->data[PPD_PORT];
 
 if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
     len = pkt->length - PPD_HDR;
@@ -483,8 +570,8 @@ else
     len = pkt->length - PPD_HDR + 2;
 
 if (opc == OPC_SNDMSG) {
-    if ((kci_req) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* SCS response packet? */
-        rsc = kci_req;
+    if ((kci_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* SCS response packet? */
+        rsc = kci_req[node];
         lof = GETW (rsc + HM_LOF);
         lof = lof & ~0074000;
         lof = lof | 0040000;
@@ -510,8 +597,8 @@ if (rsc == 0) {
 
 PUTW (rsc + HM_CQ, 0);
 PUTW (rsc + HM_LOF, lof);
-PUTB (rsc + HM_CB + 00, pkt->data[PPD_PORT]);           /* source */
-PUTB (rsc + HM_CB + 01, ~(pkt->data[PPD_PORT]));        /* complement */
+PUTB (rsc + HM_CB + 00, node);                          /* source */
+PUTB (rsc + HM_CB + 01, ~node);                         /* complement */
 
 if (((lof & 077) != 077) && (opc == OPC_SNDMSG)) {
     sim_printf ("Receive packet to control memory\n");
@@ -540,9 +627,9 @@ else {
         memcpy (&DM[(dma + 002) >> 1], &pkt->data[PPD_LENGTH], (pkt->length - PPD_LENGTH));
     }
 
-if ((kci_req) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
+if ((kci_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
     sim_printf ("K.ci complete pending request for %07o\n", kci_req);
-    kci_req = 0;
+    kci_req[node] = 0;
     }
 
 if (cq == 0)
@@ -609,6 +696,39 @@ put_to_queue (cq, rsc);
 return SCPE_OK;
 }
 
+t_stat kci_cnfrec (UNIT *uptr, CI_PKT *pkt)
+{
+uint32 frb, ctr, rte, val, cq, flg;
+
+frb = CI_GET32 (pkt->data, PPD_SBNAM);
+ctr = GETP (frb + F_PCTR);
+rte = GETP (frb + F_RTE);                               /* get route */
+
+flg = GETW (rte);                                       /* get opcode/flags from route */
+sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
+
+val = GETW (ctr + C_CNT);                               /* get counter value */
+val = val - 1;                                          /* another operation completed */
+PUTW (ctr + C_CNT, val);                                /* update counter value */
+if (val == 0) {                                         /* all operations complete? */
+    cq = GETP (ctr);
+    sim_printf ("CTR dest = %07o\n", cq);
+    PUTP (ctr, 0);                                      /* clear queue pointer */
+    put_to_queue (cq, ctr);                             /* send counter to completion queue */
+    }
+rte = rte + 010;                                        /* advance route pointer */
+PUTP (frb + F_RTE, rte);
+cq = GETW (rte + V_SUCC);                               /* get success destination */
+if (cq & 0177400)
+    cq = cq << 2;                                       /* direct address */
+else {
+    cq = frb + (cq << 2);                               /* offset into FRB */
+    cq = GETP (cq);
+    }
+put_to_queue (cq, frb);                                 /* send FRB to completion queue */
+return SCPE_OK;
+}
+
 t_stat kci_scsrec (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 msg_type = CI_GET16 (pkt->data, PPD_STYPE);
@@ -659,6 +779,9 @@ switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by po
             return SCPE_OK;                             /* discard */
         break;
 
+    case OPC_CNFREC:
+        return kci_cnfrec (uptr, pkt);
+
     case OPC_REQDATREC:
         return ci_send_data (uptr, pkt);
 
@@ -694,17 +817,27 @@ PUTW (rsc + HM_RDR + 000, 0);                           /* Discarded RTNDATs - l
 PUTW (rsc + HM_RDR + 002, 0);                           /* Discarded RTNDATs - high word */
 }
 
-void kci_set_vc (uint32 node, uint32 state, uint32 mask)
+/* get/set virtual circuit flags */
+
+void kci_set_vc (uint32 rsc)
 {
-if (state)
+uint32 node, vcf, mask;
+
+node = GETW (rsc + HM_CN);                              /* node */
+vcf = GETW (rsc + HM_VCF);                              /* new flags */
+mask = GETW (rsc + HM_MK);                              /* mask */
+
+if (vcf && mask)                                        /* opening VC? */
     ci_open_vc (&kci_unit, node);
-else
+else if (mask)                                          /* closing VC? */
     ci_close_vc (&kci_unit, node);
+kci_vcf[node] = (kci_vcf[node] & ~mask) | (vcf & mask); /* update flags */
+PUTW (rsc + HM_VCF, kci_vcf[node]);                     /* return updated value */
 }
 
 /* Local K.ci commands */
 
-void kci_local_cmd (uint32 rsc, uint32 cq)
+void kci_local_cmd (uint32 rsc, uint32 *cq)
 {
 uint32 opc, p1, p2, p3;
 
@@ -713,20 +846,20 @@ p1 = GETW (rsc + HM_MSG + 002);
 p2 = GETW (rsc + HM_MSG + 004);
 p3 = GETW (rsc + HM_MSG + 006);
 switch (opc) {
-    case 001:                                           /* set virtual circuit? */
-        sim_printf ("local cmd: opc = %d, node = %d, p2 = %06o, p3 = %06o, cq = %06o\n", opc, p1, p2, p3, cq);
-        kci_set_vc (p1, p2, p3);
+    case 001:                                           /* get/set virtual circuit flags */
+        sim_printf ("local cmd: opc = %d, node = %d, p2 = %06o, p3 = %06o, cq = %06o\n", opc, p1, p2, p3, *cq);
+        kci_set_vc (rsc);
         break;
-    case 002:                                           /* show counters */
+    case 002:                                           /* get counters */
         kci_counters (rsc, p1);
         break;
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
-        sim_printf ("local cmd: opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, cq);
+        sim_printf ("local cmd: opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
         PUTW (rsc + HM_LOF, 060077);
         break;
     default:
-        sim_printf ("local cmd: opc = %d, p1 = %06o, p2 = %06o, p3 = %06o, cq = %06o\n", opc, p1, p2, p3, cq);
+        sim_printf ("unknown local cmd\n");
         break;
     }
 }
@@ -744,7 +877,7 @@ return ci_send_ppd (uptr, pkt);
 
 /* Send a datagram */
 
-void kci_send (uint32 rsc, uint32 cq)
+void kci_send (uint32 rsc, uint32 *cq)
 {
 uint32 len, opc, flgs, node, dma, cb, srccon, dstcon, rcc, off;
 uint32 kh = kci_dib.cma;
@@ -758,7 +891,7 @@ node = GETB (rsc + HM_CB);                              /* destination node */
 
 pkt.data[PPD_PORT] = GETB (rsc + HM_CB);
 
-if (opc == 020000) {                                    /* SCS application message */
+if ((opc == 020000) || (opc == 040000)) {               /* SCS application message */
     cb = GETP (rsc + HM_CB);                            /* get connection block */
     pkt.data[PPD_PORT] = GETB (cb + CB_NOD);
     srccon = GETW (cb + CB_CID);
@@ -825,24 +958,80 @@ else
 pkt.length = len;
 r = kci_send_int (&kci_unit, &pkt);
 
-if (cq == 0) {
+if (*cq == 0) {
     if (GETW (rsc + HM_CTX) == 0) {
         if (pkt.data[PPD_OPC] == OPC_SNDMSG)
-            cq = kh + KH_SRR;
+            *cq = kh + KH_SRR;
         else
-            cq = kh + KH_DRR;
-        sim_printf ("Returning buffer %07o to queue at %07o\n", rsc, cq);
-        put_to_queue (cq, rsc);
+            *cq = kh + KH_DRR;
+        sim_printf ("Returning buffer %07o to queue at %07o\n", rsc, *cq);
+//        put_to_queue (cq, rsc);
+        }
+    else {
+        kci_req[node] = rsc;
+        sim_printf ("K.ci start pending request for %07o\n", rsc);
         }
     }
 }
 
-void kci_process_frb (uint32 rsc, uint32 cq)
+void kci_process_frb (uint32 rsc, uint32 *cq)
 {
-    
+uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma;
+uint32 kh = kci_dib.cma;
+CI_PKT pkt;
+t_stat r;
+
+*cq = 0;
+sim_printf ("K.ci FRB:\n");
+kci_print_frb (rsc);
+hm = GETP (rsc + F_PCTR);                               /* get host message */
+cb = GETP (hm + HM_CB);                                 /* get connection block */
+
+pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
+pkt.data[PPD_STATUS] = 0;                               /* status */
+pkt.data[PPD_OPC] = OPC_SNDDAT;                         /* opcode */
+// TODO: Need to set flags (multiple)
+pkt.data[PPD_FLAGS] = 0;                                /* flags */
+
+con = GETL (hm + HM_CON);
+bnm = GETL (hm + HM_BNM);
+bct = GETL (hm + HM_BCT);
+roff = GETL (hm + HM_OFF);
+soff = GETL (rsc + F_OFF);
+
+CI_PUT32 (pkt.data, PPD_LCONID, con);                   /* local connection ID */
+CI_PUT32 (pkt.data, PPD_RSPID, 1);                      /* local response ID */
+CI_PUT32 (pkt.data, PPD_SBNAM, rsc);                    /* send buffer name */
+CI_PUT32 (pkt.data, PPD_RBNAM, bnm);                    /* receive buffer name */
+
+while (bct) {
+    len = (bct > CI_MAXDAT) ? CI_MAXDAT : bct;
+    pkt.length = len + CI_DATHDR;
+    CI_PUT32 (pkt.data, PPD_XFRSZ, bct);                /* total transfer size */
+    CI_PUT32 (pkt.data, PPD_SBOFF, soff);               /* send buffer offset */
+    CI_PUT32 (pkt.data, PPD_RBOFF, roff);               /* receive buffer offset */
+    if (len <= CI_MAXDAT)
+        pkt.data[PPD_FLAGS] |= PPD_LP;                  /* last packet */
+    bd = GETP (rsc + F_BFHD);                           /* get next buffer descriptor */
+    dma = GETW (bd + 002);
+    dma = (dma << 6) & DMEMMASK;                        /* data memory address */
+    dma = dma + B_DATA;                                 /* point to sector data */
+    sim_printf ("DMEM addr = %o\n", dma);
+    memcpy (&pkt.data[CI_DATHDR], &DM[dma >> 1], len);  /* copy to packet buffer */
+    r = ci_send_ppd (&kci_unit, &pkt);                  /* send to host */
+    if (r != SCPE_OK) {
+        sim_printf ("K.ci stalled during SNDDAT operation\n");
+        break;
+        }
+    bd = get_from_queue (rsc + F_BFHD);                 /* dequeue buffer descriptor */
+    put_to_queue (kh + KG_FBU, bd);                     /* put to free buffer queue */
+    soff += len;
+    roff += len;
+    bct -= len;
+    }
 }
 
-void kci_process (uint32 rsc, uint32 cq)
+void kci_process (uint32 rsc, uint32 *cq)
 {
 uint16 opc = GETW (rsc + HM_LOF) & 074000;
         for (int i = 0; i < 12; i++)
@@ -856,6 +1045,7 @@ switch (opc) {
     case 074000:                                        /* send datagram (path auto?) */
     case 030000:                                        /* send message */
     case 020000:                                        /* send SCS message? */
+    case 040000:                                        /* send SCS message? */
         kci_send (rsc, cq);
         break;
     case 000000:
@@ -863,6 +1053,8 @@ switch (opc) {
         break;
     default:
         sim_printf ("K.ci unknown opcode: %o\n", opc);
+        for (int i = 12; i < 32; i++)
+            sim_printf ("S %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
         break;
     }
 }
@@ -889,20 +1081,18 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         }
 
     rsc = get_from_queue (wq);                          /* get resource from work queue */
-    kci_process (rsc, cq);                              /* process resource */
+    sim_printf ("Processing packet %07o from queue %07o\n", rsc, wq);
+    kci_process (rsc, &cq);                             /* process resource */
 
     if (cq)
         put_to_queue (cq, rsc);                         /* put resource to completion queue */
-    else if (GETW (rsc + HM_CTX) != 0) {
-        kci_req = rsc;
-        sim_printf ("K.ci start pending request for %07o\n", kci_req);
-        }
     }
 }
 
 t_stat kci_svc (UNIT *uptr)
 {
 uint32 kh = kci_dib.cma;
+CI_PKT pkt;
 t_stat r;
 
 kci_process_queue (kh, kh + KH_0WK);                    /* process work queues */
@@ -911,13 +1101,11 @@ kci_process_queue (kh, kh + KH_2WK);
 kci_process_queue (kh, kh + KH_3WK);
 
 for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
-    if (!kci_pkt_pend) {
-        r = ci_receive_ppd (uptr, &kci_pkt);            /* get next packet */
-        // TODO: handle errors from ci_receive
-        if (r != SCPE_OK)
-            break;
-        }
-    r = kci_receive (&kci_pkt);                         /* process packet */
+    r = ci_receive_ppd (uptr, &pkt);                    /* get next packet */
+    // TODO: handle errors from ci_receive
+    if (r != SCPE_OK)
+        break;
+    r = kci_receive (&pkt);                             /* process packet */
     if (r != SCPE_OK)
         return r;
     };
@@ -927,6 +1115,9 @@ return ci_port_svc (uptr);
 
 t_stat kci_reset (DEVICE *dptr)
 {
-kci_req = 0;
+for (int i = 0; i < CI_MAX_NODES; i++) {
+    kci_req[i] = 0;
+    kci_vcf[i] = 0;
+    }
 return ci_port_reset (dptr);
 }

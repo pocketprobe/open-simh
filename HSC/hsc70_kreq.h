@@ -47,17 +47,19 @@
 #define K_RUN           0001
 #define K_HALT          0002
 
-#define GETW(off)       RdxMemW (CM, off)
 #define GETB(off)       RdxMemB (CM, off)
-#define PUTW(off, val)  WrxMemW (CM, off, val)
+#define GETW(off)       RdxMemW (CM, off)
+#define GETL(off)       ((GETW (off + 2) << 16) | GETW (off))
 #define PUTB(off, val)  WrxMemB (CM, off, val)
+#define PUTW(off, val)  WrxMemW (CM, off, val)
+#define PUTL(off, val)  PUTW (off + 2, (val >> 16)); PUTW (off, (val & 0177777))
 #define GETP(off)       ((GETW (off) & 0077776) ? (GETW (off) << 2) : GETW (off))
 #define PUTP(off, val)  PUTW (off, (val >> 2))
 
-#define GETDW(off)      RdxMemW (DM, off)
 #define GETDB(off)      RdxMemB (DM, off)
-#define PUTDW(off, val) WrxMemW (DM, off, val)
+#define GETDW(off)      RdxMemW (DM, off)
 #define PUTDB(off, val) WrxMemB (DM, off, val)
+#define PUTDW(off, val) WrxMemW (DM, off, val)
 
 #define Q_LOCKED(q)     (GETW (q) == 0100000)
 #define Q_EMPTY(q)      (GETW (q) == 0)
@@ -111,6 +113,25 @@
 #define KT_S1           0160                            /* drive state area (port 1) */
 #define KT_S2           0200                            /* drive state area (port 2) */
 #define KT_S3           0220                            /* drive state area (port 3) */
+
+/* data buffer */
+
+#define B_OERR          000000                          /* original error bits */
+#define B_LLBN          000002                          /* LBN (low) */
+#define B_HLBN          000004                          /* LBN (high) */
+#define B_EFLG          000006                          /* error recovery flags */
+#define B_ECCN          000007                          /* ECC symbols corrected */
+#define B_LARC          000010                          /* error retry count A */
+#define B_LBRC          000011                          /* error retry count B */
+#define B_LCRC          000012                          /* error retry count C */
+#define B_ERCL          000013                          /* error recovery command */
+#define B_CMP           000014
+#define B_HDRS          000020                          /* sector headers */
+#define B_DATA          000040                          /* sector data */
+#define B_6EDC          001040                          /* EDC (16-bit) */
+#define B_6ECC          001042                          /* ECC (16-bit) */
+#define B_6EWC          001072
+#define B_6PED          001074
 
 /* debugging bitmaps */
 
