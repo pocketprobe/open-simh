@@ -978,12 +978,15 @@ PUTDW (dma + 01000, 0105);                              /* TODO: See ILDISK:5144
 void process_frb (uint32 frb, uint32 cyl, uint32 sct)
 {
 uint32 fbu, scnt, tmp, dma, lbn, trk, rte, dst, ctr, flg;
+uint32 ks = ksdi_dib.cma;
 
 lbn = GETB (frb + F_HLBN);                              /* high LBN */
 lbn = lbn << 16;
 lbn = lbn | GETW (frb + F_LLBN);                        /* low LBN */
 trk = GETW (frb + F_TRK);                               /* track */
 scnt = GETB (frb + F_SCNT);                             /* sector count */
+rte = GETP (frb + F_RTE);                               /* get route */
+flg = GETW (rte);                                       /* get opcode/flags from route */
 
 //for (int i = 0; i < 37; i++)
 //    sim_printf ("%07o: %06o\n", frb + (i << 1), GETW (frb + (i << 1)));
@@ -1038,6 +1041,10 @@ else {
             sim_printf ("Circular FBU reference at %07o\n", fbu);
             break;
             }
+        if (flg & V_FB) {                               /* free buffers? */
+            fbu = get_from_queue (frb + F_BFHD);        /* dequeue buffer descriptor */
+            put_to_queue (ks + KG_FBU, fbu);            /* put to free buffer queue */
+            }
         fbu = tmp;
         }
     }
@@ -1048,7 +1055,6 @@ ctr = GETP (frb + F_PCTR);                              /* get counter */
 print_counter (ctr);
 sim_printf ("CTR: %07o\n", ctr);
 
-rte = GETP (frb + F_RTE);                               /* get route */
 //for (int i = 0; i < 10; i++)
 //    sim_printf ("%07o: %06o\n", rte + (i << 1), GETW (rte + (i << 1)));
 print_route (rte);
