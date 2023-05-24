@@ -436,6 +436,10 @@ t_stat ci_send_ppd (UNIT *uptr, CI_PKT *pkt)
 uint32 opcode = pkt->data[PPD_OPC];
 t_stat r;
 
+if (pkt->length > CI_MAXFR) {                           /* check length */
+    sim_printf ("CI packet length error in ci_send_ppd: %d\n", pkt->length);
+    return SCPE_IERR;
+    }
 pkt->data[PPD_STATUS] = STS_OK;                         /* assume ok */
 switch (opcode) {
 
@@ -1376,6 +1380,11 @@ for (i = 0; i < CI_MAX_NODES; i++) {
             return SCPE_OK;                             /* try again later */
         if (pkt->length == PPD_HDR) {
             pkt->length = CI_GET16 (pkt->data, 0);      /* get total packet length */
+            if (pkt->length > CI_MAXFR) {               /* check length is valid */
+                sim_printf ("Received packet with invalid length %d, socket: %d\n", pkt->length, link->socket);
+                ci_link_fail (uptr, link);              /* close the VC */
+                break;
+                }
             if (pkt->offset < pkt->length)              /* more to receive? */
                 continue;                               /* yes, receive packet body */
             }
