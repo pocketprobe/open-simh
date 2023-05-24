@@ -224,7 +224,7 @@ if (sysap) {
     sprintf (&pkt->data[SCS_APPL + 0x14], "%-16s", sysap->name);
     }
 else {
-    CI_PUT16 (pkt->data, SCS_APPL, 0x20A4);             /* no such object */
+    CI_PUT16 (pkt->data, SCS_APPL, SCS_STNOMAT);        /* no match */
     }
 return ci_send_ppd (&hsc_unit[0], pkt);                 /* send response */
 }
@@ -649,7 +649,7 @@ while (xfrsz) {
     CI_PUT32 (pkt.data, PPD_XFRSZ, xfrsz);
     CI_PUT32 (pkt.data, PPD_SBOFF, bdt->boff);
     CI_PUT32 (pkt.data, PPD_RBOFF, rboff);
-    if (xfrsz <= CI_MAXDAT)
+    if (len <= CI_MAXDAT)
         pkt.data[PPD_FLAGS] |= PPD_LP;                  /* last packet */
     memcpy (&pkt.data[CI_DATHDR], &bdt->buf[bdt->boff], len);
     r = ci_send_ppd (&hsc_unit[0], &pkt);
