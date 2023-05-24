@@ -46,7 +46,7 @@
 #define HM_DUO          0002
 #define HM_CTX          0002                            /* context? */
 #define HM_CQ           0004                            /* completion queue */
-#define HM_DX           0004
+#define HM_DX           0004                            /* pointer to DX$ structure */
 #define HM_ERR          0006
 #define HM_LOF          0010                            /* length, opcode, flags */
 #define HM_CB           0012                            /* connection block */
@@ -525,6 +525,52 @@ return SCPE_OK;
 
 t_stat ci_receive_data (UNIT *uptr, CI_PKT *pkt)
 {
+uint32 bct, len, bd, dma, rte, flg, ctr, frb, val, cq;
+uint32 kh = kci_dib.cma;
+t_stat r;
+
+frb = CI_GET32 (pkt->data, PPD_RBNAM);
+bct = CI_GET32 (pkt->data, PPD_XFRSZ);
+len = (bct > CI_MAXDAT) ? CI_MAXDAT : bct;
+
+bd = GETP (kh + KG_FBU);                                /* get a free data memory buffer */
+bd = get_from_queue (bd);
+dma = GETW (bd + 002);
+dma = (dma << 6) & DMEMMASK;                            /* data memory address */
+dma = dma + B_DATA;                                     /* point to sector data */
+sim_printf ("DMEM addr = %o\n", dma);
+memcpy (&DM[dma >> 1], &pkt->data[CI_DATHDR], len);     /* copy to packet buffer */
+put_to_queue (frb + F_BFHD, bd);
+
+if (pkt->data[PPD_FLAGS] & PPD_LP) {                    /* last packet? */
+    ctr = GETP (frb + F_PCTR);
+    rte = GETP (frb + F_RTE);                               /* get route */
+
+    flg = GETW (rte);                                       /* get opcode/flags from route */
+    sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
+
+    if (flg & V_DC) {                                       /* decrement counter? */
+        val = GETW (ctr + C_CNT);                           /* get counter value */
+        val = val - 1;                                      /* another operation completed */
+        PUTW (ctr + C_CNT, val);                            /* update counter value */
+        if (val == 0) {                                     /* all operations complete? */
+            cq = GETP (ctr);
+            sim_printf ("CTR dest = %07o\n", cq);
+            PUTP (ctr, 0);                                  /* clear queue pointer */
+            put_to_queue (cq, ctr);                         /* send counter to completion queue */
+            }
+        }
+    rte = rte + 010;                                        /* advance route pointer */
+    PUTP (frb + F_RTE, rte);
+    cq = GETW (rte + V_SUCC);                               /* get success destination */
+    if (cq & 0177400)
+        cq = cq << 2;                                       /* direct address */
+    else {
+        cq = frb + (cq << 2);                               /* offset into FRB */
+        cq = GETP (cq);
+        }
+    put_to_queue (cq, frb);                                 /* send FRB to completion queue */
+    }
 return SCPE_OK;
 }
 
@@ -679,6 +725,10 @@ if (rsc == 0) {
     return SCPE_OK;
     }
 
+if (pkt->data[0x28] == 0x04) {
+    if (!sim_log)
+        sim_set_logon (0, "hsc_mscp.log");
+    }
 rcc = GETW (cb + CB_RCC);
 rcc = rcc + CI_GET16 (pkt->data, SCS_CREDIT);
 PUTW (cb + CB_RCC, rcc);
@@ -707,14 +757,16 @@ rte = GETP (frb + F_RTE);                               /* get route */
 flg = GETW (rte);                                       /* get opcode/flags from route */
 sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
 
-val = GETW (ctr + C_CNT);                               /* get counter value */
-val = val - 1;                                          /* another operation completed */
-PUTW (ctr + C_CNT, val);                                /* update counter value */
-if (val == 0) {                                         /* all operations complete? */
-    cq = GETP (ctr);
-    sim_printf ("CTR dest = %07o\n", cq);
-    PUTP (ctr, 0);                                      /* clear queue pointer */
-    put_to_queue (cq, ctr);                             /* send counter to completion queue */
+if (flg & V_DC) {                                       /* decrement counter? */
+    val = GETW (ctr + C_CNT);                           /* get counter value */
+    val = val - 1;                                      /* another operation completed */
+    PUTW (ctr + C_CNT, val);                            /* update counter value */
+    if (val == 0) {                                     /* all operations complete? */
+        cq = GETP (ctr);
+        sim_printf ("CTR dest = %07o\n", cq);
+        PUTP (ctr, 0);                                  /* clear queue pointer */
+        put_to_queue (cq, ctr);                         /* send counter to completion queue */
+        }
     }
 rte = rte + 010;                                        /* advance route pointer */
 PUTP (frb + F_RTE, rte);
@@ -879,7 +931,7 @@ return ci_send_ppd (uptr, pkt);
 
 void kci_send (uint32 rsc, uint32 *cq)
 {
-uint32 len, opc, flgs, node, dma, cb, srccon, dstcon, rcc, off;
+uint32 len, opc, flgs, node, dma, cb, srccon, dstcon, rcc, off, dx, val;
 uint32 kh = kci_dib.cma;
 CI_PKT pkt;
 t_stat r = SCPE_OK;
@@ -958,6 +1010,20 @@ else
 pkt.length = len;
 r = kci_send_int (&kci_unit, &pkt);
 
+if (opc == 040000) {
+#if 0
+    dx = GETP (rsc + HM_DX);
+    val = GETW (dx + C_CNT);
+    sim_printf ("DX count %d -> %d\n", val, (val - 2));
+    put_to_queue (dx + 004, rsc);
+    val = val - 2;
+    if (val == 0) {
+        *cq = GETP (dx);
+        put_to_queue (*cq, dx);
+        }
+#endif
+    *cq = 0;
+    }
 if (*cq == 0) {
     if (GETW (rsc + HM_CTX) == 0) {
         if (pkt.data[PPD_OPC] == OPC_SNDMSG)
@@ -974,17 +1040,19 @@ if (*cq == 0) {
     }
 }
 
-void kci_process_frb (uint32 rsc, uint32 *cq)
+void kci_send_data (uint32 rsc)
 {
-uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma;
+uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma, rte, flg;
 uint32 kh = kci_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
-*cq = 0;
 sim_printf ("K.ci FRB:\n");
 kci_print_frb (rsc);
 hm = GETP (rsc + F_PCTR);                               /* get host message */
+rte = GETP (rsc + F_RTE);                               /* get route */
+
+flg = GETW (rte);                                       /* get opcode/flags from route */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
 pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
@@ -1023,12 +1091,66 @@ while (bct) {
         sim_printf ("K.ci stalled during SNDDAT operation\n");
         break;
         }
-    bd = get_from_queue (rsc + F_BFHD);                 /* dequeue buffer descriptor */
-    put_to_queue (kh + KG_FBU, bd);                     /* put to free buffer queue */
+    if (flg & V_FB) {                                   /* free buffers? */
+        bd = get_from_queue (rsc + F_BFHD);             /* dequeue buffer descriptor */
+        put_to_queue (kh + KG_FBU, bd);                 /* put to free buffer queue */
+        }
     soff += len;
     roff += len;
     bct -= len;
     }
+}
+
+void kci_request_data (uint32 rsc)
+{
+uint32 hm, cb, con, bnm, bct, roff, soff;
+uint32 kh = kci_dib.cma;
+CI_PKT pkt;
+t_stat r;
+
+sim_printf ("K.ci FRB:\n");
+kci_print_frb (rsc);
+hm = GETP (rsc + F_PCTR);                               /* get host message */
+cb = GETP (hm + HM_CB);                                 /* get connection block */
+
+pkt.length = CI_DATHDR;
+pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
+pkt.data[PPD_STATUS] = 0;                               /* status */
+pkt.data[PPD_OPC] = OPC_REQDAT;                         /* opcode */
+// TODO: Need to set flags (multiple, last packet)
+pkt.data[PPD_FLAGS] = 0;                                /* flags */
+
+con = GETL (hm + HM_CON);
+bnm = GETL (hm + HM_BNM);
+bct = GETL (hm + HM_BCT);
+roff = GETL (hm + HM_OFF);
+soff = GETL (rsc + F_OFF);
+
+CI_PUT32 (pkt.data, PPD_LCONID, con);                   /* local connection ID */
+CI_PUT32 (pkt.data, PPD_RSPID, 1);                      /* local response ID */
+CI_PUT32 (pkt.data, PPD_XFRSZ, bct);                    /* total transfer size */
+CI_PUT32 (pkt.data, PPD_SBNAM, bnm);                    /* send buffer name */
+CI_PUT32 (pkt.data, PPD_SBOFF, soff);                   /* send buffer offset */
+CI_PUT32 (pkt.data, PPD_RBNAM, rsc);                    /* receive buffer name */
+CI_PUT32 (pkt.data, PPD_RBOFF, roff);                   /* receive buffer offset */
+r = ci_send_ppd (&kci_unit, &pkt);
+if (r != SCPE_OK)
+    sim_printf ("K.ci stalled during REQDAT operation\n");
+}
+
+void kci_process_frb (uint32 rsc, uint32 *cq)
+{
+uint32 rte, opc;
+
+*cq = 0;
+rte = GETP (rsc + F_RTE);                               /* get route */
+opc = GETB (rte + V_OPCD);                              /* get opcode */
+if (opc == V_SD)                                        /* send data */
+    kci_send_data (rsc);
+else if (opc == V_RD)                                   /* request data */
+    kci_request_data (rsc);
+else
+    sim_printf ("Unknown route opcode in FRB: %o\n", opc);
 }
 
 void kci_process (uint32 rsc, uint32 *cq)

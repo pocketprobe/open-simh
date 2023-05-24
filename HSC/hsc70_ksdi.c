@@ -1063,7 +1063,7 @@ if ((cyl == 273) && ((ksdi_mode & MODE_OB) == 0)) {
     dst = GETW (rte + V_AERR);                          /* get error destination */
     }
 else {
-    if (flg & 02) {
+    if (flg & V_DC) {                                   /* decrement counter? */
         dst = GETW (ctr + C_CNT);                       /* get counter value */
         dst = dst - 1;                                  /* another operation completed */
         PUTW (ctr + C_CNT, dst);                        /* update counter value */

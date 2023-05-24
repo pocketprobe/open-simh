@@ -87,7 +87,13 @@
 /* route vector */
 
 #define V_FLGS          0000                            /* control flags */
+#define  V_FB           0001                            /* free buffers */
+#define  V_DC           0002                            /* decrement counter */
 #define V_OPCD          0001                            /* opcode */
+#define  V_SD           0001                            /* send data to host */
+#define  V_RD           0002                            /* request data from host */
+#define  V_DR           0027                            /* disk read */
+#define  V_DW           0245                            /* disk write */
 #define V_SUCC          0002                            /* success destination address */
 #define V_CTX           0004                            /* context */
 #define V_AERR          0006                            /* error destination address */
