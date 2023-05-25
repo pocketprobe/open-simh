@@ -25,7 +25,7 @@
 */
 
 #include "pdp11_defs.h"
-#include "hsc70_kreq.h"
+#include "hsc70_kg.h"
 #include "dec_ci.h"
 
 /* K.ci control area */
@@ -155,41 +155,18 @@
 #define CB_VCT          0136
 #define CB_DBG          0137
 
-/* fragment request block */
+/* Fragment request block - K.ci */
 
-#define F_LINK          0000
-#define F_PCTR          0002
-#define F_RTE           0004
-#define F_MOD           0006
-#define F_CTRL          0010
-#define F_OFF           0012
-#define F_LLBN          0016
-#define F_RT1           0020
-#define F_HLBN          0022
-#define F_SCT           0024
-#define F_RT2           0024
-#define F_TRK           0026
-#define F_GRP           0030
-#define F_RT3           0030
-#define F_RSB           0032
-#define F_SCNT          0034
-#define F_SRTE          0036
-#define F_BFHD          0040
-#define F_BFTL          0042
-#define F_SBFH          0054
 #define F_SFLG          0054
-#define F_SSCT          0056
+#define F_SBFH          0054
 #define F_CHO           0056
+#define F_SSCT          0056
 #define F_QSLT          0060
 #define F_CB            0064
 #define F_NODE          0066
-#define F_SCR           0070
 #define F_NBFR          0070
+#define F_SCR           0070
 #define F_BFCT          0072
-#define F_DSTR          0074
-#define F_ESUM          0076
-#define F_CRUN          0110
-#define F_CFLG          0111
 
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
@@ -525,52 +502,24 @@ return SCPE_OK;
 
 t_stat ci_receive_data (UNIT *uptr, CI_PKT *pkt)
 {
-uint32 bct, len, bd, dma, rte, flg, ctr, frb, val, cq;
+uint32 bct, len, bd, dma, frb;
 uint32 kh = kci_dib.cma;
-t_stat r;
 
 frb = CI_GET32 (pkt->data, PPD_RBNAM);
 bct = CI_GET32 (pkt->data, PPD_XFRSZ);
 len = (bct > CI_MAXDAT) ? CI_MAXDAT : bct;
 
 bd = GETP (kh + KG_FBU);                                /* get a free data memory buffer */
-bd = get_from_queue (bd);
+bd = kg_receive (bd);
 dma = GETW (bd + 002);
 dma = (dma << 6) & DMEMMASK;                            /* data memory address */
 dma = dma + B_DATA;                                     /* point to sector data */
 sim_printf ("DMEM addr = %o\n", dma);
 memcpy (&DM[dma >> 1], &pkt->data[CI_DATHDR], len);     /* copy to packet buffer */
-put_to_queue (frb + F_BFHD, bd);
+kg_send (frb + F_BFHD, bd);
 
-if (pkt->data[PPD_FLAGS] & PPD_LP) {                    /* last packet? */
-    ctr = GETP (frb + F_PCTR);
-    rte = GETP (frb + F_RTE);                               /* get route */
-
-    flg = GETW (rte);                                       /* get opcode/flags from route */
-    sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
-
-    if (flg & V_DC) {                                       /* decrement counter? */
-        val = GETW (ctr + C_CNT);                           /* get counter value */
-        val = val - 1;                                      /* another operation completed */
-        PUTW (ctr + C_CNT, val);                            /* update counter value */
-        if (val == 0) {                                     /* all operations complete? */
-            cq = GETP (ctr);
-            sim_printf ("CTR dest = %07o\n", cq);
-            PUTP (ctr, 0);                                  /* clear queue pointer */
-            put_to_queue (cq, ctr);                         /* send counter to completion queue */
-            }
-        }
-    rte = rte + 010;                                        /* advance route pointer */
-    PUTP (frb + F_RTE, rte);
-    cq = GETW (rte + V_SUCC);                               /* get success destination */
-    if (cq & 0177400)
-        cq = cq << 2;                                       /* direct address */
-    else {
-        cq = frb + (cq << 2);                               /* offset into FRB */
-        cq = GETP (cq);
-        }
-    put_to_queue (cq, frb);                                 /* send FRB to completion queue */
-    }
+if (pkt->data[PPD_FLAGS] & PPD_LP)                      /* last packet? */
+    kg_route_frb (kh, frb, TRUE);
 return SCPE_OK;
 }
 
@@ -581,7 +530,7 @@ uint32 hm, last, sz;
 
 last = GETP (kh + KH_SRR + Q_TAIL);                     /* save last buffer address */
 for (;;) {
-    hm = get_from_queue (kh + KH_SRR);                  /* get next buffer */
+    hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
     if (hm == 0)
         break;                                          /* no buffers available */
     sz = GETW (hm + HM_LOF) & 077;                      /* get buffer size */
@@ -593,7 +542,7 @@ for (;;) {
         hm = 0;
         break;                                          /* no buffers available */
         }
-    put_to_queue (kh + KH_SRR, hm);                     /* put to back of queue */
+    kg_send (kh + KH_SRR, hm);                          /* put to back of queue */
     }
 return hm;
 }
@@ -632,7 +581,7 @@ if (opc == OPC_SNDMSG) {
         }
     }
 else {
-    rsc = get_from_queue (kh + KH_DRR);                 /* datagram */
+    rsc = kg_receive (kh + KH_DRR);                     /* datagram */
     lof = 0044000 | 077;
     }
 
@@ -682,7 +631,7 @@ if (cq == 0)
     cq = GETP (kh + KH_CIM);
 for (int i = 0; i < 12; i++)
     sim_printf ("R %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
-put_to_queue (cq, rsc);
+kg_send (cq, rsc);
 
 return SCPE_OK;
 }
@@ -741,43 +690,18 @@ memcpy (&CM[(rsc + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 
 for (int i = 0; i < 12; i++)
     sim_printf ("R %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
-put_to_queue (cq, rsc);
+kg_send (cq, rsc);
 
 return SCPE_OK;
 }
 
 t_stat kci_cnfrec (UNIT *uptr, CI_PKT *pkt)
 {
-uint32 frb, ctr, rte, val, cq, flg;
+uint32 frb;
+uint32 kh = kci_dib.cma;
 
 frb = CI_GET32 (pkt->data, PPD_SBNAM);
-ctr = GETP (frb + F_PCTR);
-rte = GETP (frb + F_RTE);                               /* get route */
-
-flg = GETW (rte);                                       /* get opcode/flags from route */
-sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
-
-if (flg & V_DC) {                                       /* decrement counter? */
-    val = GETW (ctr + C_CNT);                           /* get counter value */
-    val = val - 1;                                      /* another operation completed */
-    PUTW (ctr + C_CNT, val);                            /* update counter value */
-    if (val == 0) {                                     /* all operations complete? */
-        cq = GETP (ctr);
-        sim_printf ("CTR dest = %07o\n", cq);
-        PUTP (ctr, 0);                                  /* clear queue pointer */
-        put_to_queue (cq, ctr);                         /* send counter to completion queue */
-        }
-    }
-rte = rte + 010;                                        /* advance route pointer */
-PUTP (frb + F_RTE, rte);
-cq = GETW (rte + V_SUCC);                               /* get success destination */
-if (cq & 0177400)
-    cq = cq << 2;                                       /* direct address */
-else {
-    cq = frb + (cq << 2);                               /* offset into FRB */
-    cq = GETP (cq);
-    }
-put_to_queue (cq, frb);                                 /* send FRB to completion queue */
+kg_route_frb (kh, frb, TRUE);
 return SCPE_OK;
 }
 
@@ -1015,11 +939,11 @@ if (opc == 040000) {
     dx = GETP (rsc + HM_DX);
     val = GETW (dx + C_CNT);
     sim_printf ("DX count %d -> %d\n", val, (val - 2));
-    put_to_queue (dx + 004, rsc);
+    kg_send (dx + 004, rsc);
     val = val - 2;
     if (val == 0) {
         *cq = GETP (dx);
-        put_to_queue (*cq, dx);
+        kg_send (*cq, dx);
         }
 #endif
     *cq = 0;
@@ -1031,7 +955,7 @@ if (*cq == 0) {
         else
             *cq = kh + KH_DRR;
         sim_printf ("Returning buffer %07o to queue at %07o\n", rsc, *cq);
-//        put_to_queue (cq, rsc);
+//        kg_send (cq, rsc);
         }
     else {
         kci_req[node] = rsc;
@@ -1042,7 +966,7 @@ if (*cq == 0) {
 
 void kci_send_data (uint32 rsc)
 {
-uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma, rte, flg;
+uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma;
 uint32 kh = kci_dib.cma;
 CI_PKT pkt;
 t_stat r;
@@ -1050,9 +974,6 @@ t_stat r;
 sim_printf ("K.ci FRB:\n");
 kci_print_frb (rsc);
 hm = GETP (rsc + F_PCTR);                               /* get host message */
-rte = GETP (rsc + F_RTE);                               /* get route */
-
-flg = GETW (rte);                                       /* get opcode/flags from route */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
 pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
@@ -1078,7 +999,7 @@ while (bct) {
     CI_PUT32 (pkt.data, PPD_XFRSZ, bct);                /* total transfer size */
     CI_PUT32 (pkt.data, PPD_SBOFF, soff);               /* send buffer offset */
     CI_PUT32 (pkt.data, PPD_RBOFF, roff);               /* receive buffer offset */
-    if (len <= CI_MAXDAT)
+    if (bct <= CI_MAXDAT)
         pkt.data[PPD_FLAGS] |= PPD_LP;                  /* last packet */
     bd = GETP (rsc + F_BFHD);                           /* get next buffer descriptor */
     dma = GETW (bd + 002);
@@ -1090,10 +1011,6 @@ while (bct) {
     if (r != SCPE_OK) {
         sim_printf ("K.ci stalled during SNDDAT operation\n");
         break;
-        }
-    if (flg & V_FB) {                                   /* free buffers? */
-        bd = get_from_queue (rsc + F_BFHD);             /* dequeue buffer descriptor */
-        put_to_queue (kh + KG_FBU, bd);                 /* put to free buffer queue */
         }
     soff += len;
     roff += len;
@@ -1202,12 +1119,12 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         }
 
-    rsc = get_from_queue (wq);                          /* get resource from work queue */
+    rsc = kg_receive (wq);                              /* get resource from work queue */
     sim_printf ("Processing packet %07o from queue %07o\n", rsc, wq);
     kci_process (rsc, &cq);                             /* process resource */
 
     if (cq)
-        put_to_queue (cq, rsc);                         /* put resource to completion queue */
+        kg_send (cq, rsc);                              /* put resource to completion queue */
     }
 }
 

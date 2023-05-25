@@ -1,4 +1,4 @@
-/* hsc70_kreq.h: HSC70 common K requestor functions
+/* hsc70_kg.h: HSC70 common K requestor functions
 
    Copyright (c) 2023, Matt Burke
 
@@ -24,8 +24,8 @@
    in this Software without prior written authorization from the author.
 */
 
-#ifndef _HSC_KREQ_H
-#define _HSC_KREQ_H   0
+#ifndef _HSC_KG_H
+#define _HSC_KG_H   0
 
 /* status codes */
 
@@ -139,9 +139,39 @@
 #define B_6EWC          001072
 #define B_6PED          001074
 
+/* fragment request block */
+
+#define F_LINK          0000                            /* link to next */
+#define F_PCTR          0002                            /* parent counter pointer */
+#define F_RTE           0004                            /* route pointer */
+#define F_MOD           0006
+#define F_CTRL          0010
+#define F_OFF           0012
+#define F_LLBN          0016                            /* low LBN */
+#define F_RT1           0020                            /* route 1 */
+#define F_HLBN          0022                            /* high LBN */
+#define F_SCT           0024                            /* sector */
+#define F_RT2           0024                            /* route 2 */
+#define F_TRK           0026                            /* track */
+#define F_RT3           0030                            /* route 3 */
+#define F_GRP           0030                            /* group */
+#define F_RSB           0032
+#define F_SCNT          0034                            /* sector count */
+#define F_SRTE          0036                            /* saved route pointer */
+#define F_BFHD          0040                            /* buffer queue head */
+#define F_BFTL          0042                            /* buffer queue tail */
+#define F_RT4           0044                            /* route 4 */
+#define F_SLLB          0050                            /* saved low LBN */
+#define F_SHLB          0052                            /* saved high LBN */
+#define F_IQA           0054
+#define F_DSTR          0074
+#define F_ESUM          0076
+#define F_CRUN          0110
+#define F_CFLG          0111
+
 /* debugging bitmaps */
 
-#define KREQ_DBG_TRC    0x0001                          /* trace routine calls */
+#define KG_DBG_TRC      0x0001                          /* trace routine calls */
 
 extern uint32 kg_init (t_bool *run);
 extern t_stat kg_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
@@ -150,8 +180,9 @@ extern t_stat kg_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat kg_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern void print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len);
 extern void print_string (FILE *st, uint32 kg, char *name, int16 off, uint16 len);
-extern uint32 get_from_queue (uint32 q);
-extern void put_to_queue (uint32 q, uint32 itm);
+extern void kg_route_frb (uint32 kg, uint32 frb, t_bool sts);
+extern uint32 kg_receive (uint32 q);
+extern void kg_send (uint32 q, uint32 itm);
 
 extern int16 inst_pc;
 

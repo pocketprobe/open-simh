@@ -26,7 +26,7 @@
 
 #include "pdp11_defs.h"
 #include "hsc_hsc70_bin.h"
-#include "hsc70_kreq.h"
+#include "hsc70_kg.h"
 
 #define FLCSR_PE        0100000                         /* parity err */
 #define FLCSR_NXM       0040000                         /* non-existant mem err */

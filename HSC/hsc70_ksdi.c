@@ -25,7 +25,7 @@
 */
 
 #include "pdp11_defs.h"
-#include "hsc70_kreq.h"
+#include "hsc70_kg.h"
 
 /* K.sdi control area */
 
@@ -142,31 +142,9 @@
 #define DT_DCB          0062
 #define DT_FLG          0064
 
-/* Fragment Request Block */
+/* Fragment request block - K.sdi */
 
-#define F_LINK          0000                            /* link to next */
-#define F_PCTR          0002                            /* parent counter pointer */
-#define F_RTE           0004                            /* route pointer */
-#define F_MOD           0006
-#define F_CTRL          0010
-#define F_OFF           0012
-#define F_LLBN          0016                            /* low LBN */
-#define F_RT1           0020                            /* route 1 */
-#define F_HLBN          0022                            /* high LBN */
-#define F_SCT           0024                            /* sector */
-#define F_RT2           0024                            /* route 2 */
-#define F_TRK           0026                            /* track */
-#define F_RT3           0030                            /* route 3 */
-#define F_GRP           0030                            /* group */
-#define F_RSB           0032
-#define F_SCNT          0034                            /* sector count */
-#define F_SRTE          0036                            /* saved route pointer */
-#define F_BFHD          0040                            /* buffer queue head */
-#define F_BFTL          0042                            /* buffer queue tail */
-#define F_RT4           0044                            /* route 4 */
 #define F_CYL           0046                            /* cylinder */
-#define F_SLLB          0050                            /* saved low LBN */
-#define F_SHLB          0052                            /* saved high LBN */
 #define F_SBFH          0054
 #define F_SSCT          0056
 #define F_REMN          0057
@@ -177,14 +155,10 @@
 #define F_SCR           0070
 #define F_TCNT          0070
 #define F_DRAT          0072
-#define F_DSTR          0074
-#define F_ESUM          0076
 #define F_DUCB          0100
 #define F_BPTR          0102
 #define F_SQL           0104
 #define F_FLGS          0106
-#define F_CRUN          0110
-#define F_CFLG          0111
 
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
@@ -199,7 +173,7 @@ t_stat ksdi_init (uint16 req, uint16 act);
 
 /* debugging bitmaps */
 
-#define DBG_TRC         KREQ_DBG_TRC                    /* trace routine calls */
+#define DBG_TRC         KG_DBG_TRC                      /* trace routine calls */
 
 DEBTAB ksdi_debug[] = {
     { "TRACE",  DBG_TRC,   "trace routine calls" },
@@ -519,21 +493,6 @@ print_word (NULL, dc, "DC$RSV", DC_RSV, 4);
 print_word (NULL, dc, "DC$PAD", DC_PAD, 16);
 }
 
-void print_route (uint32 rt)
-{
-print_word (NULL, rt, "V.FLGS", V_FLGS, 1);
-print_word (NULL, rt, "V.OPCD", V_OPCD, 1);
-print_word (NULL, rt, "V.SUCC", V_SUCC, 2);
-print_word (NULL, rt, "V.CTX ", V_CTX , 2);
-print_word (NULL, rt, "V.AERR", V_AERR, 2);
-}
-
-void print_counter (uint32 ct)
-{
-print_word (NULL, ct, "C.SRVC", C_SRVC, 2);
-print_word (NULL, ct, "C.CNT ", C_CNT , 2);
-}
-
 t_bool online = FALSE;
 
 t_stat ksdi_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
@@ -549,7 +508,7 @@ if (GETW (ks + port) != 0) {                            /* service queue valid? 
         return SCPE_OK;
         }
     PUTW (ks + port, 0);                                /* clear service queue pointer */
-    put_to_queue (tq, ks + port);                       /* send drive state area to service queue */
+    kg_send (tq, ks + port);                            /* send drive state area to service queue */
     sim_printf ("Drive state area sent to service queue\n");
     }
 return SCPE_OK;
@@ -858,7 +817,7 @@ for (int j = 0; j < 20; j++) {
     if (Q_LOCKED (eq))                                  /* error queue locked? */
         break;
 
-    dc = get_from_queue (ksa + KSA_HEAD);               /* dequeue from drive state area */
+    dc = kg_receive (ksa + KSA_HEAD);                   /* dequeue from drive state area */
 
     print_dcb (dc);
 //    for (int i = 0; i < 17; i++)
@@ -892,7 +851,7 @@ for (int j = 0; j < 20; j++) {
     PUTW (dc + DC_FCT, tmp);                            /* set response length */
     sim_printf ("----\n");
 
-    put_to_queue (tq, dc);                              /* send to completion queue */
+    kg_send (tq, dc);                                   /* send to completion queue */
     }
 }
 
@@ -977,7 +936,7 @@ PUTDW (dma + 01000, 0105);                              /* TODO: See ILDISK:5144
 
 void process_frb (uint32 frb, uint32 cyl, uint32 sct)
 {
-uint32 fbu, scnt, tmp, dma, lbn, trk, rte, dst, ctr, flg;
+uint32 bd, scnt, tmp, dma, lbn, trk, rte, opc;
 uint32 ks = ksdi_dib.cma;
 
 lbn = GETB (frb + F_HLBN);                              /* high LBN */
@@ -986,18 +945,16 @@ lbn = lbn | GETW (frb + F_LLBN);                        /* low LBN */
 trk = GETW (frb + F_TRK);                               /* track */
 scnt = GETB (frb + F_SCNT);                             /* sector count */
 rte = GETP (frb + F_RTE);                               /* get route */
-flg = GETW (rte);                                       /* get opcode/flags from route */
+opc = GETB (rte + V_OPCD);                              /* get opcode from route */
 
-//for (int i = 0; i < 37; i++)
-//    sim_printf ("%07o: %06o\n", frb + (i << 1), GETW (frb + (i << 1)));
 print_frb (frb);
 sim_printf ("FRB: %07o, LBN: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d\n", frb, lbn, cyl, trk, sct, scnt);
-fbu = GETP (frb + F_BFHD);
-if (fbu == 0) {                                         /* no data buffer? */
+bd = GETP (frb + F_BFHD);
+if (bd == 0) {                                         /* no data buffer? */
     for (int i = 0; i < scnt; i++) {
-        fbu = GETP (ksdi_dib.cma + KG_FBU);             /* get a free data memory buffer */
-        fbu = get_from_queue (fbu);
-        dma = GETW (fbu + 002);
+        bd = GETP (ksdi_dib.cma + KG_FBU);             /* get a free data memory buffer */
+        bd = kg_receive (bd);
+        dma = GETW (bd + 002);
         dma = (dma << 6) & DMEMMASK;
         sim_printf ("DMEM addr = %o\n", dma);
 
@@ -1026,73 +983,28 @@ if (fbu == 0) {                                         /* no data buffer? */
         else
             read_lbn (dma + B_DATA);
 
-        put_to_queue (frb + F_BFHD, fbu);               /* queue buffer to the FRB */
-//        sim_printf ("FBU: %07o (new)\n", fbu);
+        kg_send (frb + F_BFHD, bd);                     /* queue buffer to the FRB */
         }
     }
 else {
     /* This is used for writing */
     for (int k = 0; k < scnt; k++) {
-        if (fbu == 0)
+        if (bd == 0)
             break;
-        sim_printf ("FBU: %07o (old)\n", fbu);
-        tmp = GETP (fbu);
-        if (tmp == fbu) {
-            sim_printf ("Circular FBU reference at %07o\n", fbu);
+        sim_printf ("FBU: %07o (old)\n", bd);
+        tmp = GETP (bd);
+        if (tmp == bd) {
+            sim_printf ("Circular FBU reference at %07o\n", bd);
             break;
             }
-        if (flg & V_FB) {                               /* free buffers? */
-            fbu = get_from_queue (frb + F_BFHD);        /* dequeue buffer descriptor */
-            put_to_queue (ks + KG_FBU, fbu);            /* put to free buffer queue */
-            }
-        fbu = tmp;
+        bd = tmp;
         }
     }
 
-ctr = GETP (frb + F_PCTR);                              /* get counter */
-//for (int i = 0; i < 24; i++)
-//    sim_printf ("%07o: %06o\n", ctr + (i << 1), GETW (ctr + (i << 1)));
-print_counter (ctr);
-sim_printf ("CTR: %07o\n", ctr);
-
-//for (int i = 0; i < 10; i++)
-//    sim_printf ("%07o: %06o\n", rte + (i << 1), GETW (rte + (i << 1)));
-print_route (rte);
-print_route (rte + 010);
-print_route (rte + 020);
-sim_printf ("RTE: %07o\n", rte);
-
-flg = GETW (rte);                                       /* get opcode/flags from route */
-sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
-if ((cyl == 273) && ((ksdi_mode & MODE_OB) == 0)) {
-    PUTW (frb + F_ESUM, 1);
-    dst = GETW (rte + V_AERR);                          /* get error destination */
-    }
-else {
-    if (flg & V_DC) {                                   /* decrement counter? */
-        dst = GETW (ctr + C_CNT);                       /* get counter value */
-        dst = dst - 1;                                  /* another operation completed */
-        PUTW (ctr + C_CNT, dst);                        /* update counter value */
-        if (dst == 0) {                                 /* all operations complete? */
-            dst = GETP (ctr);
-            sim_printf ("CTR dest = %07o\n", dst);
-            PUTP (ctr, 0);                              /* clear service queue pointer */
-            put_to_queue (dst, ctr);                    /* send to service queue */
-            }
-        }
-    rte = rte + 010;                                    /* advance route pointer */
-    PUTP (frb + F_RTE, rte);
-    dst = GETW (rte + V_SUCC);                          /* get success destination */
-    }
-
-if (dst & 0177400)
-    dst = dst << 2;                                     /* direct address */
-else {
-    dst = frb + (dst << 2);                             /* offset into FRB */
-    dst = GETP (dst);
-    }
-sim_printf ("FRB dest = %07o\n", dst);
-put_to_queue (dst, frb);                                /* send FRB to completion queue */
+if ((cyl == 273) && ((ksdi_mode & MODE_OB) == 0))
+    kg_route_frb (ks, frb, FALSE);
+else
+    kg_route_frb (ks, frb, TRUE);
 }
 
 void ksdi_process_drat (uint32 ksh, uint32 kfl)
@@ -1114,12 +1026,12 @@ cnt = GETW (dt + DT_CNT);
 
 fc = 0;
 for (int j = 0; j < 50; j++) {                          /* prevent endless loop */
-    frb = get_from_queue (dt + DT_HST + 004);           /* get next FRB */
+    frb = kg_receive (dt + DT_HST + 004);               /* get next FRB */
     if (frb == 0)
         break;
     fc++;
     cq = GETP (dt + DT_HST + 002);
-    put_to_queue (cq, frb);
+    kg_send (cq, frb);
     }
 if (fc > 0)
     sim_printf ("%d FRBs pre-processed\n", fc);
@@ -1127,7 +1039,7 @@ if (fc > 0)
 fc = 0;
 for (int k = 0; k < 32; k++) {                          /* for each sector */
     for (int j = 0; j < 50; j++) {                      /* prevent endless loop */
-        frb = get_from_queue (fq + (k << 2));           /* get next FRB */
+        frb = kg_receive (fq + (k << 2));               /* get next FRB */
         if (frb == 0)
             break;
         PUTP (frb + F_DRAT, dt);
@@ -1149,9 +1061,9 @@ if (fc > 0)
 PUTW (dt + DT_CNT, cnt);                                /* update counter */
 
 if (cnt == 0) {                                         /* all operation complete? */
-    dt = get_from_queue (ksh + Q_HEAD);                 /* dequeue DRAT */
+    dt = kg_receive (ksh + Q_HEAD);                     /* dequeue DRAT */
     cq = GETP (dt + DT_CQ);                             /* get DRAT completion queue */
-    put_to_queue (cq, dt);                              /* send DRAT to completion queue */
+    kg_send (cq, dt);                                   /* send DRAT to completion queue */
     flg = GETW (kfl);
     flg = flg | 0100000;                                /* FIXME: This is expected by ILDISK */
     PUTW (kfl, flg);
@@ -1182,9 +1094,9 @@ uint32 ksa, tq, dc;
 ksa = ksdi_dib.cma + KS_S0 + (port * 16);               /* drive state area */
 if (GETW (ks + KG_RSL) == 0) {                          /* test started? */
     PUTW (ks + KG_RSL, 1);                              /* KG$RSL - result of self test */
-    dc = get_from_queue (ksa + KSA_HEAD);               /* get DCB from drive state area */
+    dc = kg_receive (ksa + KSA_HEAD);                   /* get DCB from drive state area */
     tq = GETP (dc + 014);                               /* get destination queue */
-    put_to_queue (tq, dc);                              /* put DCB to destination */
+    kg_send (tq, dc);                                   /* put DCB to destination */
     }
 else if (!Q_LOCKED (ksa + KSA_LOCK)) {                  /* drive state area locked? */
     if ((GETW (ksa + KSA_FLGS) & 0100000) == 0)         /* drive not known to system? */

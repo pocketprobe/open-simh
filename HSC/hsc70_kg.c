@@ -1,4 +1,4 @@
-/* hsc70_kreq.c: HSC70 common K requestor functions
+/* hsc70_kg.c: HSC70 common K requestor functions
 
    Copyright (c) 2023, Matt Burke
 
@@ -25,7 +25,7 @@
 */
 
 #include "pdp11_defs.h"
-#include "hsc70_kreq.h"
+#include "hsc70_kg.h"
 
 extern int32 trap_req;
 extern int32 ipl;
@@ -229,7 +229,78 @@ for (int i = 0; i < len; i++)
 fprintf (st, "\n");
 }
 
-uint32 get_from_queue (uint32 q)
+void print_route (uint32 rte)
+{
+print_word (NULL, rte, "V.FLGS", V_FLGS, 1);
+print_word (NULL, rte, "V.OPCD", V_OPCD, 1);
+print_word (NULL, rte, "V.SUCC", V_SUCC, 2);
+print_word (NULL, rte, "V.CTX ", V_CTX , 2);
+print_word (NULL, rte, "V.AERR", V_AERR, 2);
+}
+
+void print_counter (uint32 ctr)
+{
+print_word (NULL, ctr, "C.SRVC", C_SRVC, 2);
+print_word (NULL, ctr, "C.CNT ", C_CNT , 2);
+}
+
+void kg_route_frb (uint32 kg, uint32 frb, t_bool sts)
+{
+uint32 rte, ctr, flg, val, bd, sc, cq;
+    
+ctr = GETP (frb + F_PCTR);
+rte = GETP (frb + F_RTE);                               /* get route */
+
+print_counter (ctr);
+print_route (rte);
+print_route (rte + 010);
+print_route (rte + 020);
+
+flg = GETW (rte);                                       /* get opcode/flags from route */
+sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
+
+if (sts) {
+    if (flg & V_FB) {                                   /* free buffers? */
+        sc = GETW (frb + F_SCNT);                       /* get sector count */
+        for (int k = 0; k < sc; k++) {
+            bd = kg_receive (frb + F_BFHD);             /* dequeue buffer descriptor */
+            if (bd == 0)
+                break;
+            kg_send (kg + KG_FBU, bd);                  /* put to free buffer queue */
+            }
+        }
+
+    if (flg & V_DC) {                                   /* decrement counter? */
+        val = GETW (ctr + C_CNT);                       /* get counter value */
+        val = val - 1;                                  /* another operation completed */
+        PUTW (ctr + C_CNT, val);                        /* update counter value */
+        if (val == 0) {                                 /* all operations complete? */
+            cq = GETP (ctr);
+            sim_printf ("CTR dest = %07o\n", cq);
+            PUTP (ctr, 0);                              /* clear queue pointer */
+            kg_send (cq, ctr);                          /* send counter to completion queue */
+            }
+        }
+    rte = rte + 010;                                    /* advance route pointer */
+    PUTP (frb + F_RTE, rte);
+    cq = GETW (rte + V_SUCC);                           /* get success destination */
+    }
+else {
+    PUTW (frb + F_ESUM, 1);
+    cq = GETW (rte + V_AERR);                           /* get error destination */
+    }    
+
+if (cq & 0177400)
+    cq = cq << 2;                                       /* direct address */
+else {
+    cq = frb + (cq << 2);                               /* offset into FRB */
+    cq = GETP (cq);
+    }
+sim_printf ("FRB dest = %07o\n", cq);
+kg_send (cq, frb);                                      /* send FRB to completion queue */
+}
+
+uint32 kg_receive (uint32 q)
 {
 uint32 itm;
 
@@ -246,12 +317,12 @@ PUTP (itm, 0);                                          /* remove next link from
 return itm;
 }
 
-void put_to_queue (uint32 q, uint32 itm)
+void kg_send (uint32 q, uint32 itm)
 {
 uint32 qh, qt, qn, qf, tq, sq, mask, pcb;
 
 if (Q_LOCKED (q + Q_HEAD)) {
-    //sim_printf ("put_to_queue: queue at address %06o is locked\n", q);
+    //sim_printf ("kg_send: queue at address %06o is locked\n", q);
     return;
     }
 qh = GETP (q + Q_HEAD);
@@ -285,7 +356,7 @@ if (qh == 1) {                                          /* software process wait
             //sim_printf ("Sending transmission queue %06o to service queue %06o, PCB = %06o\n", tq, sq, pcb);
             qf |= FLGS_SVC;
             PUTB (q - Q_FLGS, qf);                      /* now on service queue */
-            put_to_queue (sq, tq);                      /* send transmission queue to service queue */
+            kg_send (sq, tq);                           /* send transmission queue to service queue */
             }
         }
     }
