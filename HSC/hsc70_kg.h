@@ -169,6 +169,17 @@
 #define F_CRUN          0110
 #define F_CFLG          0111
 
+/* deallocation context? */
+
+#define DX_CTR          0000                            /* outstanding operation counter */
+#define DX_SMQ          0004                            /* server message queue */
+#define DX_SHQ          0010
+#define DX_DU           0014                            /* disk context structure pointer */
+#define DX_NDS          0016
+#define DX_DSL          0020
+#define DX_STM          0022
+#define DX_TEF          0024
+
 /* debugging bitmaps */
 
 #define KG_DBG_TRC      0x0001                          /* trace routine calls */
@@ -180,6 +191,7 @@ extern t_stat kg_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat kg_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern void print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len);
 extern void print_string (FILE *st, uint32 kg, char *name, int16 off, uint16 len);
+extern void kg_dec_ctr (uint32 ctr);
 extern void kg_route_frb (uint32 kg, uint32 frb, t_bool sts);
 extern uint32 kg_receive (uint32 q);
 extern void kg_send (uint32 q, uint32 itm);

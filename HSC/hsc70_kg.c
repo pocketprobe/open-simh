@@ -244,6 +244,23 @@ print_word (NULL, ctr, "C.SRVC", C_SRVC, 2);
 print_word (NULL, ctr, "C.CNT ", C_CNT , 2);
 }
 
+void kg_dec_ctr (uint32 ctr)
+{
+uint32 val, cq;
+
+print_counter (ctr);
+val = GETW (ctr + C_CNT);                               /* get counter value */
+sim_printf ("CTR %d -> %d\n", val, (val - 1));
+val = val - 1;                                          /* another operation completed */
+PUTW (ctr + C_CNT, val);                                /* update counter value */
+if (val == 0) {                                         /* all operations complete? */
+    cq = GETP (ctr);
+    sim_printf ("CTR dest = %07o\n", cq);
+    PUTP (ctr, 0);                                      /* clear queue pointer */
+    kg_send (cq, ctr);                                  /* send counter to completion queue */
+    }
+}
+
 void kg_route_frb (uint32 kg, uint32 frb, t_bool sts)
 {
 uint32 rte, ctr, flg, val, bd, sc, cq;
@@ -251,7 +268,6 @@ uint32 rte, ctr, flg, val, bd, sc, cq;
 ctr = GETP (frb + F_PCTR);
 rte = GETP (frb + F_RTE);                               /* get route */
 
-print_counter (ctr);
 print_route (rte);
 print_route (rte + 010);
 print_route (rte + 020);
@@ -269,18 +285,8 @@ if (sts) {
             kg_send (kg + KG_FBU, bd);                  /* put to free buffer queue */
             }
         }
-
-    if (flg & V_DC) {                                   /* decrement counter? */
-        val = GETW (ctr + C_CNT);                       /* get counter value */
-        val = val - 1;                                  /* another operation completed */
-        PUTW (ctr + C_CNT, val);                        /* update counter value */
-        if (val == 0) {                                 /* all operations complete? */
-            cq = GETP (ctr);
-            sim_printf ("CTR dest = %07o\n", cq);
-            PUTP (ctr, 0);                              /* clear queue pointer */
-            kg_send (cq, ctr);                          /* send counter to completion queue */
-            }
-        }
+    if (flg & V_DC)                                     /* decrement counter? */
+        kg_dec_ctr (ctr);
     rte = rte + 010;                                    /* advance route pointer */
     PUTP (frb + F_RTE, rte);
     cq = GETW (rte + V_SUCC);                           /* get success destination */

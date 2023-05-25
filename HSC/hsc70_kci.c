@@ -674,10 +674,6 @@ if (rsc == 0) {
     return SCPE_OK;
     }
 
-if (pkt->data[0x28] == 0x04) {
-    if (!sim_log)
-        sim_set_logon (0, "hsc_mscp.log");
-    }
 rcc = GETW (cb + CB_RCC);
 rcc = rcc + CI_GET16 (pkt->data, SCS_CREDIT);
 PUTW (cb + CB_RCC, rcc);
@@ -935,17 +931,8 @@ pkt.length = len;
 r = kci_send_int (&kci_unit, &pkt);
 
 if (opc == 040000) {
-#if 0
-    dx = GETP (rsc + HM_DX);
-    val = GETW (dx + C_CNT);
-    sim_printf ("DX count %d -> %d\n", val, (val - 2));
-    kg_send (dx + 004, rsc);
-    val = val - 2;
-    if (val == 0) {
-        *cq = GETP (dx);
-        kg_send (*cq, dx);
-        }
-#endif
+    dx = GETP (rsc + HM_DX);                            /* get deallocation context */
+    kg_dec_ctr (dx + DX_CTR);                           /* another operation complete */
     *cq = 0;
     }
 if (*cq == 0) {
