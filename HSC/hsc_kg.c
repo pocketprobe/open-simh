@@ -1,4 +1,4 @@
-/* hsc70_kg.c: HSC70 common K requestor functions
+/* hsc_kg.c: HSC common K requestor functions
 
    Copyright (c) 2023, Matt Burke
 
@@ -25,7 +25,7 @@
 */
 
 #include "pdp11_defs.h"
-#include "hsc70_kg.h"
+#include "hsc_kg.h"
 
 extern int32 trap_req;
 extern int32 ipl;
@@ -73,8 +73,12 @@ if (dptr == NULL)
 dibp = (HDIB *) dptr->ctxt;
 if (dibp == NULL)
     return SCPE_IERR;
-fprintf (st, "address=");
-fprint_val (st, (t_value) dibp->cma + CMEMBASE, DEV_RDX, 32, PV_LEFT);
+if (dibp->cma) {
+    fprintf (st, "address=");
+    fprint_val (st, (t_value) dibp->cma + CMEMBASE, DEV_RDX, 32, PV_LEFT);
+    }
+else
+    fprintf (st, "halted");
 return SCPE_OK;
 }
 

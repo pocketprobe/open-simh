@@ -1522,9 +1522,9 @@ HSCD = ${SIMHD}/HSC
 HSC70 = ${PDP11D}/pdp11_fp.c ${PDP11D}/pdp11_cpu.c ${PDP11D}/pdp11_dz.c \
 	${PDP11D}/pdp11_cis.c ${PDP11D}/pdp11_stddev.c ${PDP11D}/pdp11_sys.c \
 	${PDP11D}/pdp11_cpumod.c ${PDP11D}/pdp11_dl.c \
-	${PDP11D}/pdp11_io_lib.c ${HSCD}/hsc70_syslist.c ${HSCD}/hsc70_io.c \
-	${HSCD}/hsc70_mem.c ${HSCD}/hsc70_stddev.c ${HSCD}/hsc70_kg.c \
-	${HSCD}/hsc70_kci.c ${HSCD}/hsc70_ksdi.c ${DECD}/dec_ci.c
+	${PDP11D}/pdp11_io_lib.c ${HSCD}/hsc70_syslist.c ${HSCD}/hsc70_pio.c \
+	${HSCD}/hsc_mem.c ${HSCD}/hsc_io.c ${HSCD}/hsc_kg.c \
+	${HSCD}/hsc_kh.c ${HSCD}/hsc_ks.c ${DECD}/dec_ci.c
 HSC70_OPT = -DVM_PDP11 -DHSC -I ${HSCD} -I ${DECD} -I ${PDP11D} ${NETWORK_OPT}
 
 

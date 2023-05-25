@@ -1,4 +1,4 @@
-/* hsc70_io.c: HSC70 I/O simulator
+/* hsc_io.c: HSC I/O simulator
 
    Copyright (c) 2017, Matt Burke
    This module incorporates code from SimH, Copyright (c) 1993-2012, Robert M Supnik
@@ -29,23 +29,14 @@
 
 extern uint16 *M;
 extern int32 int_req[IPL_HLVL];
-extern int32 ub_map[UBM_LNT_LW];
-extern uint32 cpu_opt;
-extern int32 cpu_bme;
 extern int32 trap_req, ipl;
-extern int32 cpu_log;
-extern int32 autcon_enb;
-extern int32 uba_last;
-extern DEVICE cpu_dev;
-extern t_addr cpu_memsize;
 extern int32 EADR;
 
 int32 calc_ints (int32 nipl, int32 trq);
 
 extern t_stat cpu_build_dib (void);
 extern t_stat hsc_build_dib (void);
-extern t_stat ioc_build_dib (void);
-extern t_stat build_mbus_tab (DEVICE *dptr, DIB *dibp);
+extern t_stat pio_build_dib (void);
 
 /* I/O data structures */
 
@@ -111,8 +102,7 @@ EADR = pa;
 return SCPE_NXM;
 }
 
-/* Calculate interrupt outstanding
-   In a Qbus system, all device interrupts are treated as BR4 */
+/* Calculate interrupt outstanding */
 
 int32 calc_ints (int32 nipl, int32 trq)
 {
@@ -127,8 +117,7 @@ for (i = IPL_HLVL - 1; i > nipl; i--) {
 return (trq & ~TRAP_INT);
 }
 
-/* Find vector for highest priority interrupt
-   In a Qbus system, all device interrupts are treated as BR4 */
+/* Find vector for highest priority interrupt */
 
 int32 get_vector (int32 nipl)
 {
@@ -143,13 +132,14 @@ for (i = IPL_HLVL - 1; i > nipl; i--) {                 /* loop thru lvls */
             if (int_ack[i][j])
                 vec = int_ack[i][j]();
             else vec = int_vec[i][j];
-//            printf ("interrupt throught vector %o\n", vec);
             return vec;                                 /* return vector */
             }                                           /* end if t */
         }                                               /* end for j */
     }                                                   /* end for i */
 return 0;
 }
+
+/* Functions required by pdp11_cpumod.c */
 
 t_stat ubm_rd (int32 *data, int32 addr, int32 access)
 {
@@ -181,7 +171,7 @@ if ((r = cpu_build_dib ()))                             /* build CPU entries */
     return r;
 if ((r = hsc_build_dib ()))                             /* build HSC entries */
     return r;
-if ((r = ioc_build_dib ()))                             /* build IOC entries */
+if ((r = pio_build_dib ()))                             /* build PIO entries */
     return r;
 for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* loop thru dev */
     dibp = (DIB *) dptr->ctxt;                          /* get DIB */

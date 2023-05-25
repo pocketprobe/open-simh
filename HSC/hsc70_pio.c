@@ -1,4 +1,4 @@
-/* hsc70_stddev.c: HSC70 standard devices
+/* hsc70_pio.c: HSC70 P.ioj simulation
 
    Copyright (c) 2023, Matt Burke
 
@@ -26,7 +26,7 @@
 
 #include "pdp11_defs.h"
 #include "hsc_hsc70_bin.h"
-#include "hsc70_kg.h"
+#include "hsc_kg.h"
 
 #define FLCSR_PE        0100000                         /* parity err */
 #define FLCSR_NXM       0040000                         /* non-existant mem err */
@@ -95,9 +95,9 @@ extern int32 EADR, DADR;
 extern int32 autcon_enb;
 extern int16 inst_pc;
 
-t_stat ioc_rd (int32 *data, int32 pa, int32 access);
-t_stat ioc_wr (int32 data, int32 pa, int32 access);
-t_stat ioc_reset (DEVICE *dptr);
+t_stat pio_rd (int32 *data, int32 pa, int32 access);
+t_stat pio_wr (int32 data, int32 pa, int32 access);
+t_stat pio_reset (DEVICE *dptr);
 t_stat cwin_rd (int32 *data, int32 va, int32 access);
 t_stat cwin_wr (int32 data, int32 va, int32 access);
 t_stat rom_rd (int32 *data, int32 pa, int32 access);
@@ -132,26 +132,26 @@ DIB cwin_dib = { IOBA_CWIN, IOLN_CWIN, &cwin_rd, &cwin_wr, 0 };
 
 #define DBG_REG         0x0001                          /* trace routine calls */
 
-DEBTAB ioc_debug[] = {
+DEBTAB pio_debug[] = {
     { "REG",  DBG_REG,   "register access" },
     { 0 }
 };
 
-HDIB ioc_dib = {
-    { IOBA_IOC, IOLN_IOC, &ioc_rd, &ioc_wr,
+HDIB pio_dib = {
+    { IOBA_PIO, IOLN_PIO, &pio_rd, &pio_wr,
       0, 0, 0, { NULL } },
     K_PIO, 0, NULL
     };
 
-UNIT ioc_unit = { UDATA (NULL, 0, 0) };
+UNIT pio_unit = { UDATA (NULL, 0, 0) };
 
-REG ioc_reg[] = {
+REG pio_reg[] = {
     { ORDATA (SDR, SDR, 16) },
     { ORDATA (KINI, KINI, 16) },
     { NULL }
     };
 
-MTAB ioc_mod[] = {
+MTAB pio_mod[] = {
     { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
       NULL, &kg_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
@@ -159,13 +159,13 @@ MTAB ioc_mod[] = {
     { 0 }
     };
 
-DEVICE ioc_dev = {
-    "KPIO", &ioc_unit, ioc_reg, ioc_mod,
+DEVICE pio_dev = {
+    "PIO", &pio_unit, pio_reg, pio_mod,
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
     NULL, NULL, NULL,
     NULL, NULL, NULL,
-    &ioc_dib, DEV_DEBUG | DEV_UBUS | DEV_HSC,
-    0, ioc_debug
+    &pio_dib, DEV_DEBUG | DEV_UBUS | DEV_HSC,
+    0, pio_debug
     };
 
 /* ROM device */
@@ -277,7 +277,7 @@ for (i = 0; i < (CMEMSIZE >> 1); i++) {
 return SCPE_OK;
 }
 
-t_stat ioc_rd (int32 *data, int32 pa, int32 access)
+t_stat pio_rd (int32 *data, int32 pa, int32 access)
 {
 int32 rg = (pa >> 1) & 037;
 HDIB *dibp;
@@ -295,42 +295,42 @@ switch (rg) {                                           /* decode pa<2:1> */
         *data = WADR[WINDR][rg];
         *data = (*data & 0177) << 2;
         *data = *data | (rg << 9) | (016 << 12);
-        sim_debug (DBG_REG, &ioc_dev, "WADR%d rd %o\n", rg, *data);
+        sim_debug (DBG_REG, &pio_dev, "WADR%d rd %o\n", rg, *data);
         return SCPE_OK;
 
     case 010:                                           /* WINDR */
         *data = WINDR;
-        sim_debug (DBG_REG, &ioc_dev, "WINDR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "WINDR rd: %o\n", *data);
         return SCPE_OK;
 
     case 011:                                           /* WBUSR */
         *data = (CADR >> 1);
-        sim_debug (DBG_REG, &ioc_dev, "WBUSR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "WBUSR rd: %o\n", *data);
         return SCPE_OK;
 
     case 012:                                           /* low error */
         *data = EADR & 0177777;
-        sim_debug (DBG_REG, &ioc_dev, "low error rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "low error rd: %o\n", *data);
         return SCPE_OK;
 
     case 013:                                           /* high error */
         *data = (EADR >> 16) & 077;
-        sim_debug (DBG_REG, &ioc_dev, "high error rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "high error rd: %o\n", *data);
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
         *data = PCSR | PCSR_ENA;
-        sim_debug (DBG_REG, &ioc_dev, "Pio CSR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "Pio CSR rd: %o\n", *data);
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
         *data = SDR & 07777;
-        sim_debug (DBG_REG, &ioc_dev, "SDR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "SDR rd: %o\n", *data);
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
         *data = KINI;
-        sim_debug (DBG_REG, &ioc_dev, "K init rd\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "K init rd\n", *data);
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
@@ -340,26 +340,26 @@ switch (rg) {                                           /* decode pa<2:1> */
             *data = dibp->sts;
             *data = *data | (parity (*data, 1) << 7);   /* odd parity bit */
             }
-        sim_debug (DBG_REG, &ioc_dev, "K status rd\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "K status rd\n", *data);
         return SCPE_OK;
 
     case 024:                                           /* data mem low addr */
         *data = DADR & 0177777;
-        sim_debug (DBG_REG, &ioc_dev, "data mem low rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "data mem low rd: %o\n", *data);
         return SCPE_OK;
 
     case 025:                                           /* data mem high addr */
         *data = (DADR >> 16) & 07;
-        sim_debug (DBG_REG, &ioc_dev, "data mem high rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "data mem high rd: %o\n", *data);
         return SCPE_OK;
 
     case 026:                                           /* ctrl mem low addr */
         *data = (CCYCLE << 1) | (CADR & 1);
-        sim_debug (DBG_REG, &ioc_dev, "ctrl mem low rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "ctrl mem low rd: %o\n", *data);
         return SCPE_OK;
 
     case 027:                                           /* serial number reg - NI */
-        sim_debug (DBG_REG, &ioc_dev, "serial num rd\n");
+        sim_debug (DBG_REG, &pio_dev, "serial num rd\n");
         *data = 0;
         return SCPE_OK;
         }
@@ -368,7 +368,7 @@ switch (rg) {                                           /* decode pa<2:1> */
 return SCPE_NXM;
 }
 
-t_stat ioc_wr (int32 data, int32 pa, int32 access)
+t_stat pio_wr (int32 data, int32 pa, int32 access)
 {
 int32 rg = (pa >> 1) & 037;
 HDIB *dibp = NULL;
@@ -385,27 +385,27 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 005:                                           /* WADR5 */
     case 006:                                           /* WADR6 */
     case 007:                                           /* WADR7 */
-        sim_debug (DBG_REG, &ioc_dev, "WADR%d wr: %o\n", rg, data);
+        sim_debug (DBG_REG, &pio_dev, "WADR%d wr: %o\n", rg, data);
         WADR[WINDR][rg] = data;
         return SCPE_OK;
 
     case 010:                                           /* WINDR */
-        sim_debug (DBG_REG, &ioc_dev, "WINDR wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "WINDR wr: %o\n", data);
         WINDR = data & 0177;
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
-        sim_debug (DBG_REG, &ioc_dev, "Pio CSR wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "Pio CSR wr: %o\n", data);
         PCSR = data;
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
-        sim_debug (DBG_REG, &ioc_dev, "SDR wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "SDR wr: %o\n", data);
         SDR = (SDR & ~0377) | (data & 0377);
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
-        sim_debug (DBG_REG, &ioc_dev, "K init wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "K init wr: %o\n", data);
         for (int i = 6; i < 16; i++) {                  /* loop over K init bits */
             if (i < 8)                                  /* bits 6..7 = slots 8..9 */
                 slot = i + 2;
@@ -429,7 +429,7 @@ switch (rg) {                                           /* decode pa<2:1> */
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
-        sim_debug (DBG_REG, &ioc_dev, "K status wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "K status wr: %o\n", data);
         dibp = KSTS[0];
         dibp->sts = data;                               /* can only write to req 0 */
         return SCPE_OK;
@@ -810,9 +810,9 @@ saved_PC = IOBA_ROM;
 return SCPE_OK;
 }
 
-/* Build I/O space entries for IOC */
+/* Build I/O space entries for P.ioj */
 
-t_stat ioc_build_dib (void)
+t_stat pio_build_dib (void)
 {
 t_stat r;
 
@@ -821,7 +821,7 @@ fl_dev.flags |= (DEV_UBUS | DEV_QBUS);
 dli_dev.flags &= ~(DEV_DISABLE | DEV_DIS);
 dli_dib.ba = IOBA_DL;
 dli_dib.vec = VEC_DL;
-if (r = build_ubus_tab (&ioc_dev, &cwin_dib))           /* add to dispatch tab */
+if (r = build_ubus_tab (&pio_dev, &cwin_dib))           /* add to dispatch tab */
      return r;
 if (CM == NULL) {                                       /* First time init */
     CM = (uint16 *) calloc (CMEMSIZE, sizeof (uint16)); /* 2 banks */

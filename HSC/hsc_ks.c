@@ -1,4 +1,4 @@
-/* hsc70_ksdi.c: HSC70 K.sdi simulation
+/* hsc_ks.c: HSC K.sdi simulation
 
    Copyright (c) 2023, Matt Burke
 
@@ -25,7 +25,7 @@
 */
 
 #include "pdp11_defs.h"
-#include "hsc70_kg.h"
+#include "hsc_kg.h"
 
 /* K.sdi control area */
 
@@ -163,80 +163,80 @@
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
 
-uint8 ksdi_mode = 0;
+uint8 ks_mode = 0;
 
-t_stat ksdi_svc (UNIT *uptr);
-t_stat ksdi_reset (DEVICE *dptr);
-t_stat ksdi_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-t_stat ksdi_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-t_stat ksdi_init (uint16 req, uint16 act);
+t_stat ks_svc (UNIT *uptr);
+t_stat ks_reset (DEVICE *dptr);
+t_stat ks_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat ks_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat ks_init (uint16 req, uint16 act);
 
 /* debugging bitmaps */
 
 #define DBG_TRC         KG_DBG_TRC                      /* trace routine calls */
 
-DEBTAB ksdi_debug[] = {
+DEBTAB ks_debug[] = {
     { "TRACE",  DBG_TRC,   "trace routine calls" },
     { 0 }
 };
 
-HDIB ksdi_dib = {
+HDIB ks_dib = {
     { 0, 0, NULL, NULL,
       0, 0, 0, { NULL } },
-    K_SDI, 0, &ksdi_init
+    K_SDI, 0, &ks_init
     };
 
-UNIT ksdi_unit = { UDATA (&ksdi_svc, 0, 0) };
+UNIT ks_unit = { UDATA (&ks_svc, 0, 0) };
 
-REG ksdi_reg[] = {
+REG ks_reg[] = {
     { NULL }
     };
 
-MTAB ksdi_mod[] = {
+MTAB ks_mod[] = {
     { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
       NULL, &kg_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
       NULL, &kg_show_addr, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "CONTROL", "CONTROL",
-      NULL, &ksdi_show_ctrl, NULL },
+      NULL, &ks_show_ctrl, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "RUN", "RUN",
-      &ksdi_run, NULL, NULL },
+      &ks_run, NULL, NULL },
     { 0 }
     };
 
-DEVICE ksdi_dev = {
-    "KSDI", &ksdi_unit, ksdi_reg, ksdi_mod,
+DEVICE ks_dev = {
+    "KS", &ks_unit, ks_reg, ks_mod,
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
-    NULL, NULL, &ksdi_reset,
+    NULL, NULL, &ks_reset,
     NULL, NULL, NULL,
-    &ksdi_dib, DEV_DEBUG | DEV_HSC | DEV_DISABLE,
-    0, ksdi_debug
+    &ks_dib, DEV_DEBUG | DEV_HSC | DEV_DISABLE,
+    0, ks_debug
     };
 
 
 /* The version must be at least DS = 3, MC = 00 */
 
-t_stat ksdi_init (uint16 req, uint16 act)
+t_stat ks_init (uint16 req, uint16 act)
 {
 t_bool run;
 if (act == K_RUN) {
-    ksdi_dib.cma = kg_init (&run);
-    sim_debug (DBG_TRC, &ksdi_dev, "K.sdi %d startup: KH = %06o at %o\n", req, ksdi_dib.cma, (uint16)inst_pc);
-    PUTW (ksdi_dib.cma + KG_RSL, 1);                        /* KG$RSL - result of self test */
-    PUTW (ksdi_dib.cma + KG_VRS, 01452);                    /* KG$VRS - version (DS = 3, MC = 42) */
+    ks_dib.cma = kg_init (&run);
+    sim_debug (DBG_TRC, &ks_dev, "K.sdi %d startup: KH = %06o at %o\n", req, ks_dib.cma, (uint16)inst_pc);
+    PUTW (ks_dib.cma + KG_RSL, 1);                        /* KG$RSL - result of self test */
+    PUTW (ks_dib.cma + KG_VRS, 01452);                    /* KG$VRS - version (DS = 3, MC = 42) */
     if (!run)
         return SCPE_OK;
-    sim_clock_coschedule (&ksdi_unit, tmxr_poll);           /* activate */
+    sim_clock_coschedule (&ks_unit, tmxr_poll);           /* activate */
     }
 else {
-    sim_debug (DBG_TRC, &ksdi_dev, "K.sdi %d halt at %o\n", req, (uint16)inst_pc);
-    sim_cancel (&ksdi_unit);
-    ksdi_dib.cma = 0;
+    sim_debug (DBG_TRC, &ks_dev, "K.sdi %d halt at %o\n", req, (uint16)inst_pc);
+    sim_cancel (&ks_unit);
+    ks_dib.cma = 0;
     }
 return SCPE_OK;
 }
 
-t_stat ksdi_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat ks_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
 HDIB *dibp;
@@ -495,9 +495,9 @@ print_word (NULL, dc, "DC$PAD", DC_PAD, 16);
 
 t_bool online = FALSE;
 
-t_stat ksdi_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+t_stat ks_run (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
-uint32 ks = ksdi_dib.cma;
+uint32 ks = ks_dib.cma;
 uint32 port = KS_S0;
 uint32 tq;
 
@@ -516,7 +516,7 @@ return SCPE_OK;
 
 /* Online */
 
-uint16 ksdi_online (uint32 cmd, uint32 rsp)
+uint16 ks_online (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: ONLINE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -526,10 +526,10 @@ return 002;
 
 /* Disconnect */
 
-uint16 ksdi_disc (uint32 cmd, uint32 rsp)
+uint16 ks_disc (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: DISCONNECT\n");
-ksdi_mode = 0;
+ks_mode = 0;
 online = FALSE;
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
@@ -537,7 +537,7 @@ return 002;
 
 /* Diagnose */
 
-uint16 ksdi_diag (uint32 cmd, uint32 rsp)
+uint16 ks_diag (uint32 cmd, uint32 rsp)
 {
 uint8 test = GETW (cmd + 002);                          /* drive resident test to run */
 sim_printf ("SDI command: DIAGNOSE, test = %02X\n", test);
@@ -547,10 +547,10 @@ return 004;
 
 /* Drive clear */
 
-uint16 ksdi_clear (uint32 cmd, uint32 rsp)
+uint16 ks_clear (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: DRIVE CLEAR\n");
-ksdi_mode = 0;
+ks_mode = 0;
 online = FALSE;
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
@@ -558,7 +558,7 @@ return 002;
 
 /* Get common characteristics */
 
-uint16 ksdi_getchar (uint32 cmd, uint32 rsp)
+uint16 ks_getchar (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: GET COMMON CHARACTERISTICS\n");
 PUTW (rsp + 000, 0x7100 | 0x78);                        /* response opcode */
@@ -590,7 +590,7 @@ return 030;
 
 /* Get subunit characteristics */
 
-uint16 ksdi_getsubchar (uint32 cmd, uint32 rsp)
+uint16 ks_getsubchar (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: GET SUBUNIT CHARACTERISTICS\n");
 PUTW (rsp + 0000, 0x7100 | 0x77);                       /* response opcode */
@@ -638,14 +638,14 @@ return 050;
 
 /* Get status */
 
-uint16 ksdi_getsts (uint32 cmd, uint32 rsp)
+uint16 ks_getsts (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: GET STATUS\n");
 PUTW (rsp + 000, 0x7100 | 0xF6);                        /* response opcode */
 PUTW (rsp + 002, 0xD400 | 0x00);                        /* unit number (low) */
 PUTW (rsp + 004, 0xD400 | UMSK_U1);                     /* unit number (high) / subunit mask */
 PUTW (rsp + 006, 0xD400 | REQ_SR | REQ_PS | REQ_RU);    /* request byte */
-PUTW (rsp + 010, 0xD400 | ksdi_mode);                   /* mode byte */
+PUTW (rsp + 010, 0xD400 | ks_mode);                     /* mode byte */
 PUTW (rsp + 012, 0xD400 | 0x00);                        /* error byte */
 PUTW (rsp + 014, 0xD400 | 0x00);                        /* controller byte */
 PUTW (rsp + 016, 0xD400 | 0x00);                        /* retry-fail code */
@@ -662,7 +662,7 @@ return 020;
 
 /* Read memory */
 
-uint16 ksdi_rdmem (uint32 cmd, uint32 rsp)
+uint16 ks_rdmem (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: READ MEMORY\n");
 PUTW (rsp, 0x72);                                       /* response opcode */
@@ -671,7 +671,7 @@ return 030;
 
 /* Recalibrate */
 
-uint16 ksdi_recal (uint32 cmd, uint32 rsp)
+uint16 ks_recal (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: RECALIBRATE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -680,7 +680,7 @@ return 002;
 
 /* Seek */
 
-uint16 ksdi_seek (uint32 cmd, uint32 rsp)
+uint16 ks_seek (uint32 cmd, uint32 rsp)
 {
 uint32 cyl, grp;
 cyl = GETB (cmd + 004);
@@ -692,18 +692,18 @@ PUTW (rsp, 0x7E);                                       /* response opcode - COM
 return 002;
 }
 
-uint16 ksdi_chmode (uint32 cmd, uint32 rsp)
+uint16 ks_chmode (uint32 cmd, uint32 rsp)
 {
 uint8 msk, val;
 val = GETB (cmd + 002);                                 /* new mode value */
 msk = GETB (cmd + 004);                                 /* mask */
-ksdi_mode = (ksdi_mode & ~msk) | (val & msk);
+ks_mode = (ks_mode & ~msk) | (val & msk);
 sim_printf ("SDI command: CHANGE MODE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
-uint16 ksdi_chflag (uint32 cmd, uint32 rsp)
+uint16 ks_chflag (uint32 cmd, uint32 rsp)
 {
 sim_printf ("SDI command: CHANGE CONTROLLER FLAGS\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -712,58 +712,58 @@ return 002;
 
 /* SDI level 2 command */
 
-uint16 ksdi_cmd (uint32 cmd, uint32 rsp)
+uint16 ks_cmd (uint32 cmd, uint32 rsp)
 {
 uint8 opc = GETB (cmd);                                 /* get SDI opcode */
 uint16 rsz = 0;
 
 switch (opc) {
     case 0x81:                                          /* CHANGE MODE */
-        rsz = ksdi_chmode (cmd, rsp);
+        rsz = ks_chmode (cmd, rsp);
         break;
 
     case 0x82:                                          /* CHANGE CONTROLLER FLAGS */
-        rsz = ksdi_chflag (cmd, rsp);
+        rsz = ks_chflag (cmd, rsp);
         break;
 
     case 0x03:                                          /* DIAGNOSE */
-        rsz = ksdi_diag (cmd, rsp);
+        rsz = ks_diag (cmd, rsp);
         break;
 
     case 0x84:                                          /* DISCONNECT */
-        rsz = ksdi_disc (cmd, rsp);
+        rsz = ks_disc (cmd, rsp);
         break;
 
     case 0x05:                                          /* DRIVE CLEAR */
-        rsz = ksdi_clear (cmd, rsp);
+        rsz = ks_clear (cmd, rsp);
         break;
 
     case 0x87:                                          /* GET COMMON CHARACTERISTICS */
-        rsz = ksdi_getchar (cmd, rsp);
+        rsz = ks_getchar (cmd, rsp);
         break;
 
     case 0x88:                                          /* GET SUBUNIT CHARACTERISTICS */
-        rsz = ksdi_getsubchar (cmd, rsp);
+        rsz = ks_getsubchar (cmd, rsp);
         break;
 
     case 0x09:                                          /* GET STATUS */
-        rsz = ksdi_getsts (cmd, rsp);
+        rsz = ks_getsts (cmd, rsp);
         break;
 
     case 0x0A:                                          /* SEEK */
-        rsz = ksdi_seek (cmd, rsp);
+        rsz = ks_seek (cmd, rsp);
         break;
 
     case 0x8B:                                          /* ONLINE drive */
-        rsz = ksdi_online (cmd, rsp);
+        rsz = ks_online (cmd, rsp);
         break;
 
     case 0x8D:                                          /* READ MEMORY */
-        rsz = ksdi_rdmem (cmd, rsp);
+        rsz = ks_rdmem (cmd, rsp);
         break;
 
     case 0x8E:                                          /* RECALIBRATE */
-        rsz = ksdi_recal (cmd, rsp);
+        rsz = ks_recal (cmd, rsp);
         break;
 
     default:
@@ -783,7 +783,7 @@ return rsz;
 
 /* Get realtime drive status */
 
-void ksdi_rtds (uint32 rsp)
+void ks_rtds (uint32 rsp)
 {
 uint16 sts = 0;
 sim_printf ("LINE STATUS\n");
@@ -794,7 +794,7 @@ else
 PUTW (rsp, sts);
 }
 
-void ksdi_process_dcb (uint32 ksa)
+void ks_process_dcb (uint32 ksa)
 {
 uint32 dc, sq, eq, rsp, opc, rsz, tq, cmd, tmp;
 
@@ -834,12 +834,12 @@ for (int j = 0; j < 20; j++) {
             PUTW (rsp, cmd);                            /* copy to response */
             break;
         case 010400:                                    /* LINE STATUS */
-            ksdi_rtds (rsp);
+            ks_rtds (rsp);
             break;
         default:
             cmd = GETP (dc + DC_CMD);                   /* get command buffer */
             if (cmd)
-                rsz = ksdi_cmd (cmd, rsp);
+                rsz = ks_cmd (cmd, rsp);
             else {
                 sim_printf ("No command pointer\n");
                 PUTW (rsp, 0x7E);                       /* write response word */
@@ -937,7 +937,7 @@ PUTDW (dma + 01000, 0105);                              /* TODO: See ILDISK:5144
 void process_frb (uint32 frb, uint32 cyl, uint32 sct)
 {
 uint32 bd, scnt, tmp, dma, lbn, trk, rte, opc;
-uint32 ks = ksdi_dib.cma;
+uint32 ks = ks_dib.cma;
 
 lbn = GETB (frb + F_HLBN);                              /* high LBN */
 lbn = lbn << 16;
@@ -952,7 +952,7 @@ sim_printf ("FRB: %07o, LBN: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d\n", frb, lb
 bd = GETP (frb + F_BFHD);
 if (bd == 0) {                                         /* no data buffer? */
     for (int i = 0; i < scnt; i++) {
-        bd = GETP (ksdi_dib.cma + KG_FBU);             /* get a free data memory buffer */
+        bd = GETP (ks_dib.cma + KG_FBU);               /* get a free data memory buffer */
         bd = kg_receive (bd);
         dma = GETW (bd + 002);
         dma = (dma << 6) & DMEMMASK;
@@ -1001,13 +1001,13 @@ else {
         }
     }
 
-if ((cyl == 273) && ((ksdi_mode & MODE_OB) == 0))
+if ((cyl == 273) && ((ks_mode & MODE_OB) == 0))
     kg_route_frb (ks, frb, FALSE);
 else
     kg_route_frb (ks, frb, TRUE);
 }
 
-void ksdi_process_drat (uint32 ksh, uint32 kfl)
+void ks_process_drat (uint32 ksh, uint32 kfl)
 {
 uint32 dt, cyl, fq, cnt, cq, frb, fc, flg;
 
@@ -1071,27 +1071,27 @@ if (cnt == 0) {                                         /* all operation complet
     }
 }
 
-t_stat ksdi_process (uint32 port)
+t_stat ks_process (uint32 port)
 {
 uint32 ksa, ksh, kfl;
 
-ksa = ksdi_dib.cma + KS_S0 + (port * 16);               /* drive state area */
-ksdi_process_dcb (ksa);
+ksa = ks_dib.cma + KS_S0 + (port * 16);                 /* drive state area */
+ks_process_dcb (ksa);
 
-ksh = ksdi_dib.cma + KS_0HD + (port * 4);               /* DRAT queue */
-kfl = ksdi_dib.cma - KS_0FL - (port * 4);               /* port flags */
-ksdi_process_drat (ksh, kfl);
+ksh = ks_dib.cma + KS_0HD + (port * 4);                 /* DRAT queue */
+kfl = ks_dib.cma - KS_0FL - (port * 4);                 /* port flags */
+ks_process_drat (ksh, kfl);
 
 return SCPE_OK;
 }
 
-t_stat ksdi_svc (UNIT *uptr)
+t_stat ks_svc (UNIT *uptr)
 {
-uint32 ks = ksdi_dib.cma;
+uint32 ks = ks_dib.cma;
 uint32 port = 0;
 uint32 ksa, tq, dc;
 
-ksa = ksdi_dib.cma + KS_S0 + (port * 16);               /* drive state area */
+ksa = ks_dib.cma + KS_S0 + (port * 16);                 /* drive state area */
 if (GETW (ks + KG_RSL) == 0) {                          /* test started? */
     PUTW (ks + KG_RSL, 1);                              /* KG$RSL - result of self test */
     dc = kg_receive (ksa + KSA_HEAD);                   /* get DCB from drive state area */
@@ -1100,14 +1100,14 @@ if (GETW (ks + KG_RSL) == 0) {                          /* test started? */
     }
 else if (!Q_LOCKED (ksa + KSA_LOCK)) {                  /* drive state area locked? */
     if ((GETW (ksa + KSA_FLGS) & 0100000) == 0)         /* drive not known to system? */
-        ksdi_run (uptr, 0, NULL, NULL);                 /* notify drive present */
-    ksdi_process (port);
+        ks_run (uptr, 0, NULL, NULL);                   /* notify drive present */
+    ks_process (port);
     }
 sim_clock_coschedule (uptr, tmxr_poll);                 /* reactivate */
 return SCPE_OK;
 }
 
-t_stat ksdi_reset (DEVICE *dptr)
+t_stat ks_reset (DEVICE *dptr)
 {
 return SCPE_OK;
 }

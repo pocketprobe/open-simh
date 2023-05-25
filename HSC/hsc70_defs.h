@@ -56,15 +56,15 @@
 
 /* I/O page layout */
 
-#define IOBA_CWIN       IOPAGEBASE
+#define IOBA_CWIN       IOPAGEBASE                      /* control memory window */
 #define IOLN_CWIN       010000
-#define IOBA_IOC        (IOPAGEBASE + 010000)
-#define IOLN_IOC        060
-#define IOBA_ROM        (IOPAGEBASE + 013000)
+#define IOBA_PIO        (IOPAGEBASE + 010000)           /* P.ioj registers */
+#define IOLN_PIO        060
+#define IOBA_ROM        (IOPAGEBASE + 013000)           /* boot ROM */
 #define IOLN_ROM        04000
-#define IOBA_FL         (IOPAGEBASE + 017400)
+#define IOBA_FL         (IOPAGEBASE + 017400)           /* floppy controller */
 #define IOLN_FL         010
-#define IOBA_DL         (IOPAGEBASE + 017520)
+#define IOBA_DL         (IOPAGEBASE + 017520)           /* serial ports */
 #define VEC_DL          0300
 
 #define DEV_V_HSC       (DEV_V_FFUF + 0)
@@ -116,46 +116,5 @@ extern uint16 *DM;                                      /* Data memory */
 #define PCSR_NMA        0000004                         /* non-memory access */
 #define PCSR_CIE        0000002                         /* control mem interrupt enable */
 #define PCSR_LCK        0000001                         /* control mem lock enable */
-
-# if 0
-
-/* IO parameters */
-
-#define DLX_LINES       2                               /* max # of KL11/DL11's */
-
-/* Interrupt assignments; within each level, priority is right to left
-   PIRQn has the highest priority with a level and is always bit <0>
-   On level 6, the clock is second highest priority */
-
-#define INT_V_CB7       1                               /* BR7 */
-
-#define INT_V_CB6       5                               /* BR6 */
-
-#define INT_V_CB5       20                              /* BR5 */
-
-#define INT_V_FL        13                              /* BR4 */
-#define INT_V_CB4       14
-
-#define INT_FL          (1u << INT_V_FL)
-#define INT_CB7         (1u << INT_V_CB7)
-#define INT_CB6         (1u << INT_V_CB6)
-#define INT_CB5         (1u << INT_V_CB5)
-#define INT_CB4         (1u << INT_V_CB4)
-
-#define IPL_FL          4                               /* int pri levels */
-#define IPL_CB7         7
-#define IPL_CB6         6
-#define IPL_CB5         5
-#define IPL_CB4         4
-
-/* Processor specific internal fixed vectors */
-
-#define VEC_FL          0230
-#define VEC_CB7         0134
-#define VEC_CB6         0130
-#define VEC_CB5         0124
-#define VEC_CB4         0120
-
-#endif
 
 #endif

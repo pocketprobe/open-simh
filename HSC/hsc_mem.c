@@ -1,4 +1,4 @@
-/* hsc70_mem.c: HSC70 memory
+/* hsc_mem.c: HSC memory
 
    Copyright (c) 2023, Matt Burke
 

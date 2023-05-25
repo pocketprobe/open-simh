@@ -1,4 +1,4 @@
-/* hsc70_kg.h: HSC70 common K requestor functions
+/* hsc_kg.h: HSC common K requestor functions
 
    Copyright (c) 2023, Matt Burke
 

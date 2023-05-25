@@ -1,4 +1,4 @@
-/* hsc70_kci.c: HSC70 K.ci simulation
+/* hsc_kh.c: HSC K.ci simulation
 
    Copyright (c) 2023, Matt Burke
 
@@ -25,7 +25,7 @@
 */
 
 #include "pdp11_defs.h"
-#include "hsc70_kg.h"
+#include "hsc_kg.h"
 #include "dec_ci.h"
 
 /* K.ci control area */
@@ -171,19 +171,19 @@
 
 extern int32 tmxr_poll;                                 /* calibrated delay */
 
-uint32 kci_req[CI_MAX_NODES];                           /* pending request buffers */
-uint32 kci_vcf[CI_MAX_NODES];                           /* virtual circuit flags */
+uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
+uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
 
-t_stat kci_svc (UNIT *uptr);
-t_stat kci_reset (DEVICE *dptr);
-t_stat kci_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-t_stat kci_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-t_stat kci_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-t_stat kci_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-t_stat kci_set_node (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-t_stat kci_init (uint16 req, uint16 act);
+t_stat kh_svc (UNIT *uptr);
+t_stat kh_reset (DEVICE *dptr);
+t_stat kh_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat kh_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat kh_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat kh_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat kh_set_node (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat kh_init (uint16 req, uint16 act);
 
-DEBTAB kci_debug[] = {
+DEBTAB kh_debug[] = {
     { "REG",    DBG_REG },
     { "WARN",   DBG_WRN },
     { "REQID",  DBG_REQID },
@@ -198,19 +198,19 @@ DEBTAB kci_debug[] = {
     { 0 }
     };
 
-HDIB kci_dib = {
+HDIB kh_dib = {
     { 0, 0, NULL, NULL,
       0, 0, 0, { NULL } },
-    K_CI, 0, &kci_init
+    K_CI, 0, &kh_init
     };
 
-UNIT kci_unit = { UDATA (&kci_svc, 0, 0) };
+UNIT kh_unit = { UDATA (&kh_svc, 0, 0) };
 
-REG kci_reg[] = {
+REG kh_reg[] = {
     { NULL }
     };
 
-MTAB kci_mod[] = {
+MTAB kh_mod[] = {
     { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
       NULL, &kg_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
@@ -222,55 +222,55 @@ MTAB kci_mod[] = {
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "LINKS", NULL,
       NULL, &ci_show_links, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "CONTROL", NULL,
-      NULL, &kci_show_ctrl, NULL },
+      NULL, &kh_show_ctrl, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 004, "SB", NULL,
-      NULL, &kci_show_sb, NULL },
+      NULL, &kh_show_sb, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 004, "CB", NULL,
-      NULL, &kci_show_cb, NULL },
+      NULL, &kh_show_cb, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, KH_2WK, "2WK", NULL,
       NULL, &kg_show_queue, NULL, "Display work queue 2" },
     { 0 }
     };
 
-DEVICE kci_dev = {
-    "KCI", &kci_unit, kci_reg, kci_mod,
+DEVICE kh_dev = {
+    "KCI", &kh_unit, kh_reg, kh_mod,
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
-    NULL, NULL, &kci_reset,
+    NULL, NULL, &kh_reset,
     NULL, &ci_attach, &ci_detach,
-    &kci_dib, DEV_DEBUG | DEV_HSC | DEV_CI | DEV_DISABLE,
-    0, kci_debug
+    &kh_dib, DEV_DEBUG | DEV_HSC | DEV_CI | DEV_DISABLE,
+    0, kh_debug
     };
 
 
 /* The version must be at least DS = 2, MC = 44 */
 
-t_stat kci_init (uint16 req, uint16 act)
+t_stat kh_init (uint16 req, uint16 act)
 {
-uint8 node = ci_get_node (&kci_unit);
+uint8 node = ci_get_node (&kh_unit);
 t_bool run;
 if (act == K_RUN) {
-    kci_dib.cma = kg_init (&run);
-    sim_debug (DBG_TRC, &kci_dev, "K.ci startup: KH = %06o at %o\n", kci_dib.cma, (uint16)inst_pc);
-    PUTW (kci_dib.cma + KH_NAD, node);                      /* KH$NAD - CI node address */
-    PUTW (kci_dib.cma + KG_VRS, (3 << 8) | 73);             /* KG$VRS - version (DS = 3, MC = 73) */
+    kh_dib.cma = kg_init (&run);
+    sim_debug (DBG_TRC, &kh_dev, "K.ci startup: KH = %06o at %o\n", kh_dib.cma, (uint16)inst_pc);
+    PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
+    PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
     if (!run)
         return SCPE_OK;
-    ci_set_state (&kci_unit, PORT_INIT);
-    ci_set_state (&kci_unit, PORT_ENABLED);
-    sim_clock_coschedule (&kci_unit, tmxr_poll);            /* activate */
+    ci_set_state (&kh_unit, PORT_INIT);
+    ci_set_state (&kh_unit, PORT_ENABLED);
+    sim_clock_coschedule (&kh_unit, tmxr_poll);         /* activate */
     }
 else {
-    sim_debug (DBG_TRC, &kci_dev, "K.ci halt at %o\n", (uint16)inst_pc);
-    ci_set_state (&kci_unit, PORT_UNINIT);
-    sim_cancel (&kci_unit);
-    kci_dib.cma = 0;
+    sim_debug (DBG_TRC, &kh_dev, "K.ci halt at %o\n", (uint16)inst_pc);
+    ci_set_state (&kh_unit, PORT_UNINIT);
+    sim_cancel (&kh_unit);
+    kh_dib.cma = 0;
     }
 return SCPE_OK;
 }
 
-t_stat kci_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat kh_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 t_stat r;
 
 print_word (st, kh, "KH$LNK", KH_LNK, 2);
@@ -306,10 +306,10 @@ print_word (st, kh, "KH$ABQ", 0174, 2);                 /* abort queue? */
 return SCPE_OK;
 }
 
-t_stat kci_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat kh_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 const char *cptr = (const char *) desc;
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 uint32 sb, node;
 t_stat r;
 
@@ -351,10 +351,10 @@ print_word (st, sb, "SB$PRO", SB_PRO, 1);
 return SCPE_OK;
 }
 
-t_stat kci_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+t_stat kh_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 const char *cptr = (const char *) desc;
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 uint32 sb, cb, node;
 t_stat r;
 
@@ -431,7 +431,7 @@ while (cb != 0) {
 return SCPE_OK;
 }
 
-void kci_print_frb (uint32 frb)
+void kh_print_frb (uint32 frb)
 {
 print_word (NULL, frb, "F$LINK", F_LINK, 2);
 print_word (NULL, frb, "F$PCTR", F_PCTR, 2);
@@ -478,7 +478,7 @@ t_stat ci_request_id (UNIT *uptr, CI_PKT *pkt)
 {
 pkt->data[PPD_STATUS] = 0;                              /* status: OK */
 pkt->data[PPD_OPC] = OPC_RETID;                         /* set opcode */
-if (ci_check_vc (&kci_unit, pkt->data[PPD_PORT])) {     /* don't send ID once VC is open? */
+if (ci_check_vc (&kh_unit, pkt->data[PPD_PORT])) {      /* don't send ID once VC is open? */
     CI_PUT32 (pkt->data, 0x10, 1);                      /* transaction ID low (MBZ to trigger START) */
     }
 else {
@@ -488,11 +488,11 @@ CI_PUT32 (pkt->data, 0x14, 0);                          /* transaction ID high (
 CI_PUT32 (pkt->data, 0x18, (CI_DUALPATH | CI_HSC));     /* remote port type */
 CI_PUT32 (pkt->data, 0x1C, 0x03060D22);                 /* code revision */
 CI_PUT32 (pkt->data, 0x20, 0xFFFF0D00);                 /* function mask */
-pkt->data[0x24] = kci_unit.ci_node;                     /* resetting port */
+pkt->data[0x24] = kh_unit.ci_node;                      /* resetting port */
 // TODO: should also respond when disabled?
 pkt->data[0x25] = 0x4;                                  /* port state (maint = 0, state = enabled) */
 pkt->length = 0x26;  // TODO: check length, add #define
-return ci_send_ppd (&kci_unit, pkt);
+return ci_send_ppd (&kh_unit, pkt);
 }
 
 t_stat ci_send_data (UNIT *uptr, CI_PKT *pkt)
@@ -503,7 +503,7 @@ return SCPE_OK;
 t_stat ci_receive_data (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 bct, len, bd, dma, frb;
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 
 frb = CI_GET32 (pkt->data, PPD_RBNAM);
 bct = CI_GET32 (pkt->data, PPD_XFRSZ);
@@ -523,9 +523,9 @@ if (pkt->data[PPD_FLAGS] & PPD_LP)                      /* last packet? */
 return SCPE_OK;
 }
 
-uint32 kci_get_srr (uint32 len)
+uint32 kh_get_srr (uint32 len)
 {
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 uint32 hm, last, sz;
 
 last = GETP (kh + KH_SRR + Q_TAIL);                     /* save last buffer address */
@@ -549,9 +549,9 @@ return hm;
 
 /* New incoming packet received (internal version) */
 
-t_stat kci_receive_int (UNIT *uptr, CI_PKT *pkt, uint32 cq)
+t_stat kh_receive_int (UNIT *uptr, CI_PKT *pkt, uint32 cq)
 {
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 uint32 rsc, dma, opc, lof, len, sb, node;
     uint16 dg_type = CI_GET16 (pkt->data, PPD_MTYPE) & DG_MTYPE;
     uint16 scs_type = CI_GET16 (pkt->data, PPD_STYPE);
@@ -565,15 +565,15 @@ else
     len = pkt->length - PPD_HDR + 2;
 
 if (opc == OPC_SNDMSG) {
-    if ((kci_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* SCS response packet? */
-        rsc = kci_req[node];
+    if ((kh_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* SCS response packet? */
+        rsc = kh_req[node];
         lof = GETW (rsc + HM_LOF);
         lof = lof & ~0074000;
         lof = lof | 0040000;
         }
     else {
         lof = 0040000;
-        rsc = kci_get_srr (len);
+        rsc = kh_get_srr (len);
         if (len >= 0100)
             lof = lof | 077;
         else
@@ -622,9 +622,9 @@ else {
         memcpy (&DM[(dma + 002) >> 1], &pkt->data[PPD_LENGTH], (pkt->length - PPD_LENGTH));
     }
 
-if ((kci_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
-    sim_printf ("K.ci complete pending request for %07o\n", kci_req);
-    kci_req[node] = 0;
+if ((kh_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
+    sim_printf ("K.ci complete pending request for %07o\n", kh_req);
+    kh_req[node] = 0;
     }
 
 if (cq == 0)
@@ -636,11 +636,11 @@ kg_send (cq, rsc);
 return SCPE_OK;
 }
 
-t_stat kci_appmsg (UNIT *uptr, CI_PKT *pkt)
+t_stat kh_appmsg (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 srccon, dstcon;
 uint32 node = pkt->data[PPD_PORT];
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 uint32 sb, cb, cq;
 uint32 rsc, dma, opc, lof, len, rcc;
 
@@ -666,7 +666,7 @@ if (cq == 0)
     return SCPE_OK;
 
 len = pkt->length - SCS_APPL;
-rsc = kci_get_srr (len);
+rsc = kh_get_srr (len);
 lof = 0 | len;
 
 if (rsc == 0) {
@@ -691,17 +691,17 @@ kg_send (cq, rsc);
 return SCPE_OK;
 }
 
-t_stat kci_cnfrec (UNIT *uptr, CI_PKT *pkt)
+t_stat kh_cnfrec (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 frb;
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 
 frb = CI_GET32 (pkt->data, PPD_SBNAM);
 kg_route_frb (kh, frb, TRUE);
 return SCPE_OK;
 }
 
-t_stat kci_scsrec (UNIT *uptr, CI_PKT *pkt)
+t_stat kh_scsrec (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 msg_type = CI_GET16 (pkt->data, PPD_STYPE);
 
@@ -709,34 +709,34 @@ switch (msg_type) {
     
     case SCS_APPMSG:                                    /* application message */
     case SCS_APPDG:                                     /* application datagram */
-        return kci_appmsg (uptr, pkt);
+        return kh_appmsg (uptr, pkt);
 
     default:
         break;
         }
-return kci_receive_int (uptr, pkt, 0);
+return kh_receive_int (uptr, pkt, 0);
 }
 
-t_stat kci_msgrec (UNIT *uptr, CI_PKT *pkt)
+t_stat kh_msgrec (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 dg_type = CI_GET16 (pkt->data, PPD_MTYPE);
 
 switch (dg_type) {
 
     case DG_SCSMSG:
-        return kci_scsrec (uptr, pkt);
+        return kh_scsrec (uptr, pkt);
 
     default:
         break;
         }
-return kci_receive_int (uptr, pkt, 0);
+return kh_receive_int (uptr, pkt, 0);
 }
 
 /* New incoming packet received */
 
-t_stat kci_receive (CI_PKT *pkt)
+t_stat kh_receive (CI_PKT *pkt)
 {
-UNIT *uptr = &kci_unit;
+UNIT *uptr = &kh_unit;
 uint32 dg_type;
 
 /* LOADER-E K.ci loopback microcode loaded */
@@ -744,7 +744,7 @@ if (pkt->data[PPD_PORT] == ci_get_node (uptr))          /* from local node? */
     return SCPE_OK;                                     /* ignore */
 switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by port */
     case OPC_MSGREC:
-        return kci_msgrec (uptr, pkt);
+        return kh_msgrec (uptr, pkt);
 
     case OPC_IDREC:
         if (ci_check_vc (uptr, pkt->data[PPD_PORT]))    /* VC open? */
@@ -752,7 +752,7 @@ switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by po
         break;
 
     case OPC_CNFREC:
-        return kci_cnfrec (uptr, pkt);
+        return kh_cnfrec (uptr, pkt);
 
     case OPC_REQDATREC:
         return ci_send_data (uptr, pkt);
@@ -764,10 +764,10 @@ switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by po
     case OPC_REQREC:
         return ci_request_id (uptr, pkt);
         }
-return kci_receive_int (uptr, pkt, 0);
+return kh_receive_int (uptr, pkt, 0);
 }
 
-void kci_counters (uint32 rsc, uint8 node)
+void kh_counters (uint32 rsc, uint8 node)
 {
 PUTW (rsc + HM_AKA + 000, 0);                           /* ACKs path A - low word */
 PUTW (rsc + HM_AKA + 002, 0);                           /* ACKs path A - high word */
@@ -791,7 +791,7 @@ PUTW (rsc + HM_RDR + 002, 0);                           /* Discarded RTNDATs - h
 
 /* get/set virtual circuit flags */
 
-void kci_set_vc (uint32 rsc)
+void kh_set_vc (uint32 rsc)
 {
 uint32 node, vcf, mask;
 
@@ -800,16 +800,16 @@ vcf = GETW (rsc + HM_VCF);                              /* new flags */
 mask = GETW (rsc + HM_MK);                              /* mask */
 
 if (vcf && mask)                                        /* opening VC? */
-    ci_open_vc (&kci_unit, node);
+    ci_open_vc (&kh_unit, node);
 else if (mask)                                          /* closing VC? */
-    ci_close_vc (&kci_unit, node);
-kci_vcf[node] = (kci_vcf[node] & ~mask) | (vcf & mask); /* update flags */
-PUTW (rsc + HM_VCF, kci_vcf[node]);                     /* return updated value */
+    ci_close_vc (&kh_unit, node);
+kh_vcf[node] = (kh_vcf[node] & ~mask) | (vcf & mask);   /* update flags */
+PUTW (rsc + HM_VCF, kh_vcf[node]);                      /* return updated value */
 }
 
 /* Local K.ci commands */
 
-void kci_local_cmd (uint32 rsc, uint32 *cq)
+void kh_local_cmd (uint32 rsc, uint32 *cq)
 {
 uint32 opc, p1, p2, p3;
 
@@ -820,10 +820,10 @@ p3 = GETW (rsc + HM_MSG + 006);
 switch (opc) {
     case 001:                                           /* get/set virtual circuit flags */
         sim_printf ("local cmd: opc = %d, node = %d, p2 = %06o, p3 = %06o, cq = %06o\n", opc, p1, p2, p3, *cq);
-        kci_set_vc (rsc);
+        kh_set_vc (rsc);
         break;
     case 002:                                           /* get counters */
-        kci_counters (rsc, p1);
+        kh_counters (rsc, p1);
         break;
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
@@ -836,7 +836,7 @@ switch (opc) {
     }
 }
 
-t_stat kci_send_int (UNIT *uptr, CI_PKT *pkt)
+t_stat kh_send_int (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 dg_type;
 
@@ -849,10 +849,10 @@ return ci_send_ppd (uptr, pkt);
 
 /* Send a datagram */
 
-void kci_send (uint32 rsc, uint32 *cq)
+void kh_send (uint32 rsc, uint32 *cq)
 {
 uint32 len, opc, flgs, node, dma, cb, srccon, dstcon, rcc, off, dx, val;
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r = SCPE_OK;
 
@@ -928,7 +928,7 @@ else if (opc == 054000)                                 /* send datagram path B 
 else
     pkt.data[PPD_FLAGS] |= (PPD_PSAUTO << PPD_V_PS);    /* path auto? */
 pkt.length = len;
-r = kci_send_int (&kci_unit, &pkt);
+r = kh_send_int (&kh_unit, &pkt);
 
 if (opc == 040000) {
     dx = GETP (rsc + HM_DX);                            /* get deallocation context */
@@ -945,21 +945,21 @@ if (*cq == 0) {
 //        kg_send (cq, rsc);
         }
     else {
-        kci_req[node] = rsc;
+        kh_req[node] = rsc;
         sim_printf ("K.ci start pending request for %07o\n", rsc);
         }
     }
 }
 
-void kci_send_data (uint32 rsc)
+void kh_send_data (uint32 rsc)
 {
 uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma;
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
 sim_printf ("K.ci FRB:\n");
-kci_print_frb (rsc);
+kh_print_frb (rsc);
 hm = GETP (rsc + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
@@ -994,7 +994,7 @@ while (bct) {
     dma = dma + B_DATA;                                 /* point to sector data */
     sim_printf ("DMEM addr = %o\n", dma);
     memcpy (&pkt.data[CI_DATHDR], &DM[dma >> 1], len);  /* copy to packet buffer */
-    r = ci_send_ppd (&kci_unit, &pkt);                  /* send to host */
+    r = ci_send_ppd (&kh_unit, &pkt);                   /* send to host */
     if (r != SCPE_OK) {
         sim_printf ("K.ci stalled during SNDDAT operation\n");
         break;
@@ -1005,15 +1005,15 @@ while (bct) {
     }
 }
 
-void kci_request_data (uint32 rsc)
+void kh_request_data (uint32 rsc)
 {
 uint32 hm, cb, con, bnm, bct, roff, soff;
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
 sim_printf ("K.ci FRB:\n");
-kci_print_frb (rsc);
+kh_print_frb (rsc);
 hm = GETP (rsc + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
@@ -1037,12 +1037,12 @@ CI_PUT32 (pkt.data, PPD_SBNAM, bnm);                    /* send buffer name */
 CI_PUT32 (pkt.data, PPD_SBOFF, soff);                   /* send buffer offset */
 CI_PUT32 (pkt.data, PPD_RBNAM, rsc);                    /* receive buffer name */
 CI_PUT32 (pkt.data, PPD_RBOFF, roff);                   /* receive buffer offset */
-r = ci_send_ppd (&kci_unit, &pkt);
+r = ci_send_ppd (&kh_unit, &pkt);
 if (r != SCPE_OK)
     sim_printf ("K.ci stalled during REQDAT operation\n");
 }
 
-void kci_process_frb (uint32 rsc, uint32 *cq)
+void kh_process_frb (uint32 rsc, uint32 *cq)
 {
 uint32 rte, opc;
 
@@ -1050,21 +1050,21 @@ uint32 rte, opc;
 rte = GETP (rsc + F_RTE);                               /* get route */
 opc = GETB (rte + V_OPCD);                              /* get opcode */
 if (opc == V_SD)                                        /* send data */
-    kci_send_data (rsc);
+    kh_send_data (rsc);
 else if (opc == V_RD)                                   /* request data */
-    kci_request_data (rsc);
+    kh_request_data (rsc);
 else
     sim_printf ("Unknown route opcode in FRB: %o\n", opc);
 }
 
-void kci_process (uint32 rsc, uint32 *cq)
+void kh_process (uint32 rsc, uint32 *cq)
 {
 uint16 opc = GETW (rsc + HM_LOF) & 074000;
         for (int i = 0; i < 12; i++)
             sim_printf ("S %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
 switch (opc) {
     case 060000:                                        /* local command */
-        kci_local_cmd (rsc, cq);
+        kh_local_cmd (rsc, cq);
         break;
     case 034000:                                        /* send datagram (path A) */
     case 054000:                                        /* send datagram (path B) */
@@ -1072,10 +1072,10 @@ switch (opc) {
     case 030000:                                        /* send message */
     case 020000:                                        /* send SCS message? */
     case 040000:                                        /* send SCS message? */
-        kci_send (rsc, cq);
+        kh_send (rsc, cq);
         break;
     case 000000:
-        kci_process_frb (rsc, cq);
+        kh_process_frb (rsc, cq);
         break;
     default:
         sim_printf ("K.ci unknown opcode: %o\n", opc);
@@ -1085,7 +1085,7 @@ switch (opc) {
     }
 }
 
-void kci_process_queue (uint32 kh, uint32 wq)
+void kh_process_queue (uint32 kh, uint32 wq)
 {
 uint32 cq, rsc, i, opc;
 
@@ -1108,30 +1108,30 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
 
     rsc = kg_receive (wq);                              /* get resource from work queue */
     sim_printf ("Processing packet %07o from queue %07o\n", rsc, wq);
-    kci_process (rsc, &cq);                             /* process resource */
+    kh_process (rsc, &cq);                              /* process resource */
 
     if (cq)
         kg_send (cq, rsc);                              /* put resource to completion queue */
     }
 }
 
-t_stat kci_svc (UNIT *uptr)
+t_stat kh_svc (UNIT *uptr)
 {
-uint32 kh = kci_dib.cma;
+uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
-kci_process_queue (kh, kh + KH_0WK);                    /* process work queues */
-kci_process_queue (kh, kh + KH_1WK);
-kci_process_queue (kh, kh + KH_2WK);
-kci_process_queue (kh, kh + KH_3WK);
+kh_process_queue (kh, kh + KH_0WK);                     /* process work queues */
+kh_process_queue (kh, kh + KH_1WK);
+kh_process_queue (kh, kh + KH_2WK);
+kh_process_queue (kh, kh + KH_3WK);
 
 for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
     r = ci_receive_ppd (uptr, &pkt);                    /* get next packet */
     // TODO: handle errors from ci_receive
     if (r != SCPE_OK)
         break;
-    r = kci_receive (&pkt);                             /* process packet */
+    r = kh_receive (&pkt);                              /* process packet */
     if (r != SCPE_OK)
         return r;
     };
@@ -1139,11 +1139,11 @@ for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
 return ci_port_svc (uptr);
 }
 
-t_stat kci_reset (DEVICE *dptr)
+t_stat kh_reset (DEVICE *dptr)
 {
 for (int i = 0; i < CI_MAX_NODES; i++) {
-    kci_req[i] = 0;
-    kci_vcf[i] = 0;
+    kh_req[i] = 0;
+    kh_vcf[i] = 0;
     }
 return ci_port_reset (dptr);
 }
