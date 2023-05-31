@@ -127,15 +127,15 @@ for (;;) {
     qh = GETP (qh);
     if ((qh == 0) || qh == 0100000)
         break;
-    print_word (st, qh, "", 0000, 2);
-    print_word (st, qh, "", 0002, 2);
-    print_word (st, qh, "", 0004, 2);
-    print_word (st, qh, "", 0006, 2);
-    print_word (st, qh, "", 0010, 2);
-    print_word (st, qh, "", 0012, 2);
-    print_word (st, qh, "", 0014, 2);
-    print_word (st, qh, "", 0016, 2);
-    print_word (st, qh, "", 0020, 2);
+    kg_print_word (st, qh, "", 0000, 2);
+    kg_print_word (st, qh, "", 0002, 2);
+    kg_print_word (st, qh, "", 0004, 2);
+    kg_print_word (st, qh, "", 0006, 2);
+    kg_print_word (st, qh, "", 0010, 2);
+    kg_print_word (st, qh, "", 0012, 2);
+    kg_print_word (st, qh, "", 0014, 2);
+    kg_print_word (st, qh, "", 0016, 2);
+    kg_print_word (st, qh, "", 0020, 2);
     fprintf (st, "   ---\n");
     }
 return SCPE_OK;
@@ -158,29 +158,29 @@ if (dibp == NULL)
     return SCPE_IERR;
 kg = dibp->cma;
 
-print_word (st, kg, "KG$TLK", 0040, 2);
-print_word (st, kg, "KG$SLT", 0042, 1);                 /* structure type? */
-print_word (st, kg, "KG$TYP", 0043, 1);                 /* structure type? */
-print_word (st, kg, "KG$VRS", 0044, 2);                 /* version */
-print_word (st, kg, "KG$FCB", 0046, 2);                 /* free control memory buffers? */
-print_word (st, kg, "KG$FBU", 0050, 2);
-print_word (st, kg, "KG$BWS", 0052, 2);
-print_word (st, kg, "KG$TMR", 0054, 2);
-print_word (st, kg, "KG$DMP", 0056, 2);
-print_word (st, kg, "KG$DCA", 0060, 2);
-print_word (st, kg, "KG$TST", 0062, 2);
-print_word (st, kg, "KG$FRS", 0064, 2);
-print_word (st, kg, "KG$LAS", 0066, 2);
-print_word (st, kg, "KG$MDL", 0070, 0);
-print_word (st, kg, "KG$MTY", 0070, 2);
-print_word (st, kg, "KG$PFL", 0072, 2);
-print_word (st, kg, "KG$RSL", 0074, 2);                 /* microdiagnostic test result */
-print_word (st, kg, "KG$LTR", 0076, 2);
-print_word (st, kg, "KG$PSA", 0100, 2);
-print_word (st, kg, "KG$PSB", 0102, 2);
-print_word (st, kg, "KG$DSA", 0104, 20);
-print_word (st, kg, "KG$MC0", 0130, 8);
-print_word (st, kg, "KG$KSA", 0140, 0);
+kg_print_word (st, kg, "KG$TLK", 0040, 2);
+kg_print_word (st, kg, "KG$SLT", 0042, 1);              /* structure type? */
+kg_print_word (st, kg, "KG$TYP", 0043, 1);              /* structure type? */
+kg_print_word (st, kg, "KG$VRS", 0044, 2);              /* version */
+kg_print_word (st, kg, "KG$FCB", 0046, 2);              /* free control memory buffers? */
+kg_print_word (st, kg, "KG$FBU", 0050, 2);
+kg_print_word (st, kg, "KG$BWS", 0052, 2);
+kg_print_word (st, kg, "KG$TMR", 0054, 2);
+kg_print_word (st, kg, "KG$DMP", 0056, 2);
+kg_print_word (st, kg, "KG$DCA", 0060, 2);
+kg_print_word (st, kg, "KG$TST", 0062, 2);
+kg_print_word (st, kg, "KG$FRS", 0064, 2);
+kg_print_word (st, kg, "KG$LAS", 0066, 2);
+kg_print_word (st, kg, "KG$MDL", 0070, 0);
+kg_print_word (st, kg, "KG$MTY", 0070, 2);
+kg_print_word (st, kg, "KG$PFL", 0072, 2);
+kg_print_word (st, kg, "KG$RSL", 0074, 2);              /* microdiagnostic test result */
+kg_print_word (st, kg, "KG$LTR", 0076, 2);
+kg_print_word (st, kg, "KG$PSA", 0100, 2);
+kg_print_word (st, kg, "KG$PSB", 0102, 2);
+kg_print_word (st, kg, "KG$DSA", 0104, 20);
+kg_print_word (st, kg, "KG$MC0", 0130, 8);
+kg_print_word (st, kg, "KG$KSA", 0140, 0);
 
 return SCPE_OK;
 }
@@ -203,7 +203,7 @@ else {
     }
 }
 
-void print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
+void kg_print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
 {
 if (st == NULL) {
     sim_print_word (kg, name, off, len);
@@ -225,7 +225,7 @@ else {
     }
 }
 
-void print_string (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
+void kg_print_string (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
 {
 fprintf (st, "%s %06o   ", name, kg + off);
 for (int i = 0; i < len; i++)
@@ -233,33 +233,33 @@ for (int i = 0; i < len; i++)
 fprintf (st, "\n");
 }
 
-void print_route (uint32 rte)
+void kg_print_route (uint32 rte)
 {
-print_word (NULL, rte, "V.FLGS", V_FLGS, 1);
-print_word (NULL, rte, "V.OPCD", V_OPCD, 1);
-print_word (NULL, rte, "V.SUCC", V_SUCC, 2);
-print_word (NULL, rte, "V.CTX ", V_CTX , 2);
-print_word (NULL, rte, "V.AERR", V_AERR, 2);
+kg_print_word (NULL, rte, "V.FLGS", V_FLGS, 1);
+kg_print_word (NULL, rte, "V.OPCD", V_OPCD, 1);
+kg_print_word (NULL, rte, "V.SUCC", V_SUCC, 2);
+kg_print_word (NULL, rte, "V.CTX ", V_CTX , 2);
+kg_print_word (NULL, rte, "V.AERR", V_AERR, 2);
 }
 
-void print_counter (uint32 ctr)
+void kg_print_counter (uint32 ctr)
 {
-print_word (NULL, ctr, "C.SRVC", C_SRVC, 2);
-print_word (NULL, ctr, "C.CNT ", C_CNT , 2);
+kg_print_word (NULL, ctr, "C.SRVC", C_SRVC, 2);
+kg_print_word (NULL, ctr, "C.CNT ", C_CNT , 2);
 }
 
 void kg_dec_ctr (uint32 ctr)
 {
 uint32 val, cq;
 
-print_counter (ctr);
+//kg_print_counter (ctr);
 val = GETW (ctr + C_CNT);                               /* get counter value */
 sim_printf ("CTR %d -> %d\n", val, (val - 1));
 val = val - 1;                                          /* another operation completed */
 PUTW (ctr + C_CNT, val);                                /* update counter value */
 if (val == 0) {                                         /* all operations complete? */
     cq = GETP (ctr);
-    sim_printf ("CTR dest = %07o\n", cq);
+//    sim_printf ("CTR dest = %07o\n", cq);
     PUTP (ctr, 0);                                      /* clear queue pointer */
     kg_send (cq, ctr);                                  /* send counter to completion queue */
     }
@@ -272,12 +272,12 @@ uint32 rte, ctr, flg, val, bd, sc, cq;
 ctr = GETP (frb + F_PCTR);
 rte = GETP (frb + F_RTE);                               /* get route */
 
-print_route (rte);
-print_route (rte + 010);
-print_route (rte + 020);
+//kg_print_route (rte);
+//kg_print_route (rte + 010);
+//kg_print_route (rte + 020);
 
 flg = GETW (rte);                                       /* get opcode/flags from route */
-sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
+//sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
 
 if (sts) {
     if (flg & V_FB) {                                   /* free buffers? */
@@ -306,7 +306,7 @@ else {
     cq = frb + (cq << 2);                               /* offset into FRB */
     cq = GETP (cq);
     }
-sim_printf ("FRB dest = %07o\n", cq);
+//sim_printf ("FRB dest = %07o\n", cq);
 kg_send (cq, frb);                                      /* send FRB to completion queue */
 }
 

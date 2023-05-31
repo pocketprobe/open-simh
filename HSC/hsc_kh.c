@@ -273,35 +273,35 @@ t_stat kh_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 uint32 kh = kh_dib.cma;
 t_stat r;
 
-print_word (st, kh, "KH$LNK", KH_LNK, 2);
-print_word (st, kh, "KH$FLG", 0002, 2);
-print_word (st, kh, "KH$3WK", KH_3WK, 4);               /* work queue 3 */
-print_word (st, kh, "KH$2WK", KH_2WK, 4);               /* work queue 2 */
-print_word (st, kh, "KH$1WK", KH_1WK, 4);               /* work queue 1 */
-print_word (st, kh, "KH$0WK", KH_0WK, 4);               /* work queue 0 */
-print_word (st, kh, "KH$EQ ", 0024, 4);                 /* error queue? */
-print_word (st, kh, "KH$SRR", KH_SRR, 4);
-print_word (st, kh, "KH$DRR", KH_DRR, 4);
+kg_print_word (st, kh, "KH$LNK", KH_LNK, 2);
+kg_print_word (st, kh, "KH$FLG", 0002, 2);
+kg_print_word (st, kh, "KH$3WK", KH_3WK, 4);               /* work queue 3 */
+kg_print_word (st, kh, "KH$2WK", KH_2WK, 4);               /* work queue 2 */
+kg_print_word (st, kh, "KH$1WK", KH_1WK, 4);               /* work queue 1 */
+kg_print_word (st, kh, "KH$0WK", KH_0WK, 4);               /* work queue 0 */
+kg_print_word (st, kh, "KH$EQ ", 0024, 4);                 /* error queue? */
+kg_print_word (st, kh, "KH$SRR", KH_SRR, 4);
+kg_print_word (st, kh, "KH$DRR", KH_DRR, 4);
 
 r = kg_show_ctrl (st, uptr, val, desc);
 if (r != SCPE_OK)
     return r;
 
-print_word (st, kh, "KH$D2T", 0140, 2);
-print_word (st, kh, "KH$CIM", KH_CIM, 2);               /* CI manager queue pointer? */
-print_word (st, kh, "KH$D1T", 0144, 2);
-print_word (st, kh, "KH$VA ", 0146, 2);
-print_word (st, kh, "KH$D0T", 0150, 2);
-print_word (st, kh, "KH$CVS", 0152, 2);
-print_word (st, kh, "KH$TMR", 0154, 4);                 /* timer */
-print_word (st, kh, "KH$BFR", 0160, 4);
-print_word (st, kh, "KH$NAD", KH_NAD, 2);               /* node address */
-print_word (st, kh, "KH$PDS", 0166, 1);
-print_word (st, kh, "KH$KDS", 0167, 1);
-print_word (st, kh, "KH$MBA", 0170, 1);
-print_word (st, kh, "KH$MXD", 0171, 1);
-print_word (st, kh, "KH$BSV", 0172, 2);
-print_word (st, kh, "KH$ABQ", 0174, 2);                 /* abort queue? */
+kg_print_word (st, kh, "KH$D2T", 0140, 2);
+kg_print_word (st, kh, "KH$CIM", KH_CIM, 2);               /* CI manager queue pointer? */
+kg_print_word (st, kh, "KH$D1T", 0144, 2);
+kg_print_word (st, kh, "KH$VA ", 0146, 2);
+kg_print_word (st, kh, "KH$D0T", 0150, 2);
+kg_print_word (st, kh, "KH$CVS", 0152, 2);
+kg_print_word (st, kh, "KH$TMR", 0154, 4);                 /* timer */
+kg_print_word (st, kh, "KH$BFR", 0160, 4);
+kg_print_word (st, kh, "KH$NAD", KH_NAD, 2);               /* node address */
+kg_print_word (st, kh, "KH$PDS", 0166, 1);
+kg_print_word (st, kh, "KH$KDS", 0167, 1);
+kg_print_word (st, kh, "KH$MBA", 0170, 1);
+kg_print_word (st, kh, "KH$MXD", 0171, 1);
+kg_print_word (st, kh, "KH$BSV", 0172, 2);
+kg_print_word (st, kh, "KH$ABQ", 0174, 2);                 /* abort queue? */
 
 return SCPE_OK;
 }
@@ -326,27 +326,27 @@ if (sb == 0) {
     fprintf (st, "No system block for node %d\n", node);
     return SCPE_OK;
     }
-print_word (st, sb, "SB$LNK", SB_LNK, 2);
-print_word (st, sb, "SB$CBN", SB_CBN, 2);
-print_word (st, sb, "SB$CBQ", SB_CBQ, 4);
-print_word (st, sb, "SB$NCB", SB_NCB, 2);
-print_word (st, sb, "SB$CNT", SB_CNT, 1);
-print_word (st, sb, "SB$FL2", SB_FL2, 1);
-print_word (st, sb, "SB$SCS", SB_SCS, 2);
-print_word (st, sb, "SB$BMB", SB_BMB, 4);
-print_word (st, sb, "SB$TIM", SB_TIM, 1);
-print_word (st, sb, "SB$PAS", SB_PAS, 1);
-print_word (st, sb, "SB$VCS", SB_VCS, 2);
-print_word (st, sb, "SB$FLG", SB_FLG, 2);
-print_word (st, sb, "SB$NOD", SB_NOD, 1);
-print_word (st, sb, "SB$NDC", SB_NDC, 1);
-print_word (st, sb, "SB$MDG", SB_MDG, 2);
-print_word (st, sb, "SB$MDM", SB_MDM, 2);
-print_word (st, sb, "SB$DID", SB_DID, 6);
-print_word (st, sb, "SB$MID", SB_MID, 4);
-print_string (st, sb, "SB$NAM", SB_NAM, 8);
-print_word (st, sb, "SB$IOC", SB_IOC, 2);
-print_word (st, sb, "SB$PRO", SB_PRO, 1);
+kg_print_word (st, sb, "SB$LNK", SB_LNK, 2);
+kg_print_word (st, sb, "SB$CBN", SB_CBN, 2);
+kg_print_word (st, sb, "SB$CBQ", SB_CBQ, 4);
+kg_print_word (st, sb, "SB$NCB", SB_NCB, 2);
+kg_print_word (st, sb, "SB$CNT", SB_CNT, 1);
+kg_print_word (st, sb, "SB$FL2", SB_FL2, 1);
+kg_print_word (st, sb, "SB$SCS", SB_SCS, 2);
+kg_print_word (st, sb, "SB$BMB", SB_BMB, 4);
+kg_print_word (st, sb, "SB$TIM", SB_TIM, 1);
+kg_print_word (st, sb, "SB$PAS", SB_PAS, 1);
+kg_print_word (st, sb, "SB$VCS", SB_VCS, 2);
+kg_print_word (st, sb, "SB$FLG", SB_FLG, 2);
+kg_print_word (st, sb, "SB$NOD", SB_NOD, 1);
+kg_print_word (st, sb, "SB$NDC", SB_NDC, 1);
+kg_print_word (st, sb, "SB$MDG", SB_MDG, 2);
+kg_print_word (st, sb, "SB$MDM", SB_MDM, 2);
+kg_print_word (st, sb, "SB$DID", SB_DID, 6);
+kg_print_word (st, sb, "SB$MID", SB_MID, 4);
+kg_print_string (st, sb, "SB$NAM", SB_NAM, 8);
+kg_print_word (st, sb, "SB$IOC", SB_IOC, 2);
+kg_print_word (st, sb, "SB$PRO", SB_PRO, 1);
 
 return SCPE_OK;
 }
@@ -372,7 +372,7 @@ if (sb == 0) {
     return SCPE_OK;
     }
 
-cb = GETP (sb + SB_NCB) - CB_TLK;                       /* get connection block */
+cb = GETP (sb + SB_NCB);                                /* get connection block */
 
 if (cb == 0) {
     fprintf (st, "No connections from node %d\n", node);
@@ -380,49 +380,50 @@ if (cb == 0) {
     }
 
 while (cb != 0) {
-    print_word (st, cb, "CB$LNK", CB_LNK, 2);
-    print_word (st, cb, "CB$REF", CB_REF, 2);
-    print_word (st, cb, "CB$SND", CB_SND, 2);
-    print_word (st, cb, "CB$STA", CB_STA, 1);
-    print_word (st, cb, "CB$BLK", CB_BLK, 1);
-    print_word (st, cb, "CB$ACT", CB_ACT, 1);
-    print_word (st, cb, "CB$TYP", CB_TYP, 1);
-    print_word (st, cb, "CB$CMX", CB_CMX, 2);
-    print_word (st, cb, "CB$TLK", CB_TLK, 2);
-    print_word (st, cb, "CB$DIR", CB_DIR, 2);
-    print_word (st, cb, "CB$CID", CB_CID, 4);
-    print_word (st, cb, "CB$VTI", CB_VTI, 2);
-    print_word (st, cb, "CB$INC", CB_INC, 2);
-    print_word (st, cb, "CB$SRS", CB_SRS, 2);
-    print_word (st, cb, "CB$DRS", CB_DRS, 2);
-    print_word (st, cb, "CB$MSC", CB_MSC, 2);
-    print_word (st, cb, "CB$RCC", CB_RCC, 2);
-    print_word (st, cb, "CB$MRC", CB_MRC, 2);
-    print_word (st, cb, "CB$PC ", CB_PC, 2);
-    print_word (st, cb, "CB$RQC", CB_RQC, 2);
-    print_word (st, cb, "CB$RTC", CB_RTC, 2);
-    print_word (st, cb, "CB$RN ", CB_RN, 2);
-    print_word (st, cb, "CB$SB ", CB_SB, 2);
-    print_word (st, cb, "CB$ED ", CB_ED, 2);
-    print_word (st, cb, "CB$EM ", CB_EM, 2);
-    print_word (st, cb, "CB$CTX", CB_CTX, 2);
-    print_word (st, cb, "CB$NOD", CB_NOD, 2);
-    print_word (st, cb, "CB$SVR", CB_SVR, 2);
-    print_word (st, cb, "CB$SIU", CB_SIU, 2);
-    print_string (st, cb, "CB$PRN", CB_PRN, 16);
-    print_word (st, cb, "CB$REQ", CB_REQ, 4);
-    print_word (st, cb, "CB$ICT", CB_ICT, 4);
-    print_word (st, cb, "CB$DDL", CB_DDL, 2);
-    print_word (st, cb, "CB$DDF", CB_DDF, 2);
-    print_word (st, cb, "CB$CRN", CB_CRN, 2);
-    print_word (st, cb, "CB$CMI", CB_CMI, 1);
-    print_word (st, cb, "CB$CMA", CB_CMA, 1);
-    print_word (st, cb, "CB$CDF", CB_CDF, 1);
-    print_word (st, cb, "CB$CCG", CB_CCG, 1);
-    print_word (st, cb, "CB$SMX", CB_SMX, 2);
-    print_word (st, cb, "CB$STO", CB_STO, 2);
-    print_word (st, cb, "CB$VCT", CB_VCT, 1);
-    print_word (st, cb, "CB$DBG", CB_DBG, 1);
+    cb = cb - CB_TLK;                                   /* offset to start of CB$ */
+    kg_print_word (st, cb, "CB$LNK", CB_LNK, 2);
+    kg_print_word (st, cb, "CB$REF", CB_REF, 2);
+    kg_print_word (st, cb, "CB$SND", CB_SND, 2);
+    kg_print_word (st, cb, "CB$STA", CB_STA, 1);
+    kg_print_word (st, cb, "CB$BLK", CB_BLK, 1);
+    kg_print_word (st, cb, "CB$ACT", CB_ACT, 1);
+    kg_print_word (st, cb, "CB$TYP", CB_TYP, 1);
+    kg_print_word (st, cb, "CB$CMX", CB_CMX, 2);
+    kg_print_word (st, cb, "CB$TLK", CB_TLK, 2);
+    kg_print_word (st, cb, "CB$DIR", CB_DIR, 2);
+    kg_print_word (st, cb, "CB$CID", CB_CID, 4);
+    kg_print_word (st, cb, "CB$VTI", CB_VTI, 2);
+    kg_print_word (st, cb, "CB$INC", CB_INC, 2);
+    kg_print_word (st, cb, "CB$SRS", CB_SRS, 2);
+    kg_print_word (st, cb, "CB$DRS", CB_DRS, 2);
+    kg_print_word (st, cb, "CB$MSC", CB_MSC, 2);
+    kg_print_word (st, cb, "CB$RCC", CB_RCC, 2);
+    kg_print_word (st, cb, "CB$MRC", CB_MRC, 2);
+    kg_print_word (st, cb, "CB$PC ", CB_PC, 2);
+    kg_print_word (st, cb, "CB$RQC", CB_RQC, 2);
+    kg_print_word (st, cb, "CB$RTC", CB_RTC, 2);
+    kg_print_word (st, cb, "CB$RN ", CB_RN, 2);
+    kg_print_word (st, cb, "CB$SB ", CB_SB, 2);
+    kg_print_word (st, cb, "CB$ED ", CB_ED, 2);
+    kg_print_word (st, cb, "CB$EM ", CB_EM, 2);
+    kg_print_word (st, cb, "CB$CTX", CB_CTX, 2);
+    kg_print_word (st, cb, "CB$NOD", CB_NOD, 2);
+    kg_print_word (st, cb, "CB$SVR", CB_SVR, 2);
+    kg_print_word (st, cb, "CB$SIU", CB_SIU, 2);
+    kg_print_string (st, cb, "CB$PRN", CB_PRN, 16);
+    kg_print_word (st, cb, "CB$REQ", CB_REQ, 4);
+    kg_print_word (st, cb, "CB$ICT", CB_ICT, 4);
+    kg_print_word (st, cb, "CB$DDL", CB_DDL, 2);
+    kg_print_word (st, cb, "CB$DDF", CB_DDF, 2);
+    kg_print_word (st, cb, "CB$CRN", CB_CRN, 2);
+    kg_print_word (st, cb, "CB$CMI", CB_CMI, 1);
+    kg_print_word (st, cb, "CB$CMA", CB_CMA, 1);
+    kg_print_word (st, cb, "CB$CDF", CB_CDF, 1);
+    kg_print_word (st, cb, "CB$CCG", CB_CCG, 1);
+    kg_print_word (st, cb, "CB$SMX", CB_SMX, 2);
+    kg_print_word (st, cb, "CB$STO", CB_STO, 2);
+    kg_print_word (st, cb, "CB$VCT", CB_VCT, 1);
+    kg_print_word (st, cb, "CB$DBG", CB_DBG, 1);
     fprintf (st, "---\n");
 
     cb = GETP (cb + CB_TLK);                            /* get next connection */
@@ -433,45 +434,45 @@ return SCPE_OK;
 
 void kh_print_frb (uint32 frb)
 {
-print_word (NULL, frb, "F$LINK", F_LINK, 2);
-print_word (NULL, frb, "F$PCTR", F_PCTR, 2);
-print_word (NULL, frb, "F$RTE ", F_RTE , 2);
-print_word (NULL, frb, "F$MOD ", F_MOD , 2);
-print_word (NULL, frb, "F$CTRL", F_CTRL, 2);
-print_word (NULL, frb, "F$OFF ", F_OFF , 4);
-print_word (NULL, frb, "F$LLBN", F_LLBN, 2);
-print_word (NULL, frb, "F$RT1 ", F_RT1 , 2);
-print_word (NULL, frb, "F$HLBN", F_HLBN, 2);
-print_word (NULL, frb, "F$SCT ", F_SCT , 0);
-print_word (NULL, frb, "F$RT2 ", F_RT2 , 2);
-print_word (NULL, frb, "F$TRK ", F_TRK , 1);
-print_word (NULL, frb, "UNUSED", 027, 1);
-print_word (NULL, frb, "F$GRP ", F_GRP , 0);
-print_word (NULL, frb, "F$RT3 ", F_RT3 , 2);
-print_word (NULL, frb, "F$RSB ", F_RSB , 2);
-print_word (NULL, frb, "F$SCNT", F_SCNT, 1);
-print_word (NULL, frb, "UNUSED", 035, 1);
-print_word (NULL, frb, "F$SRTE", F_SRTE, 2);
-print_word (NULL, frb, "F$BFHD", F_BFHD, 2);
-print_word (NULL, frb, "F$BFTL", F_BFTL, 2);
-print_word (NULL, frb, "UNUSED", 044, 8);
-print_word (NULL, frb, "F$SBFH", F_SBFH, 0);
-print_word (NULL, frb, "F$SFLG", F_SFLG, 2);
-print_word (NULL, frb, "F$SSCT", F_SSCT, 0);
-print_word (NULL, frb, "F$CHO ", F_CHO , 2);
-print_word (NULL, frb, "F$QSLT", F_QSLT, 2);
-print_word (NULL, frb, "UNUSED", 062, 2);
-print_word (NULL, frb, "F$CB  ", F_CB  , 2);
-print_word (NULL, frb, "F$NODE", F_NODE, 2);
-print_word (NULL, frb, "F$SCR ", F_SCR , 0);
-print_word (NULL, frb, "F$NBFR", F_NBFR, 2);
-print_word (NULL, frb, "F$BFCT", F_BFCT, 2);
-print_word (NULL, frb, "F$DSTR", F_DSTR, 2);
-print_word (NULL, frb, "F$ESUM", F_ESUM, 2);
-print_word (NULL, frb, "UNUSED", 0100, 8);
-print_word (NULL, frb, "F$CRUN", F_CRUN, 1);
-print_word (NULL, frb, "F$CFLG", F_CFLG, 1);
-print_word (NULL, frb, "UNUSED", 0112, 6);
+kg_print_word (NULL, frb, "F$LINK", F_LINK, 2);
+kg_print_word (NULL, frb, "F$PCTR", F_PCTR, 2);
+kg_print_word (NULL, frb, "F$RTE ", F_RTE , 2);
+kg_print_word (NULL, frb, "F$MOD ", F_MOD , 2);
+kg_print_word (NULL, frb, "F$CTRL", F_CTRL, 2);
+kg_print_word (NULL, frb, "F$OFF ", F_OFF , 4);
+kg_print_word (NULL, frb, "F$LLBN", F_LLBN, 2);
+kg_print_word (NULL, frb, "F$RT1 ", F_RT1 , 2);
+kg_print_word (NULL, frb, "F$HLBN", F_HLBN, 2);
+kg_print_word (NULL, frb, "F$SCT ", F_SCT , 0);
+kg_print_word (NULL, frb, "F$RT2 ", F_RT2 , 2);
+kg_print_word (NULL, frb, "F$TRK ", F_TRK , 1);
+kg_print_word (NULL, frb, "UNUSED", 027, 1);
+kg_print_word (NULL, frb, "F$GRP ", F_GRP , 0);
+kg_print_word (NULL, frb, "F$RT3 ", F_RT3 , 2);
+kg_print_word (NULL, frb, "F$RSB ", F_RSB , 2);
+kg_print_word (NULL, frb, "F$SCNT", F_SCNT, 1);
+kg_print_word (NULL, frb, "UNUSED", 035, 1);
+kg_print_word (NULL, frb, "F$SRTE", F_SRTE, 2);
+kg_print_word (NULL, frb, "F$BFHD", F_BFHD, 2);
+kg_print_word (NULL, frb, "F$BFTL", F_BFTL, 2);
+kg_print_word (NULL, frb, "UNUSED", 044, 8);
+kg_print_word (NULL, frb, "F$SBFH", F_SBFH, 0);
+kg_print_word (NULL, frb, "F$SFLG", F_SFLG, 2);
+kg_print_word (NULL, frb, "F$SSCT", F_SSCT, 0);
+kg_print_word (NULL, frb, "F$CHO ", F_CHO , 2);
+kg_print_word (NULL, frb, "F$QSLT", F_QSLT, 2);
+kg_print_word (NULL, frb, "UNUSED", 062, 2);
+kg_print_word (NULL, frb, "F$CB  ", F_CB  , 2);
+kg_print_word (NULL, frb, "F$NODE", F_NODE, 2);
+kg_print_word (NULL, frb, "F$SCR ", F_SCR , 0);
+kg_print_word (NULL, frb, "F$NBFR", F_NBFR, 2);
+kg_print_word (NULL, frb, "F$BFCT", F_BFCT, 2);
+kg_print_word (NULL, frb, "F$DSTR", F_DSTR, 2);
+kg_print_word (NULL, frb, "F$ESUM", F_ESUM, 2);
+kg_print_word (NULL, frb, "UNUSED", 0100, 8);
+kg_print_word (NULL, frb, "F$CRUN", F_CRUN, 1);
+kg_print_word (NULL, frb, "F$CFLG", F_CFLG, 1);
+kg_print_word (NULL, frb, "UNUSED", 0112, 6);
 }
 
 t_stat ci_request_id (UNIT *uptr, CI_PKT *pkt)
@@ -514,7 +515,7 @@ bd = kg_receive (bd);
 dma = GETW (bd + 002);
 dma = (dma << 6) & DMEMMASK;                            /* data memory address */
 dma = dma + B_DATA;                                     /* point to sector data */
-sim_printf ("DMEM addr = %o\n", dma);
+//sim_printf ("DMEM addr = %o\n", dma);
 memcpy (&DM[dma >> 1], &pkt->data[CI_DATHDR], len);     /* copy to packet buffer */
 kg_send (frb + F_BFHD, bd);
 
@@ -596,7 +597,7 @@ PUTB (rsc + HM_CB + 00, node);                          /* source */
 PUTB (rsc + HM_CB + 01, ~node);                         /* complement */
 
 if (((lof & 077) != 077) && (opc == OPC_SNDMSG)) {
-    sim_printf ("Receive packet to control memory\n");
+//    sim_printf ("Receive packet to control memory\n");
     PUTB (rsc + HM_MSG + 000, opc);
     PUTB (rsc + HM_MSG + 001, pkt->data[PPD_FLAGS]);
     if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
@@ -608,7 +609,7 @@ else {
     PUTW (rsc + HM_BC, len);
     dma = GETW (rsc + HM_BMB);                          /* data mem addr */
     dma = (dma << 6) & DMEMMASK;
-    sim_printf ("Receive packet to data memory: %o\n", dma);
+//    sim_printf ("Receive packet to data memory: %o\n", dma);
 
     if (dma == 0) {
         sim_printf ("No data memory address in packet!\n");
@@ -623,14 +624,16 @@ else {
     }
 
 if ((kh_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
-    sim_printf ("K.ci complete pending request for %07o\n", kh_req);
+    sim_printf ("K.ci complete pending request for %07o\n", kh_req[node]);
     kh_req[node] = 0;
     }
 
 if (cq == 0)
     cq = GETP (kh + KH_CIM);
+#if 0
 for (int i = 0; i < 12; i++)
     sim_printf ("R %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
+#endif
 kg_send (cq, rsc);
 
 return SCPE_OK;
@@ -684,8 +687,10 @@ PUTW (rsc + HM_LOF, lof);
 
 memcpy (&CM[(rsc + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 
+#if 0
 for (int i = 0; i < 12; i++)
     sim_printf ("R %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
+#endif
 kg_send (cq, rsc);
 
 return SCPE_OK;
@@ -959,7 +964,7 @@ CI_PKT pkt;
 t_stat r;
 
 sim_printf ("K.ci FRB:\n");
-kh_print_frb (rsc);
+//kh_print_frb (rsc);
 hm = GETP (rsc + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
@@ -992,7 +997,7 @@ while (bct) {
     dma = GETW (bd + 002);
     dma = (dma << 6) & DMEMMASK;                        /* data memory address */
     dma = dma + B_DATA;                                 /* point to sector data */
-    sim_printf ("DMEM addr = %o\n", dma);
+//    sim_printf ("DMEM addr = %o\n", dma);
     memcpy (&pkt.data[CI_DATHDR], &DM[dma >> 1], len);  /* copy to packet buffer */
     r = ci_send_ppd (&kh_unit, &pkt);                   /* send to host */
     if (r != SCPE_OK) {
@@ -1060,8 +1065,10 @@ else
 void kh_process (uint32 rsc, uint32 *cq)
 {
 uint16 opc = GETW (rsc + HM_LOF) & 074000;
+#if 0
         for (int i = 0; i < 12; i++)
             sim_printf ("S %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
+#endif
 switch (opc) {
     case 060000:                                        /* local command */
         kh_local_cmd (rsc, cq);
@@ -1079,8 +1086,10 @@ switch (opc) {
         break;
     default:
         sim_printf ("K.ci unknown opcode: %o\n", opc);
+#if 0
         for (int i = 12; i < 32; i++)
             sim_printf ("S %07o : %06o\n", rsc + (i << 1), GETW (rsc + (i << 1)));
+#endif
         break;
     }
 }
@@ -1107,7 +1116,7 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         }
 
     rsc = kg_receive (wq);                              /* get resource from work queue */
-    sim_printf ("Processing packet %07o from queue %07o\n", rsc, wq);
+//    sim_printf ("Processing packet %07o from queue %07o\n", rsc, wq);
     kh_process (rsc, &cq);                              /* process resource */
 
     if (cq)
