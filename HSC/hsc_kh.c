@@ -624,7 +624,7 @@ else {
     }
 
 if ((kh_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
-    sim_printf ("K.ci complete pending request for %07o\n", kh_req[node]);
+    //sim_printf ("K.ci complete pending request for %07o\n", kh_req[node]);
     kh_req[node] = 0;
     }
 
@@ -662,10 +662,10 @@ for (;;) {
     if ((srccon == CI_GET32 (pkt->data, SCS_SRCCON)) &&
         (dstcon == CI_GET32 (pkt->data, SCS_DSTCON)))
         break;                                          /* valid connection found */
-    cb = GETP (cb + CB_TLK);                            /* try next connection */
+    cb = GETP (cb + CB_TLK) - CB_TLK;                   /* try next connection */
     }
 cq = GETP (cb + CB_SVR);                                /* get server queue */
-if (cq == 0)
+if (cq == 0)  
     return SCPE_OK;
 
 len = pkt->length - SCS_APPL;
@@ -824,7 +824,7 @@ p2 = GETW (rsc + HM_MSG + 004);
 p3 = GETW (rsc + HM_MSG + 006);
 switch (opc) {
     case 001:                                           /* get/set virtual circuit flags */
-        sim_printf ("local cmd: opc = %d, node = %d, p2 = %06o, p3 = %06o, cq = %06o\n", opc, p1, p2, p3, *cq);
+//        sim_printf ("local cmd: opc = %d, node = %d, p2 = %06o, p3 = %06o, cq = %06o\n", opc, p1, p2, p3, *cq);
         kh_set_vc (rsc);
         break;
     case 002:                                           /* get counters */
@@ -832,7 +832,7 @@ switch (opc) {
         break;
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
-        sim_printf ("local cmd: opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
+//        sim_printf ("local cmd: opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
         PUTW (rsc + HM_LOF, 060077);
         break;
     default:
@@ -946,12 +946,12 @@ if (*cq == 0) {
             *cq = kh + KH_SRR;
         else
             *cq = kh + KH_DRR;
-        sim_printf ("Returning buffer %07o to queue at %07o\n", rsc, *cq);
+        //sim_printf ("Returning buffer %07o to queue at %07o\n", rsc, *cq);
 //        kg_send (cq, rsc);
         }
     else {
         kh_req[node] = rsc;
-        sim_printf ("K.ci start pending request for %07o\n", rsc);
+        //sim_printf ("K.ci start pending request for %07o\n", rsc);
         }
     }
 }
@@ -963,7 +963,7 @@ uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
-sim_printf ("K.ci FRB:\n");
+//sim_printf ("K.ci FRB:\n");
 //kh_print_frb (rsc);
 hm = GETP (rsc + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
@@ -985,6 +985,7 @@ CI_PUT32 (pkt.data, PPD_RSPID, 1);                      /* local response ID */
 CI_PUT32 (pkt.data, PPD_SBNAM, rsc);                    /* send buffer name */
 CI_PUT32 (pkt.data, PPD_RBNAM, bnm);                    /* receive buffer name */
 
+bd = rsc + F_BFHD;                                      /* initial buffer descriptor */
 while (bct) {
     len = (bct > CI_MAXDAT) ? CI_MAXDAT : bct;
     pkt.length = len + CI_DATHDR;
@@ -993,7 +994,7 @@ while (bct) {
     CI_PUT32 (pkt.data, PPD_RBOFF, roff);               /* receive buffer offset */
     if (bct <= CI_MAXDAT)
         pkt.data[PPD_FLAGS] |= PPD_LP;                  /* last packet */
-    bd = GETP (rsc + F_BFHD);                           /* get next buffer descriptor */
+    bd = GETP (bd);                                     /* get next buffer descriptor */
     dma = GETW (bd + 002);
     dma = (dma << 6) & DMEMMASK;                        /* data memory address */
     dma = dma + B_DATA;                                 /* point to sector data */
@@ -1017,8 +1018,8 @@ uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
-sim_printf ("K.ci FRB:\n");
-kh_print_frb (rsc);
+//sim_printf ("K.ci FRB:\n");
+//kh_print_frb (rsc);
 hm = GETP (rsc + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
@@ -1058,6 +1059,8 @@ if (opc == V_SD)                                        /* send data */
     kh_send_data (rsc);
 else if (opc == V_RD)                                   /* request data */
     kh_request_data (rsc);
+else if (opc == 3)                                      /* send data? */
+    kh_send_data (rsc);
 else
     sim_printf ("Unknown route opcode in FRB: %o\n", opc);
 }

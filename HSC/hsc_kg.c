@@ -254,7 +254,7 @@ uint32 val, cq;
 
 //kg_print_counter (ctr);
 val = GETW (ctr + C_CNT);                               /* get counter value */
-sim_printf ("CTR %d -> %d\n", val, (val - 1));
+//sim_printf ("CTR %d -> %d\n", val, (val - 1));
 val = val - 1;                                          /* another operation completed */
 PUTW (ctr + C_CNT, val);                                /* update counter value */
 if (val == 0) {                                         /* all operations complete? */

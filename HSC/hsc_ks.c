@@ -1022,7 +1022,7 @@ for (int j = 0; j < 20; j++) {
     tmp = GETW (dc + DC_FCT);
     tmp = tmp - rsz;
     PUTW (dc + DC_FCT, tmp);                            /* set response length */
-    sim_printf ("----\n");
+//    sim_printf ("----\n");
 
     kg_send (tq, dc);                                   /* send to completion queue */
     }
@@ -1111,8 +1111,8 @@ t_stat ks_read_lbn (UNIT *uptr, uint32 dma, uint32 lbn)
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
 struct drvtyp *dtab = &drv_tab[dtyp];
 t_seccnt sects, sectsread;
-t_stat r;
 uint16 *xbuf = (uint16 *)uptr->ksxb;
+t_stat r;
 
 if (lbn >= dtab->lbn)                                   /* outside host area? */
     ks_read_rct (dma);                                  /* read RCT */
@@ -1129,8 +1129,25 @@ PUTDW (dma + 01000, ks_edc (dma));
 return SCPE_OK;
 }
 
-void ks_write_lbn (UNIT *uptr, uint32 dma, uint32 lbn)
+t_stat ks_write_lbn (UNIT *uptr, uint32 dma, uint32 lbn)
 {
+uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+struct drvtyp *dtab = &drv_tab[dtyp];
+t_seccnt sects, sectswritten;
+uint16 *xbuf = (uint16 *)uptr->ksxb;
+t_stat r;
+
+if (lbn >= dtab->lbn) { }                               /* outside host area? */
+else {
+    for (int i = 0; i < 256; i++) {
+        xbuf[i] = GETDW (dma + (i << 1));
+        }
+    sects = 1;
+    r = sim_disk_wrsect (uptr, lbn, (uint8 *)xbuf, &sectswritten, sects);
+    if (r != SCPE_OK)
+        return r;
+    }
+return SCPE_OK;
 }
 
 void ks_read_rbn (UNIT *uptr, uint32 dma, uint32 lbn)
@@ -1169,7 +1186,9 @@ const char *ot_names[] = {
 
 void ks_process_frb (UNIT *uptr, uint32 frb, uint32 cyl, uint32 sct)
 {
-uint32 bd, scnt, tmp, dma, lbn, trk, rte, opc, ot;
+uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+struct drvtyp *dtab = &drv_tab[dtyp];
+uint32 bd, scnt, dma, lbn, trk, rte, opc, ot;
 uint32 ks = ks_dib.cma;
 
 lbn = GETB (frb + F_HLBN);                              /* high LBN */
@@ -1182,7 +1201,7 @@ rte = GETP (frb + F_RTE);                               /* get route */
 opc = GETB (rte + V_OPCD);                              /* get opcode from route */
 
 //ks_print_frb (frb);
-//sim_printf ("FRB: %07o, %s: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d\n", frb, ot_names[ot], lbn, cyl, trk, sct, scnt);
+sim_printf ("FRB: %07o, %s: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d, OPC: %o\n", frb, ot_names[ot], lbn, cyl, trk, sct, scnt, opc);
 bd = GETP (frb + F_BFHD);
 if (bd == 0) {                                         /* no data buffer? */
     for (int i = 0; i < scnt; i++) {
@@ -1231,16 +1250,25 @@ else {
         if (bd == 0)
             break;
 //        sim_printf ("FBU: %07o (old)\n", bd);
-        tmp = GETP (bd);
-        if (tmp == bd) {
-            sim_printf ("Circular FBU reference at %07o\n", bd);
-            break;
+        dma = GETW (bd + 002);
+        dma = (dma << 6) & DMEMMASK;
+
+        switch (ot) {
+            case OT_LBN:
+                ks_write_lbn (uptr, dma + B_DATA, lbn);
+                break;
+            case OT_DBN:
+                ks_write_dbn (uptr, dma + B_DATA, lbn);
+                break;
             }
-        bd = tmp;
+
+        bd = GETP (bd);
+        sct++;
+        lbn++;
         }
     }
 
-if ((cyl == 273) && ((ks_mode & MODE_OB) == 0))
+if ((ot == OT_LBN) && (lbn >= dtab->lbn) && ((ks_mode & MODE_OB) == 0)) /* outside host area? */
     kg_route_frb (ks, frb, FALSE);
 else
     kg_route_frb (ks, frb, TRUE);
