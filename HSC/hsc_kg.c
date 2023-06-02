@@ -267,7 +267,7 @@ if (val == 0) {                                         /* all operations comple
 
 void kg_route_frb (uint32 kg, uint32 frb, t_bool sts)
 {
-uint32 rte, ctr, flg, val, bd, sc, cq;
+uint32 rte, ctr, flg, val, bd, sc, cq, fq;
     
 ctr = GETP (frb + F_PCTR);
 rte = GETP (frb + F_RTE);                               /* get route */
@@ -282,11 +282,12 @@ flg = GETW (rte);                                       /* get opcode/flags from
 if (sts) {
     if (flg & V_FB) {                                   /* free buffers? */
         sc = GETW (frb + F_SCNT);                       /* get sector count */
+        fq = GETP (kg + KG_FBU);                        /* get free buffer queue */
         for (int k = 0; k < sc; k++) {
             bd = kg_receive (frb + F_BFHD);             /* dequeue buffer descriptor */
             if (bd == 0)
                 break;
-            kg_send (kg + KG_FBU, bd);                  /* put to free buffer queue */
+            kg_send (fq, bd);                           /* put to free buffer queue */
             }
         }
     if (flg & V_DC)                                     /* decrement counter? */
@@ -376,12 +377,14 @@ if (qh == 0) {                                          /* queue empty */
     }
 else {                                                  /* queue is not empty */
     qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
+#if 0
     while (GETW (qt) != 0) {                            /* find the real end of the queue */
         qn = GETP (qt);
         if (qn == qt)                                   /* circular pointer? */
             break;
         qt = qn;                                        /* point to next */
         }
+#endif
     PUTP (qt, itm);                                     /* add link to item */
     PUTP (q + Q_TAIL, itm);                             /* update queue tail pointer */
     }

@@ -527,7 +527,7 @@ return SCPE_OK;
 uint32 kh_get_srr (uint32 len)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, last, sz;
+uint32 hm, last, sz, cn;
 
 last = GETP (kh + KH_SRR + Q_TAIL);                     /* save last buffer address */
 for (;;) {
@@ -535,7 +535,8 @@ for (;;) {
     if (hm == 0)
         break;                                          /* no buffers available */
     sz = GETW (hm + HM_LOF) & 077;                      /* get buffer size */
-    if ((sz == 077) && (len >= 077))
+    cn = GETW (hm + HM_CN);                             /* FIXME */
+    if (((sz == 077) && (len >= 077)) && (cn == 2))
         break;                                          /* found buffer for large packet */
     if ((sz != 077) && (len < 077))
         break;                                          /* found buffer for small packet */
@@ -608,13 +609,15 @@ if (((lof & 077) != 077) && (opc == OPC_SNDMSG)) {
 else {
     PUTW (rsc + HM_BC, len);
     dma = GETW (rsc + HM_BMB);                          /* data mem addr */
-    dma = (dma << 6) & DMEMMASK;
-//    sim_printf ("Receive packet to data memory: %o\n", dma);
+    dma = (dma << 6);
 
-    if (dma == 0) {
-        sim_printf ("No data memory address in packet!\n");
+    if (!ADDR_IS_DMEM (dma)) {
+        sim_printf ("Invalid data memory address %o in packet %o\n", dma, rsc);
         return SCPE_IERR;
         }
+    dma = dma & DMEMMASK;
+//    sim_printf ("Receive packet to data memory: %o\n", dma);
+
     PUTDB (dma + 000, opc);
     PUTDB (dma + 001, pkt->data[PPD_FLAGS]);
     if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
@@ -935,10 +938,13 @@ else
 pkt.length = len;
 r = kh_send_int (&kh_unit, &pkt);
 
+if (opc == 020000)                                      /* FIXME: APPMSG always goes to SRR? */
+    *cq = kh + KH_SRR;
 if (opc == 040000) {
+    sim_printf ("DX: %06o\n", rsc);
     dx = GETP (rsc + HM_DX);                            /* get deallocation context */
     kg_dec_ctr (dx + DX_CTR);                           /* another operation complete */
-    *cq = 0;
+    *cq = kh + KH_SRR;
     }
 if (*cq == 0) {
     if (GETW (rsc + HM_CTX) == 0) {
@@ -1085,6 +1091,7 @@ switch (opc) {
         kh_send (rsc, cq);
         break;
     case 000000:
+    case 004000:
         kh_process_frb (rsc, cq);
         break;
     default:
@@ -1097,9 +1104,9 @@ switch (opc) {
     }
 }
 
-void kh_process_queue (uint32 kh, uint32 wq)
+t_stat kh_process_queue (uint32 kh, uint32 wq)
 {
-uint32 cq, rsc, i, opc;
+uint32 cq, rsc, i;
 
 for (i = 0; i < 20; i++) {                              /* process maximum of 20 items */
     if (Q_LOCKED (wq + Q_HEAD))                         /* source queue locked */
@@ -1108,11 +1115,6 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         break;
     rsc = GETP (wq + Q_HEAD);                           /* get the resource pointer */
     cq = GETP (rsc + HM_CQ);                            /* get completion queue pointer */
-    if (cq == wq)                                       /* target is self? */
-        cq = GETP (kh + KG_FCB);                        /* FIXME: put to free queue */
-    opc = GETW (rsc + HM_LOF);
-    if (opc == 020077)
-        cq = GETP (kh + KG_FCB);                        /* FIXME: put to free queue */
     if (cq) {
         if (Q_LOCKED (cq))                              /* completion queue locked */
             break;
@@ -1125,6 +1127,7 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
     if (cq)
         kg_send (cq, rsc);                              /* put resource to completion queue */
     }
+return SCPE_OK;
 }
 
 t_stat kh_svc (UNIT *uptr)
@@ -1133,10 +1136,18 @@ uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
-kh_process_queue (kh, kh + KH_0WK);                     /* process work queues */
-kh_process_queue (kh, kh + KH_1WK);
-kh_process_queue (kh, kh + KH_2WK);
-kh_process_queue (kh, kh + KH_3WK);
+r = kh_process_queue (kh, kh + KH_0WK);                     /* process work queues */
+if (r != SCPE_OK)
+    return r;
+r = kh_process_queue (kh, kh + KH_1WK);
+if (r != SCPE_OK)
+    return r;
+r = kh_process_queue (kh, kh + KH_2WK);
+if (r != SCPE_OK)
+    return r;
+r = kh_process_queue (kh, kh + KH_3WK);
+if (r != SCPE_OK)
+    return r;
 
 for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
     r = ci_receive_ppd (uptr, &pkt);                    /* get next packet */

@@ -26,6 +26,7 @@
 
 #include "pdp11_defs.h"
 #include "hsc_kg.h"
+#include "dec_disk.h"
 #include "sim_disk.h"
 
 /* K.sdi control area */
@@ -163,7 +164,6 @@
 
 #define KS_MAXDR        4                               /* max # drives */
 
-#define RQDF_SDI        04                              /* SDI drive */
 #define KS_NUMBY        512                             /* bytes per block */
 #define KS_MAXFR        (1 << 16)                       /* max xfer */
 
@@ -187,96 +187,67 @@
 #define unit_plug       u4                              /* drive unit plug value */
 #define ksxb            filebuf                         /* xfer buffer */
 
-#define RA81_DTYPE      14                              /* SDI drive */
-#define RA81_SECT       51                              /* +1 spare/track */
-#define RA81_SURF       14
-#define RA81_CYL        1258                            /* 0-1247 user */
-#define RA81_TPG        RA81_SURF
-#define RA81_GPC        1
-#define RA81_XBN        2436                            /* cyl 1252-1254? */
-#define RA81_DBN        2436                            /* cyl 1255-1256? */
-#define RA81_LBN        891072                          /* 51*14*1248 */
-#define RA81_RCTS       2856                            /* cyl 1248-1251? */
-#define RA81_RCTC       1
-#define RA81_RBN        17472                           /* 1 *14*1248 */
-#define RA81_MOD        5
-#define RA81_MED        0x25641051
-#define RA81_FLGS       RQDF_SDI
-
-#define RA82_DTYPE      7                               /* SDI drive */
-#define RA82_SECT       57                              /* +1 spare/track */
-#define RA82_SURF       15
-#define RA82_CYL        1435                            /* 0-1422 user */
-#define RA82_TPG        RA82_SURF
-#define RA82_GPC        1
-#define RA82_XBN        3480                            /* cyl 1427-1430 */
-#define RA82_DBN        3480                            /* cyl 1431-1434 */
-#define RA82_LBN        1216665                         /* 57*15*1423 */
-#define RA82_RCTS       3420                            /* cyl 1423-1426 */
-#define RA82_RCTC       1
-#define RA82_RBN        21345                           /* 1 *15*1423 */
-#define RA82_MOD        11
-#define RA82_MED        0x25641052
-#define RA82_FLGS       RQDF_SDI
-
-#define RA80_DTYPE      0                               /* SDI drive */
-#define RA80_SECT       31                              /* +1 spare/track */
-#define RA80_SURF       14
-#define RA80_LCYL       275                             /* 0-274 user */
-#define RA80_XCYL       2                               /* XBN cyls */
-#define RA80_DCYL       2                               /* DBN cyls */
-#define RA80_CYL        (RA80_LCYL + RA80_XCYL + RA80_DCYL)
-#define RA80_TPG        RA80_SURF                       /* tracks/group */
-#define RA80_GPC        2                               /* groups/cyl */
-#define RA80_GOF        16                              /* group offset */
-#define RA80_TPC        (RA80_TPG * RA80_GPC)           /* tracks/cyl */
-#define RA80_XBNC       (RA80_TPC * (RA80_SECT + 1))    /* XBNs/cyl */
-#define RA80_XBN        (RA80_XCYL * RA80_XBNC)         /* XBNs */
-#define RA80_DBN        (RA80_DCYL * RA80_XBNC)         /* DBNs */
-#define RA80_DRG        1
-#define RA80_LBN        237212
-#define RA80_FCTS       480
-#define RA80_RCTS       465
-#define RA80_RCTC       4
-#define RA80_RBN        (1 * RA80_TPC * RA80_LCYL)
-#define RA80_MOD        1
-#define RA80_MED        0x25641050
-#define RA80_FLGS       RQDF_SDI
+#define RA60_DTYPE      0
+#define RA70_DTYPE      1
+#define RA80_DTYPE      2
+#define RA81_DTYPE      3
+#define RA82_DTYPE      4
 
 struct drvtyp {
-    uint16      sect;                                   /* sectors */
+    uint8       sdiv;                                   /* SDI version */
+    uint8       sto;                                    /* short timeout */
+    uint8       lto;                                    /* long timeout */
+    uint8       retry;                                  /* retry # */
+    uint16      xfrt;                                   /* xfer rate */
+    uint16      erl;                                    /* error recovery levels */
+    uint16      eet;                                    /* ECC error threshold */
+    uint16      swr;                                    /* software revision */
+    uint16      hwr;                                    /* hardware revision */
+    uint16      hps;                                    /* header pre-amble size */
+    uint16      dps;                                    /* data pre-amble size */
+    uint16      sect_16;                                /* sectors (16-bit) */
+    uint16      sect_18;                                /* sectors (18-bit) */
     int32       surf;                                   /* surfaces */
     uint32      lcyl;                                   /* LBN cylinders */
     uint32      xcyl;                                   /* XBN cylinders */
     uint32      dcyl;                                   /* DBN cylinders */
-    int32       cyl;                                    /* cylinders */
     uint16      tpg;                                    /* trk/grp */
     uint16      gpc;                                    /* grp/cyl */
-    uint16      gof;                                    /* group offset */
-    int32       xbn;                                    /* XBN size */
-    int32       dbn;                                    /* DBN size */
+    uint16      gof_16;                                 /* group offset (16-bit) */
+    uint16      gof_18;                                 /* group offset (18-bit) */
     uint16      drg;                                    /* DBN readonly groups */
-    uint32      lbn;                                    /* LBN size */
+    uint32      lbn_16;                                 /* LBN size (16-bit) */
+    uint32      lbn_18;                                 /* LBN size (18-bit) */
     uint16      fcts;                                   /* FCT copy size */
-    uint16      rcts;                                   /* RCT size */
-    int32       rctc;                                   /* RCT copies */
-    int32       rbn;                                    /* RBNs */
+    uint16      rcts_16;                                /* RCT size (16-bit) */
+    uint16      rcts_18;                                /* RCT size (18-bit) */
+    uint8       rctc;                                   /* RCT copies */
+    uint8       rbn;                                    /* RBNs/track */
+    uint16      revs;                                   /* drive revs/second */
     uint16      mod;                                    /* MSCP model */
-    int32       MediaId;                                /* MSCP media */
-    int32       flgs;                                   /* flags */
+    uint32      media;                                  /* MSCP media */
+    uint32      flgs;                                   /* flags */
     const char  *name;                                  /* name */
     };
 
 #define RQ_DRV(d) \
-  { d##_SECT, d##_SURF, d##_LCYL, d##_XCYL, \
-    d##_DCYL, d##_CYL,  d##_TPG,  d##_GPC, \
-    d##_GOF,  d##_XBN,  d##_DBN,  d##_DRG, \
-    d##_LBN,  d##_FCTS, d##_RCTS, d##_RCTC, \
-    d##_RBN,  d##_MOD,  d##_MED, d##_FLGS, #d }
-#define RQ_SIZE(d)      d##_LBN
+  { d##_SDIV,    d##_STO,      d##_LTO,     d##_RETRY, \
+    d##_XFRT,    d##_ERL,      d##_EET,     d##_SWR, \
+    d##_HWR,     d##_HPS,      d##_DPS,     d##_SECT_16, \
+    d##_SECT_18, d##_SURF,     d##_LCYL,    d##_XCYL, \
+    d##_DCYL,    d##_TPG,      d##_GPC,     d##_GOF_16, \
+    d##_GOF_18,  d##_DRG,      d##_LBN_16,  d##_LBN_18, \
+    d##_FCTS,    d##_RCTS_16,  d##_RCTS_18, d##_RCTC, \
+    d##_RBN,     d##_REVS,     d##_MOD,     d##_MED, \
+    d##_FLGS,    #d }
+#define RQ_SIZE(d)      d##_LBN_16                      /* FIXME: support 18-bit mode */
 
 static struct drvtyp drv_tab[] = {
+    RQ_DRV (RA60),
+    RQ_DRV (RA70),
     RQ_DRV (RA80),
+    RQ_DRV (RA81),
+    RQ_DRV (RA82),
     { 0 }
     };
 
@@ -338,8 +309,16 @@ MTAB ks_mod[] = {
       NULL, &kg_show_addr, NULL },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "CONTROL", "CONTROL",
       NULL, &ks_show_ctrl, NULL },
+    { MTAB_XTD|MTAB_VUN, RA60_DTYPE, NULL, "RA60",
+      &ks_set_type, NULL, NULL, "Set RA60 Disk Type" },
+    { MTAB_XTD|MTAB_VUN, RA70_DTYPE, NULL, "RA70",
+      &ks_set_type, NULL, NULL, "Set RA70 Disk Type" },
     { MTAB_XTD|MTAB_VUN, RA80_DTYPE, NULL, "RA80",
       &ks_set_type, NULL, NULL, "Set RA80 Disk Type" },
+    { MTAB_XTD|MTAB_VUN, RA81_DTYPE, NULL, "RA81",
+      &ks_set_type, NULL, NULL, "Set RA81 Disk Type" },
+    { MTAB_XTD|MTAB_VUN, RA82_DTYPE, NULL, "RA82",
+      &ks_set_type, NULL, NULL, "Set RA82 Disk Type" },
     { MTAB_XTD|MTAB_VUN, 0, "TYPE", NULL,
       NULL, &ks_show_type, NULL, "Display device type" },
     { MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "UNIT", "UNIT=val (0-4095)",
@@ -380,12 +359,16 @@ if (act == K_RUN) {
     if (!run)
         return SCPE_OK;
     sim_clock_coschedule (&ks_unit[0], tmxr_poll);        /* activate */
-//    sim_clock_coschedule (&ks_unit[1], tmxr_poll);        /* activate */
+    sim_clock_coschedule (&ks_unit[1], tmxr_poll);        /* activate */
+    sim_clock_coschedule (&ks_unit[2], tmxr_poll);        /* activate */
+    sim_clock_coschedule (&ks_unit[3], tmxr_poll);        /* activate */
     }
 else {
     sim_debug (DBG_TRC, &ks_dev, "K.sdi %d halt at %o\n", req, (uint16)inst_pc);
     sim_cancel (&ks_unit[0]);
-//    sim_cancel (&ks_unit[1]);
+    sim_cancel (&ks_unit[1]);
+    sim_cancel (&ks_unit[2]);
+    sim_cancel (&ks_unit[3]);
     ks_dib.cma = 0;
     }
 return SCPE_OK;
@@ -656,6 +639,10 @@ uint32 sq, fl;
 fl = GETB (ksa + KSA_FLGS);                             /* get drive flags */
 if ((fl & FLGS_SVC) == 0) {                             /* drive not known to system? */
     sq = GETP (ksa);                                    /* get service queue pointer */
+    if (sq == 0) {
+//        sim_printf ("Drive service queue is NULL!\n");
+        return SCPE_OK;
+        }
     if (Q_LOCKED (sq)) {
         sim_printf ("Service queue currently locked\n");
         return SCPE_OK;
@@ -664,7 +651,7 @@ if ((fl & FLGS_SVC) == 0) {                             /* drive not known to sy
     fl |= FLGS_SVC;
     PUTB (ksa + KSA_FLGS, fl);                          /* now on service queue */
     kg_send (sq, ksa);                                  /* send drive state area to service queue */
-    sim_printf ("Drive state area sent to service queue\n");
+//    sim_printf ("Drive state area sent to service queue\n");
     }
 return SCPE_OK;
 }
@@ -720,14 +707,14 @@ struct drvtyp *dtab = &drv_tab[dtyp];
 
 sim_printf ("SDI command: GET COMMON CHARACTERISTICS\n");
 PUTW (rsp + 000, 0x78);                                 /* response opcode */
-PUTW (rsp + 002, 0x33);                                 /* short TO / SDI version */
-PUTW (rsp + 004, 0x61);                                 /* transfer rate */
-PUTW (rsp + 006, 0x57);                                 /* long TO / retry # */
+PUTW (rsp + 002, (dtab->sdiv << 4) | dtab->sto);        /* short TO / SDI version */
+PUTW (rsp + 004, dtab->xfrt);                           /* transfer rate */
+PUTW (rsp + 006, (dtab->retry << 4) | dtab->lto);       /* long TO / retry # */
 PUTW (rsp + 010, 0x80 | dtab->rctc);                    /* RCT copies / reserved, 0x80 = 576 byte mode allowed */
-PUTW (rsp + 012, 0x00);                                 /* error recovery levels */
-PUTW (rsp + 014, 0x02);                                 /* ECC error threshold */
-PUTW (rsp + 016, 0x0A);                                 /* software revision */
-PUTW (rsp + 020, 0x00);                                 /* hardware revision, 0x80 = limited diag support */
+PUTW (rsp + 012, dtab->erl);                            /* error recovery levels */
+PUTW (rsp + 014, dtab->eet);                            /* ECC error threshold */
+PUTW (rsp + 016, dtab->swr);                            /* software revision */
+PUTW (rsp + 020, dtab->hwr);                            /* hardware revision, 0x80 = limited diag support */
 PUTW (rsp + 022, 0x7A);                                 /* unique drive ID #1 */
 PUTW (rsp + 024, 0x0A);
 PUTW (rsp + 026, 0x00);                                 /* unique drive ID #2 */
@@ -735,7 +722,7 @@ PUTW (rsp + 030, 0x00);
 PUTW (rsp + 032, 0x00);                                 /* unique drive ID #3 */
 PUTW (rsp + 034, 0x00);
 PUTW (rsp + 036, dtab->mod);                            /* drive type identifier */
-PUTW (rsp + 040, 0x74);                                 /* drive revs/s */
+PUTW (rsp + 040, dtab->revs);                           /* drive revs/s */
 PUTW (rsp + 042, 0x00);
 PUTW (rsp + 044, 0x00);
 PUTW (rsp + 046, 0x00);
@@ -758,37 +745,37 @@ PUTW (rsp + 0000, 0x77);                                /* response opcode */
 PUTW (rsp + 0002, dtab->lcyl & 0xFF);                   /* low order LBN space in cylinders */
 PUTW (rsp + 0004, (dtab->lcyl >> 8) & 0xFF);
 PUTW (rsp + 0006, (dtab->lcyl >> 16) & 0xFF);           /* high order LBN space in cylinders */
-PUTW (rsp + 0010, (dtab->lcyl >> 24) & 0xFF);               /* cyl # */
+PUTW (rsp + 0010, (dtab->lcyl >> 24) & 0xFF);
 PUTW (rsp + 0012, dtab->gpc);                           /* groups/cylinder */
-PUTW (rsp + 0014, 0x00);                                    /* start LBN / start XBN */
+PUTW (rsp + 0014, 0x00);                                /* start LBN / start XBN? */
 PUTW (rsp + 0016, dtab->tpg);                           /* tracks/group */
-PUTW (rsp + 0020, 0x00);                                    /* start RBN / start DBN */
-PUTW (rsp + 0022, 1);                                   /* RBNs/track */
-PUTW (rsp + 0024, 0x00);                                    /* reserved */
-PUTW (rsp + 0026, 11);                                  /* data preamble size */
-PUTW (rsp + 0030, 4);                                   /* header preamble size */
-PUTW (rsp + 0032, dtab->MediaId & 0xFF);                /* media type low */
-PUTW (rsp + 0034, (dtab->MediaId >> 8) & 0xFF);
-PUTW (rsp + 0036, (dtab->MediaId >> 16) & 0xFF);        /* media type high */
-PUTW (rsp + 0040, (dtab->MediaId >> 24) & 0xFF);
+PUTW (rsp + 0020, 0x00);                                /* start RBN / start DBN? */
+PUTW (rsp + 0022, dtab->rbn);                           /* RBNs/track */
+PUTW (rsp + 0024, 0x00);                                /* reserved */
+PUTW (rsp + 0026, dtab->dps);                           /* data preamble size */
+PUTW (rsp + 0030, dtab->hps);                           /* header preamble size */
+PUTW (rsp + 0032, dtab->media & 0xFF);                  /* media type low */
+PUTW (rsp + 0034, (dtab->media >> 8) & 0xFF);
+PUTW (rsp + 0036, (dtab->media >> 16) & 0xFF);          /* media type high */
+PUTW (rsp + 0040, (dtab->media >> 24) & 0xFF);
 PUTW (rsp + 0042, dtab->fcts & 0xFF);                   /* FCT copy size in XBNs */
 PUTW (rsp + 0044, (dtab->fcts >> 8) & 0xFF);
-PUTW (rsp + 0046, dtab->sect);                          /* LBNs/track (16-bit) */
-PUTW (rsp + 0050, dtab->gof);                           /* group offset (16-bit) */
-PUTW (rsp + 0052, dtab->lbn & 0xFF);                    /* LBNs in host area low (16-bit) */
-PUTW (rsp + 0054, (dtab->lbn >> 8) & 0xFF);
-PUTW (rsp + 0056, (dtab->lbn >> 16) & 0xFF);            /* LBNs in host area high (16-bit) */
-PUTW (rsp + 0060, (dtab->lbn >> 24) & 0xFF);
-PUTW (rsp + 0062, dtab->rcts & 0xFF);                   /* RCT size in LBNs (16-bit) */
-PUTW (rsp + 0064, (dtab->rcts >> 8) & 0xFF);
-PUTW (rsp + 0066, 0x00);                                /* LBNs/track (18-bit) */
-PUTW (rsp + 0070, 0x00);                                /* group offset (18-bit) */
-PUTW (rsp + 0072, 0x00);                                /* LBNs in host area low (18-bit) */
-PUTW (rsp + 0074, 0x00);
-PUTW (rsp + 0076, 0x00);                                /* LBNs in host area high (18-bit) */
-PUTW (rsp + 0100, 0x00);
-PUTW (rsp + 0102, 0x00);                                /* RCT size in LBNs (18-bit) */
-PUTW (rsp + 0104, 0x00);
+PUTW (rsp + 0046, dtab->sect_16);                       /* LBNs/track (16-bit) */
+PUTW (rsp + 0050, dtab->gof_16);                        /* group offset (16-bit) */
+PUTW (rsp + 0052, dtab->lbn_16 & 0xFF);                 /* LBNs in host area low (16-bit) */
+PUTW (rsp + 0054, (dtab->lbn_16 >> 8) & 0xFF);
+PUTW (rsp + 0056, (dtab->lbn_16 >> 16) & 0xFF);         /* LBNs in host area high (16-bit) */
+PUTW (rsp + 0060, (dtab->lbn_16 >> 24) & 0xFF);
+PUTW (rsp + 0062, dtab->rcts_16 & 0xFF);                /* RCT size in LBNs (16-bit) */
+PUTW (rsp + 0064, (dtab->rcts_16 >> 8) & 0xFF);
+PUTW (rsp + 0066, dtab->sect_18);                       /* LBNs/track (18-bit) */
+PUTW (rsp + 0070, dtab->gof_18);                        /* group offset (18-bit) */
+PUTW (rsp + 0072, dtab->lbn_18 & 0xFF);                 /* LBNs in host area low (18-bit) */
+PUTW (rsp + 0074, (dtab->lbn_18 >> 8) & 0xFF);
+PUTW (rsp + 0076, (dtab->lbn_18 >> 16) & 0xFF);         /* LBNs in host area high (18-bit) */
+PUTW (rsp + 0100, (dtab->lbn_18 >> 24) & 0xFF);
+PUTW (rsp + 0102, dtab->rcts_18 & 0xFF);                /* RCT size in LBNs (18-bit) */
+PUTW (rsp + 0104, (dtab->rcts_18 >> 8) & 0xFF);
 PUTW (rsp + 0106, dtab->xcyl & 0xFF);                   /* XBN space in cylinders */
 PUTW (rsp + 0110, (dtab->xcyl >> 8) & 0xFF);
 PUTW (rsp + 0112, dtab->drg);                           /* DBN readonly groups */
@@ -805,7 +792,10 @@ sim_printf ("SDI command: GET STATUS\n");
 PUTW (rsp + 000, 0xF6);                                 /* response opcode */
 PUTW (rsp + 002, uptr->unit_plug);                      /* unit number (low) */
 PUTW (rsp + 004, UMSK_U1 | ((uptr->unit_plug >> 8) & 0xF)); /* unit number (high) / subunit mask */
-PUTW (rsp + 006, REQ_SR | REQ_PS | REQ_RU);             /* request byte */
+if (uptr->flags & UNIT_ATT)                             /* attached? */
+    PUTW (rsp + 006, REQ_SR | REQ_PS | REQ_RU);         /* request byte - drive ready */
+else
+    PUTW (rsp + 006, REQ_PS);                           /* request byte - drive not ready */
 PUTW (rsp + 010, ks_mode);                              /* mode byte */
 PUTW (rsp + 012, 0x00);                                 /* error byte */
 PUTW (rsp + 014, 0x00);                                 /* controller byte */
@@ -1114,7 +1104,7 @@ t_seccnt sects, sectsread;
 uint16 *xbuf = (uint16 *)uptr->ksxb;
 t_stat r;
 
-if (lbn >= dtab->lbn)                                   /* outside host area? */
+if (lbn >= dtab->lbn_16)                                /* outside host area? */
     ks_read_rct (dma);                                  /* read RCT */
 else {
     sects = 1;
@@ -1137,7 +1127,7 @@ t_seccnt sects, sectswritten;
 uint16 *xbuf = (uint16 *)uptr->ksxb;
 t_stat r;
 
-if (lbn >= dtab->lbn) { }                               /* outside host area? */
+if (lbn >= dtab->lbn_16) { }                            /* outside host area? */
 else {
     for (int i = 0; i < 256; i++) {
         xbuf[i] = GETDW (dma + (i << 1));
@@ -1268,7 +1258,7 @@ else {
         }
     }
 
-if ((ot == OT_LBN) && (lbn >= dtab->lbn) && ((ks_mode & MODE_OB) == 0)) /* outside host area? */
+if ((ot == OT_LBN) && (lbn >= dtab->lbn_16) && ((ks_mode & MODE_OB) == 0)) /* outside host area? */
     kg_route_frb (ks, frb, FALSE);
 else
     kg_route_frb (ks, frb, TRUE);
@@ -1276,9 +1266,12 @@ else
 
 void ks_process_drat (UNIT *uptr, uint32 ks, uint32 port)
 {
+uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+struct drvtyp *dtab = &drv_tab[dtyp];
 uint32 ksh = ks + KS_0HD + (port * 4);                  /* DRAT queue */
 uint32 kfl = ks - KS_0FL - (port * 4);                  /* port flags */
 uint32 dt, cyl, fq, cnt, cq, frb, fc, flg;
+uint32 sect = dtab->sect_16 + dtab->rbn;
 
 dt = GETP (ksh + Q_HEAD);                               /* get DRAT */
 if (dt == 0)
@@ -1290,7 +1283,7 @@ if (dt == 0)
 //sim_printf ("DRAT: %07o\n", dt);
 
 cyl = GETW (dt + DT_CYL);                               /* get current cylinder */
-fq = dt - (32 * 4);                                     /* 32 sectors/track, 4 bytes for queue head/tail */
+fq = dt - (sect * 4);                                   /* 4 bytes for queue head/tail */
 cnt = GETW (dt + DT_CNT);
 
 fc = 0;
@@ -1306,7 +1299,7 @@ if (fc > 0)
     sim_printf ("%d FRBs pre-processed\n", fc);
 
 fc = 0;
-for (int k = 0; k < 32; k++) {                          /* for each sector */
+for (int k = 0; k < sect; k++) {                        /* for each sector */
     for (int j = 0; j < 50; j++) {                      /* prevent endless loop */
         frb = kg_receive (fq + (k << 2));               /* get next FRB */
         if (frb == 0)
@@ -1316,7 +1309,7 @@ for (int k = 0; k < 32; k++) {                          /* for each sector */
         fc++;
         if (cnt > 0)
             cnt = cnt - 1;
-        sim_printf ("DRAT count %d -> %d\n", (cnt + 1), cnt);
+//        sim_printf ("DRAT count %d -> %d\n", (cnt + 1), cnt);
         }
     }
 if (fc > 0)
@@ -1350,6 +1343,7 @@ uint32 ksa, cq, dc;
 
 ksa = ks + KS_S0 + (port * 16);                         /* drive state area */
 if (GETW (ks + KG_RSL) == 0) {                          /* test started? */
+//    sim_printf ("Test started for port %d\n", port);
     PUTW (ks + KG_RSL, 1);                              /* KG$RSL - result of self test */
     dc = kg_receive (ksa + KSA_HEAD);                   /* get DCB from drive state area */
     cq = GETP (dc + DC_0CQ);                            /* get completion queue */
@@ -1393,7 +1387,7 @@ if (val < 0)
 if (uptr->flags & UNIT_ATT)
     return SCPE_ALATT;
 uptr->flags = (uptr->flags & ~UNIT_DTYPE) | (val << UNIT_V_DTYPE);
-uptr->capac = (t_addr)drv_tab[val].lbn;
+uptr->capac = (t_addr)drv_tab[val].lbn_16;
 return SCPE_OK;
 }
 
@@ -1491,7 +1485,7 @@ if (!plugs_inited ) {
     uint32 d, u = 0;
 
     plugs_inited  = TRUE;
-    for (d = 0; d < dptr->numunits - 2; d++) {
+    for (d = 0; d < dptr->numunits; d++) {
         dptr->units[d].unit_plug = u++;                 /* unique unit numbers */
         }
     }
