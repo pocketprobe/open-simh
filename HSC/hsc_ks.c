@@ -660,7 +660,7 @@ return SCPE_OK;
 
 uint16 ks_online (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: ONLINE\n");
+//sim_printf ("SDI command: ONLINE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 uptr->flags = uptr->flags | UNIT_ONL;
 return 002;
@@ -670,7 +670,7 @@ return 002;
 
 uint16 ks_disc (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: DISCONNECT\n");
+//sim_printf ("SDI command: DISCONNECT\n");
 ks_mode = 0;
 uptr->flags = uptr->flags & ~UNIT_ONL;
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -682,7 +682,7 @@ return 002;
 uint16 ks_diag (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
 uint8 test = GETW (cmd + 002);                          /* drive resident test to run */
-sim_printf ("SDI command: DIAGNOSE, test = %02X\n", test);
+//sim_printf ("SDI command: DIAGNOSE, test = %02X\n", test);
 PUTW (rsp, 0xFC);                                       /* response opcode */
 return 004;
 }
@@ -691,7 +691,7 @@ return 004;
 
 uint16 ks_clear (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: DRIVE CLEAR\n");
+//sim_printf ("SDI command: DRIVE CLEAR\n");
 ks_mode = 0;
 uptr->flags = uptr->flags & ~UNIT_ONL;
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -705,7 +705,7 @@ uint16 ks_getchar (UNIT *uptr, uint32 cmd, uint32 rsp)
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
 struct drvtyp *dtab = &drv_tab[dtyp];
 
-sim_printf ("SDI command: GET COMMON CHARACTERISTICS\n");
+//sim_printf ("SDI command: GET COMMON CHARACTERISTICS\n");
 PUTW (rsp + 000, 0x78);                                 /* response opcode */
 PUTW (rsp + 002, (dtab->sdiv << 4) | dtab->sto);        /* short TO / SDI version */
 PUTW (rsp + 004, dtab->xfrt);                           /* transfer rate */
@@ -740,7 +740,7 @@ uint16 ks_getsubchar (UNIT *uptr, uint32 cmd, uint32 rsp)
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
 struct drvtyp *dtab = &drv_tab[dtyp];
 
-sim_printf ("SDI command: GET SUBUNIT CHARACTERISTICS\n");
+//sim_printf ("SDI command: GET SUBUNIT CHARACTERISTICS\n");
 PUTW (rsp + 0000, 0x77);                                /* response opcode */
 PUTW (rsp + 0002, dtab->lcyl & 0xFF);                   /* low order LBN space in cylinders */
 PUTW (rsp + 0004, (dtab->lcyl >> 8) & 0xFF);
@@ -788,7 +788,7 @@ return 050;
 
 uint16 ks_getsts (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: GET STATUS\n");
+//sim_printf ("SDI command: GET STATUS\n");
 PUTW (rsp + 000, 0xF6);                                 /* response opcode */
 PUTW (rsp + 002, uptr->unit_plug);                      /* unit number (low) */
 PUTW (rsp + 004, UMSK_U1 | ((uptr->unit_plug >> 8) & 0xF)); /* unit number (high) / subunit mask */
@@ -815,7 +815,7 @@ return 020;
 
 uint16 ks_rdmem (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: READ MEMORY\n");
+//sim_printf ("SDI command: READ MEMORY\n");
 PUTW (rsp, 0x72);                                       /* response opcode */
 return 030;
 }
@@ -824,7 +824,7 @@ return 030;
 
 uint16 ks_recal (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: RECALIBRATE\n");
+//sim_printf ("SDI command: RECALIBRATE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
@@ -838,7 +838,7 @@ cyl = GETB (cmd + 004);
 cyl = cyl << 8;
 cyl = cyl | GETB (cmd + 002);
 grp = GETB (cmd + 006);
-sim_printf ("SDI command: SEEK, cyl = %d, grp = %d\n", cyl, grp);
+//sim_printf ("SDI command: SEEK, cyl = %d, grp = %d\n", cyl, grp);
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
@@ -849,21 +849,21 @@ uint8 msk, val;
 val = GETB (cmd + 002);                                 /* new mode value */
 msk = GETB (cmd + 004);                                 /* mask */
 ks_mode = (ks_mode & ~msk) | (val & msk);
-sim_printf ("SDI command: CHANGE MODE\n");
+//sim_printf ("SDI command: CHANGE MODE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
 uint16 ks_chflag (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: CHANGE CONTROLLER FLAGS\n");
+//sim_printf ("SDI command: CHANGE CONTROLLER FLAGS\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
 uint16 ks_topology (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-sim_printf ("SDI command: TOPOLOGY\n");
+//sim_printf ("SDI command: TOPOLOGY\n");
 PUTW (rsp, 0x6F);                                       /* TOPOLOGY RESPONSE */
 return 020;
 }
@@ -947,7 +947,7 @@ return rsz;
 void ks_rtds (UNIT *uptr, uint32 rsp)
 {
 uint16 sts = 0;
-sim_printf ("LINE STATUS\n");
+//sim_printf ("LINE STATUS\n");
 if (uptr->flags & UNIT_ONL)
     sts = RTDS_RWR;                                     /* READ/WRITE READY */
 else
@@ -992,7 +992,7 @@ for (int j = 0; j < 20; j++) {
 //    sim_printf ("K.sdi opcode = %o\n", (opc & 0177400));
     switch (opc & 0177400) {
         case 014400:                                    /* ECHO DATA */
-            sim_printf ("ECHO DATA\n");
+            //sim_printf ("ECHO DATA\n");
             cmd = GETW (dc + DC_CMD);                   /* get immediate */
             PUTW (rsp, cmd);                            /* copy to response */
             break;
@@ -1259,8 +1259,9 @@ else {
     }
 
 if ((ot == OT_LBN) && (lbn >= dtab->lbn_16) && ((ks_mode & MODE_OB) == 0)) /* outside host area? */
-    kg_route_frb (ks, frb, FALSE);
-else
+    PUTW (frb + F_ESUM, 1);
+//    kg_route_frb (ks, frb, FALSE);
+//else
     kg_route_frb (ks, frb, TRUE);
 }
 
@@ -1270,15 +1271,13 @@ uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
 struct drvtyp *dtab = &drv_tab[dtyp];
 uint32 ksh = ks + KS_0HD + (port * 4);                  /* DRAT queue */
 uint32 kfl = ks - KS_0FL - (port * 4);                  /* port flags */
-uint32 dt, cyl, fq, cnt, cq, frb, fc, flg;
+uint32 dt, cyl, fq, cnt, cq, frb, fc, flg, rte;
 uint32 sect = dtab->sect_16 + dtab->rbn;
 
 dt = GETP (ksh + Q_HEAD);                               /* get DRAT */
 if (dt == 0)
     return;
 
-//for (int i = 0; i < 24; i++)
-//    sim_printf ("%07o: %06o\n", dt + (i << 1), GETW (dt + (i << 1)));
 //print_drat (dt);
 //sim_printf ("DRAT: %07o\n", dt);
 
@@ -1295,8 +1294,8 @@ for (int j = 0; j < 50; j++) {                          /* prevent endless loop 
     cq = GETP (dt + DT_HST + 002);
     kg_send (cq, frb);
     }
-if (fc > 0)
-    sim_printf ("%d FRBs pre-processed\n", fc);
+//if (fc > 0)
+//    sim_printf ("%d FRBs pre-processed\n", fc);
 
 fc = 0;
 for (int k = 0; k < sect; k++) {                        /* for each sector */
@@ -1305,20 +1304,16 @@ for (int k = 0; k < sect; k++) {                        /* for each sector */
         if (frb == 0)
             break;
         PUTP (frb + F_DRAT, dt);
+        rte = GETP (frb + F_RTE);                       /* get route */
+        flg = GETB (rte + V_FLGS);                      /* get flags from route */
         ks_process_frb (uptr, frb, cyl, k);
         fc++;
-        if (cnt > 0)
+        if (((flg & V_NC) == 0) && (cnt > 0))
             cnt = cnt - 1;
-//        sim_printf ("DRAT count %d -> %d\n", (cnt + 1), cnt);
         }
     }
-if (fc > 0)
-    sim_printf ("%d FRBs processed\n", fc);
-//if (cnt < GETW (dt + DT_CNT)) {
-//    for (int i = 0; i < 24; i++)
-//        sim_printf ("%07o: %06o\n", dt + (i << 1), GETW (dt + (i << 1)));
-//    sim_printf ("DRAT: %07o\n", dt);
-//    }
+//if (fc > 0)
+//    sim_printf ("%d FRBs processed\n", fc);
 
 PUTW (dt + DT_CNT, cnt);                                /* update counter */
 
@@ -1329,7 +1324,7 @@ if (cnt == 0) {                                         /* all operation complet
     flg = GETW (kfl);
     flg = flg | 0100000;                                /* FIXME: This is expected by ILDISK */
     PUTW (kfl, flg);
-    sim_printf ("DRAT completed\n");
+//    sim_printf ("DRAT completed\n");
     }
 }
 

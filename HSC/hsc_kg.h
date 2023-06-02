@@ -89,6 +89,7 @@
 #define V_FLGS          0000                            /* control flags */
 #define  V_FB           0001                            /* free buffers */
 #define  V_DC           0002                            /* decrement counter */
+#define  V_NC           0010                            /* prevent down count in DRAT */
 #define V_OPCD          0001                            /* opcode */
 #define  V_SD           0001                            /* send data to host */
 #define  V_RD           0002                            /* request data from host */

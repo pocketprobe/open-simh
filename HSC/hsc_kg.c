@@ -277,7 +277,6 @@ rte = GETP (frb + F_RTE);                               /* get route */
 //kg_print_route (rte + 020);
 
 flg = GETW (rte);                                       /* get opcode/flags from route */
-//sim_printf ("OPC: %o, FLG: %o\n", (flg >> 8), (flg & 0377));
 
 if (sts) {
     if (flg & V_FB) {                                   /* free buffers? */
@@ -307,7 +306,7 @@ else {
     cq = frb + (cq << 2);                               /* offset into FRB */
     cq = GETP (cq);
     }
-//sim_printf ("FRB dest = %07o\n", cq);
+//sim_printf ("OPC: %o, FLG: %o, STS: %d, DST: %o\n", (flg >> 8), (flg & 0377), sts, cq);
 kg_send (cq, frb);                                      /* send FRB to completion queue */
 }
 

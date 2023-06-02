@@ -941,7 +941,6 @@ r = kh_send_int (&kh_unit, &pkt);
 if (opc == 020000)                                      /* FIXME: APPMSG always goes to SRR? */
     *cq = kh + KH_SRR;
 if (opc == 040000) {
-    sim_printf ("DX: %06o\n", rsc);
     dx = GETP (rsc + HM_DX);                            /* get deallocation context */
     kg_dec_ctr (dx + DX_CTR);                           /* another operation complete */
     *cq = kh + KH_SRR;
