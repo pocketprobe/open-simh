@@ -178,20 +178,35 @@
 #define UNIT_V_DTYPE    (DKUF_V_UF + 3)                 /* drive type */
 #define UNIT_M_DTYPE    0x1F
 #define UNIT_V_NOAUTO   (DKUF_V_UF + 8)                 /* noautosize */
+#define UNIT_V_FMT      (DKUF_V_UF + 9)                 /* drive format */
 #define UNIT_ONL        (1 << UNIT_V_ONL)
 #define UNIT_WLK        (1 << UNIT_V_WLK)
 #define UNIT_ATP        (1 << UNIT_V_ATP)
 #define UNIT_NOAUTO     (1 << UNIT_V_NOAUTO)
+#define UNIT_FMT        (1 << UNIT_V_FMT)
 #define UNIT_DTYPE      (UNIT_M_DTYPE << UNIT_V_DTYPE)
 #define GET_DTYPE(x)    (((x) >> UNIT_V_DTYPE) & UNIT_M_DTYPE)
+#define GET_FMT(x)      (((x) >> UNIT_V_FMT) & 0x1)
 #define unit_plug       u4                              /* drive unit plug value */
+#define dbn_size        u5
+#define dbn             up7
 #define ksxb            filebuf                         /* xfer buffer */
+
+#define FMT_16          0                               /* 16-bit format */
+#define FMT_18          1                               /* 18-bit format */
 
 #define RA60_DTYPE      0
 #define RA70_DTYPE      1
 #define RA80_DTYPE      2
 #define RA81_DTYPE      3
 #define RA82_DTYPE      4
+
+struct drvfmt {
+    uint16      sect;                                   /* sectors (16-bit) */
+    uint16      gof;                                    /* group offset (16-bit) */
+    uint32      lbn;                                    /* LBN size (16-bit) */
+    uint16      rcts;                                   /* RCT size (16-bit) */
+    };
 
 struct drvtyp {
     uint8       sdiv;                                   /* SDI version */
@@ -227,6 +242,7 @@ struct drvtyp {
     uint16      mod;                                    /* MSCP model */
     uint32      media;                                  /* MSCP media */
     uint32      flgs;                                   /* flags */
+    struct drvfmt fmt[2];
     const char  *name;                                  /* name */
     };
 
@@ -239,7 +255,10 @@ struct drvtyp {
     d##_GOF_18,  d##_DRG,      d##_LBN_16,  d##_LBN_18, \
     d##_FCTS,    d##_RCTS_16,  d##_RCTS_18, d##_RCTC, \
     d##_RBN,     d##_REVS,     d##_MOD,     d##_MED, \
-    d##_FLGS,    #d }
+    d##_FLGS,    \
+    { { d##_SECT_16, d##_GOF_16, d##_LBN_16, d##_RCTS_16 }, \
+      { d##_SECT_18, d##_GOF_18, d##_LBN_18, d##_RCTS_18 } }, \
+    #d }
 #define RQ_SIZE(d)      d##_LBN_16                      /* FIXME: support 18-bit mode */
 
 static struct drvtyp drv_tab[] = {
@@ -262,6 +281,7 @@ t_stat ks_init (uint16 req, uint16 act);
 t_stat ks_attach (UNIT *uptr, CONST char *cptr);
 t_stat ks_detach (UNIT *uptr);
 t_stat ks_set_wlk (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat ks_set_fmt (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat ks_set_type (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat ks_set_ctype (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat ks_set_plug (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -269,15 +289,22 @@ t_stat ks_show_plug (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat ks_show_type (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat ks_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat ks_show_wlk (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat ks_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat ks_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 /* debugging bitmaps */
 
 #define DBG_TRC         KG_DBG_TRC                      /* trace routine calls */
 #define DBG_DSK         0x0010                          /* display sim_disk activities */
+#define DBG_SDI         0x0020                          /* SDI commands */
+#define DBG_FRB         0x0040                          /* FRB operations */
+#define DBG_DRAT        0x0080                          /* DRAT operations */
 
 DEBTAB ks_debug[] = {
-    { "TRACE",  DBG_TRC,   "trace routine calls" },
+    { "TRACE", DBG_TRC,  "trace routine calls" },
+    { "SDI",   DBG_SDI,  "SDI commands" },
+    { "FRB",   DBG_FRB,  "FRB operations" },
+    { "DRAT",  DBG_DRAT, "DRAT operations" },
     { 0 }
 };
 
@@ -303,12 +330,24 @@ REG ks_reg[] = {
     };
 
 MTAB ks_mod[] = {
-    { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
+    { MTAB_XTD|MTAB_VDV, 0, "SLOT", "SLOT",
       NULL, &kg_show_req, NULL },
-    { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
+    { MTAB_XTD|MTAB_VDV, 0, "ADDRESS", "ADDRESS",
       NULL, &kg_show_addr, NULL },
-    { MTAB_XTD|MTAB_VDV|MTAB_NMO, 004, "CONTROL", "CONTROL",
+    { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "CONTROL", "CONTROL",
       NULL, &ks_show_ctrl, NULL },
+    { UNIT_WLK, 0, NULL, "WRITEENABLED",
+      &ks_set_wlk, NULL, NULL, "Write enable disk drive" },
+    { UNIT_WLK, UNIT_WLK, NULL, "LOCKED",
+      &ks_set_wlk, NULL, NULL, "Write lock disk drive" },
+    { MTAB_XTD|MTAB_VUN, 0, "WRITE", NULL,
+      NULL, &ks_show_wlk, NULL, "Display drive writelock status" },
+    { MTAB_XTD|MTAB_VUN, FMT_16, NULL, "16BIT",
+      &ks_set_fmt, NULL, NULL, "Set drive format to 16-bit" },
+    { MTAB_XTD|MTAB_VUN, FMT_18, NULL, "18BIT",
+      &ks_set_fmt, NULL, NULL, "Set drive format to 18-bit" },
+    { MTAB_XTD|MTAB_VUN, 0, "FORMAT", NULL,
+      NULL, &ks_show_fmt, NULL, "Display drive format" },
     { MTAB_XTD|MTAB_VUN, RA60_DTYPE, NULL, "RA60",
       &ks_set_type, NULL, NULL, "Set RA60 Disk Type" },
     { MTAB_XTD|MTAB_VUN, RA70_DTYPE, NULL, "RA70",
@@ -660,7 +699,7 @@ return SCPE_OK;
 
 uint16 ks_online (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: ONLINE\n");
+sim_debug_unit (DBG_SDI, uptr, "ONLINE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 uptr->flags = uptr->flags | UNIT_ONL;
 return 002;
@@ -670,7 +709,7 @@ return 002;
 
 uint16 ks_disc (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: DISCONNECT\n");
+sim_debug_unit (DBG_SDI, uptr, "DISCONNECT\n");
 ks_mode = 0;
 uptr->flags = uptr->flags & ~UNIT_ONL;
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -682,7 +721,7 @@ return 002;
 uint16 ks_diag (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
 uint8 test = GETW (cmd + 002);                          /* drive resident test to run */
-//sim_printf ("SDI command: DIAGNOSE, test = %02X\n", test);
+sim_debug_unit (DBG_SDI, uptr, "DIAGNOSE, test = %02X\n", test);
 PUTW (rsp, 0xFC);                                       /* response opcode */
 return 004;
 }
@@ -691,7 +730,7 @@ return 004;
 
 uint16 ks_clear (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: DRIVE CLEAR\n");
+sim_debug_unit (DBG_SDI, uptr, "DRIVE CLEAR\n");
 ks_mode = 0;
 uptr->flags = uptr->flags & ~UNIT_ONL;
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
@@ -703,14 +742,18 @@ return 002;
 uint16 ks_getchar (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+uint32 fmt = GET_FMT (uptr->flags);                     /* get drive format */
 struct drvtyp *dtab = &drv_tab[dtyp];
 
-//sim_printf ("SDI command: GET COMMON CHARACTERISTICS\n");
+sim_debug_unit (DBG_SDI, uptr, "GET COMMON CHARACTERISTICS\n");
 PUTW (rsp + 000, 0x78);                                 /* response opcode */
 PUTW (rsp + 002, (dtab->sdiv << 4) | dtab->sto);        /* short TO / SDI version */
 PUTW (rsp + 004, dtab->xfrt);                           /* transfer rate */
 PUTW (rsp + 006, (dtab->retry << 4) | dtab->lto);       /* long TO / retry # */
-PUTW (rsp + 010, 0x80 | dtab->rctc);                    /* RCT copies / reserved, 0x80 = 576 byte mode allowed */
+if (fmt == FMT_18)
+    PUTW (rsp + 010, 0x80 | dtab->rctc);                /* RCT copies / reserved, 0x80 = 576 byte mode allowed */
+else
+    PUTW (rsp + 010, dtab->rctc);                       /* RCT copies / reserved */
 PUTW (rsp + 012, dtab->erl);                            /* error recovery levels */
 PUTW (rsp + 014, dtab->eet);                            /* ECC error threshold */
 PUTW (rsp + 016, dtab->swr);                            /* software revision */
@@ -740,7 +783,7 @@ uint16 ks_getsubchar (UNIT *uptr, uint32 cmd, uint32 rsp)
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
 struct drvtyp *dtab = &drv_tab[dtyp];
 
-//sim_printf ("SDI command: GET SUBUNIT CHARACTERISTICS\n");
+sim_debug_unit (DBG_SDI, uptr, "GET SUBUNIT CHARACTERISTICS\n");
 PUTW (rsp + 0000, 0x77);                                /* response opcode */
 PUTW (rsp + 0002, dtab->lcyl & 0xFF);                   /* low order LBN space in cylinders */
 PUTW (rsp + 0004, (dtab->lcyl >> 8) & 0xFF);
@@ -760,22 +803,22 @@ PUTW (rsp + 0036, (dtab->media >> 16) & 0xFF);          /* media type high */
 PUTW (rsp + 0040, (dtab->media >> 24) & 0xFF);
 PUTW (rsp + 0042, dtab->fcts & 0xFF);                   /* FCT copy size in XBNs */
 PUTW (rsp + 0044, (dtab->fcts >> 8) & 0xFF);
-PUTW (rsp + 0046, dtab->sect_16);                       /* LBNs/track (16-bit) */
-PUTW (rsp + 0050, dtab->gof_16);                        /* group offset (16-bit) */
-PUTW (rsp + 0052, dtab->lbn_16 & 0xFF);                 /* LBNs in host area low (16-bit) */
-PUTW (rsp + 0054, (dtab->lbn_16 >> 8) & 0xFF);
-PUTW (rsp + 0056, (dtab->lbn_16 >> 16) & 0xFF);         /* LBNs in host area high (16-bit) */
-PUTW (rsp + 0060, (dtab->lbn_16 >> 24) & 0xFF);
-PUTW (rsp + 0062, dtab->rcts_16 & 0xFF);                /* RCT size in LBNs (16-bit) */
-PUTW (rsp + 0064, (dtab->rcts_16 >> 8) & 0xFF);
-PUTW (rsp + 0066, dtab->sect_18);                       /* LBNs/track (18-bit) */
-PUTW (rsp + 0070, dtab->gof_18);                        /* group offset (18-bit) */
-PUTW (rsp + 0072, dtab->lbn_18 & 0xFF);                 /* LBNs in host area low (18-bit) */
-PUTW (rsp + 0074, (dtab->lbn_18 >> 8) & 0xFF);
-PUTW (rsp + 0076, (dtab->lbn_18 >> 16) & 0xFF);         /* LBNs in host area high (18-bit) */
-PUTW (rsp + 0100, (dtab->lbn_18 >> 24) & 0xFF);
-PUTW (rsp + 0102, dtab->rcts_18 & 0xFF);                /* RCT size in LBNs (18-bit) */
-PUTW (rsp + 0104, (dtab->rcts_18 >> 8) & 0xFF);
+PUTW (rsp + 0046, dtab->fmt[FMT_16].sect);              /* LBNs/track (16-bit) */
+PUTW (rsp + 0050, dtab->fmt[FMT_16].gof);               /* group offset (16-bit) */
+PUTW (rsp + 0052, dtab->fmt[FMT_16].lbn & 0xFF);        /* LBNs in host area low (16-bit) */
+PUTW (rsp + 0054, (dtab->fmt[FMT_16].lbn >> 8) & 0xFF);
+PUTW (rsp + 0056, (dtab->fmt[FMT_16].lbn >> 16) & 0xFF); /* LBNs in host area high (16-bit) */
+PUTW (rsp + 0060, (dtab->fmt[FMT_16].lbn >> 24) & 0xFF);
+PUTW (rsp + 0062, dtab->fmt[FMT_16].rcts & 0xFF);       /* RCT size in LBNs (16-bit) */
+PUTW (rsp + 0064, (dtab->fmt[FMT_16].rcts >> 8) & 0xFF);
+PUTW (rsp + 0066, dtab->fmt[FMT_18].sect);              /* LBNs/track (18-bit) */
+PUTW (rsp + 0070, dtab->fmt[FMT_18].gof);               /* group offset (18-bit) */
+PUTW (rsp + 0072, dtab->fmt[FMT_18].lbn & 0xFF);        /* LBNs in host area low (18-bit) */
+PUTW (rsp + 0074, (dtab->fmt[FMT_18].lbn >> 8) & 0xFF);
+PUTW (rsp + 0076, (dtab->fmt[FMT_18].lbn >> 16) & 0xFF); /* LBNs in host area high (18-bit) */
+PUTW (rsp + 0100, (dtab->fmt[FMT_18].lbn >> 24) & 0xFF);
+PUTW (rsp + 0102, dtab->fmt[FMT_18].rcts & 0xFF);       /* RCT size in LBNs (18-bit) */
+PUTW (rsp + 0104, (dtab->fmt[FMT_18].rcts >> 8) & 0xFF);
 PUTW (rsp + 0106, dtab->xcyl & 0xFF);                   /* XBN space in cylinders */
 PUTW (rsp + 0110, (dtab->xcyl >> 8) & 0xFF);
 PUTW (rsp + 0112, dtab->drg);                           /* DBN readonly groups */
@@ -788,7 +831,7 @@ return 050;
 
 uint16 ks_getsts (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: GET STATUS\n");
+sim_debug_unit (DBG_SDI, uptr, "GET STATUS\n");
 PUTW (rsp + 000, 0xF6);                                 /* response opcode */
 PUTW (rsp + 002, uptr->unit_plug);                      /* unit number (low) */
 PUTW (rsp + 004, UMSK_U1 | ((uptr->unit_plug >> 8) & 0xF)); /* unit number (high) / subunit mask */
@@ -815,7 +858,7 @@ return 020;
 
 uint16 ks_rdmem (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: READ MEMORY\n");
+sim_debug_unit (DBG_SDI, uptr, "READ MEMORY\n");
 PUTW (rsp, 0x72);                                       /* response opcode */
 return 030;
 }
@@ -824,7 +867,7 @@ return 030;
 
 uint16 ks_recal (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: RECALIBRATE\n");
+sim_debug_unit (DBG_SDI, uptr, "RECALIBRATE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
@@ -838,7 +881,7 @@ cyl = GETB (cmd + 004);
 cyl = cyl << 8;
 cyl = cyl | GETB (cmd + 002);
 grp = GETB (cmd + 006);
-//sim_printf ("SDI command: SEEK, cyl = %d, grp = %d\n", cyl, grp);
+sim_debug_unit (DBG_SDI, uptr, "SEEK, cyl = %d, grp = %d\n", cyl, grp);
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
@@ -849,21 +892,21 @@ uint8 msk, val;
 val = GETB (cmd + 002);                                 /* new mode value */
 msk = GETB (cmd + 004);                                 /* mask */
 ks_mode = (ks_mode & ~msk) | (val & msk);
-//sim_printf ("SDI command: CHANGE MODE\n");
+sim_debug_unit (DBG_SDI, uptr, "CHANGE MODE\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
 uint16 ks_chflag (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: CHANGE CONTROLLER FLAGS\n");
+sim_debug_unit (DBG_SDI, uptr, "CHANGE CONTROLLER FLAGS\n");
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
 return 002;
 }
 
 uint16 ks_topology (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
-//sim_printf ("SDI command: TOPOLOGY\n");
+sim_debug_unit (DBG_SDI, uptr, "TOPOLOGY\n");
 PUTW (rsp, 0x6F);                                       /* TOPOLOGY RESPONSE */
 return 020;
 }
@@ -929,7 +972,7 @@ switch (opc) {
         break;
 
     default:
-        sim_printf ("SDI level 2 command: opc = 0x%02X\n", opc);
+        sim_printf ("Unknown SDI level 2 command: 0x%02X\n", opc);
         PUTW (rsp, 0x7E);                               /* response opcode */
         rsz = 2;
         break;
@@ -947,7 +990,7 @@ return rsz;
 void ks_rtds (UNIT *uptr, uint32 rsp)
 {
 uint16 sts = 0;
-//sim_printf ("LINE STATUS\n");
+sim_debug_unit (DBG_SDI, uptr, "LINE STATUS\n");
 if (uptr->flags & UNIT_ONL)
     sts = RTDS_RWR;                                     /* READ/WRITE READY */
 else
@@ -958,41 +1001,30 @@ PUTW (rsp, sts);
 void ks_process_dcb (UNIT *uptr, uint32 ks, uint32 port)
 {
 uint32 ksa = ks + KS_S0 + (port * 16);                  /* drive state area */
-uint32 dc, sq, eq, rsp, opc, rsz, tq, cmd, tmp;
+uint32 dc, cq, rsp, opc, rsz, cmd, fct;
 
 for (int j = 0; j < 20; j++) {
     dc = GETP (ksa + KSA_HEAD);                         /* get DCB */
     if (dc == 0)
         break;
 
-    sq = GETP (dc + DC_0CQ);                            /* get success queue */
-    if (sq == 0)
+    cq = GETP (dc + DC_0CQ);                            /* get success queue */
+    if (cq == 0)
         break;
 
-    if (Q_LOCKED (sq))                                  /* success queue locked? */
-        break;
-
-    eq = GETP (dc + DC_1CQ);                            /* get error queue */
-    if (eq == 0)
-        break;
-
-    if (Q_LOCKED (eq))                                  /* error queue locked? */
+    if (Q_LOCKED (cq))                                  /* success queue locked? */
         break;
 
     dc = kg_receive (ksa + KSA_HEAD);                   /* dequeue from drive state area */
 
 //    ks_print_dcb (dc);
-//    for (int i = 0; i < 17; i++)
-//        sim_printf ("%07o: %06o\n", dc + (i << 1), GETW (dc + (i << 1)));
 
     rsp = GETP (dc + DC_RSB);                           /* get response buffer */
     opc = GETW (dc + DC_STA);
     rsz = 0;
-    tq = sq;                                            /* target is success queue */
-//    sim_printf ("K.sdi opcode = %o\n", (opc & 0177400));
     switch (opc & 0177400) {
         case 014400:                                    /* ECHO DATA */
-            //sim_printf ("ECHO DATA\n");
+            sim_debug_unit (DBG_SDI, uptr, "ECHO DATA\n");
             cmd = GETW (dc + DC_CMD);                   /* get immediate */
             PUTW (rsp, cmd);                            /* copy to response */
             break;
@@ -1009,18 +1041,21 @@ for (int j = 0; j < 20; j++) {
                 }
             break;
         }
-    tmp = GETW (dc + DC_FCT);
-    tmp = tmp - rsz;
-    PUTW (dc + DC_FCT, tmp);                            /* set response length */
-//    sim_printf ("----\n");
-
-    kg_send (tq, dc);                                   /* send to completion queue */
+    fct = GETW (dc + DC_FCT);
+    fct = fct - rsz;
+    PUTW (dc + DC_FCT, fct);                            /* set response length */
+    kg_send (cq, dc);                                   /* send to completion queue */
     }
 }
 
-void ks_read_fct (uint32 dma)
+void ks_read_fct (UNIT *uptr, uint32 dma)
 {
-PUTDW (dma + 0000, FMT_512);                            /* bytes/sector */
+uint32 fmt = GET_FMT (uptr->flags);
+
+if (fmt == FMT_18)
+    PUTDW (dma + 0000, FMT_576);                        /* bytes/sector */
+else
+    PUTDW (dma + 0000, FMT_512);                        /* bytes/sector */
 PUTDW (dma + 0002, 6);                                  /* format instance */
 PUTDW (dma + 0004, 0xCD15);                             /* volume serial (low) */
 PUTDW (dma + 0006, 0x075B);                             /* volume serial (high) */
@@ -1099,12 +1134,14 @@ return edc;
 t_stat ks_read_lbn (UNIT *uptr, uint32 dma, uint32 lbn)
 {
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+uint32 fmt = GET_FMT (uptr->flags);                     /* get drive format */
 struct drvtyp *dtab = &drv_tab[dtyp];
+struct drvfmt *ftab = &dtab->fmt[fmt];
 t_seccnt sects, sectsread;
 uint16 *xbuf = (uint16 *)uptr->ksxb;
 t_stat r;
 
-if (lbn >= dtab->lbn_16)                                /* outside host area? */
+if (lbn >= ftab->lbn)                                   /* outside host area? */
     ks_read_rct (dma);                                  /* read RCT */
 else {
     sects = 1;
@@ -1122,12 +1159,14 @@ return SCPE_OK;
 t_stat ks_write_lbn (UNIT *uptr, uint32 dma, uint32 lbn)
 {
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+uint32 fmt = GET_FMT (uptr->flags);                     /* get drive format */
 struct drvtyp *dtab = &drv_tab[dtyp];
+struct drvfmt *ftab = &dtab->fmt[fmt];
 t_seccnt sects, sectswritten;
 uint16 *xbuf = (uint16 *)uptr->ksxb;
 t_stat r;
 
-if (lbn >= dtab->lbn_16) { }                            /* outside host area? */
+if (lbn >= ftab->lbn) { }                               /* outside host area? */
 else {
     for (int i = 0; i < 256; i++) {
         xbuf[i] = GETDW (dma + (i << 1));
@@ -1147,24 +1186,40 @@ void ks_read_rbn (UNIT *uptr, uint32 dma, uint32 lbn)
 void ks_read_xbn (UNIT *uptr, uint32 dma, uint32 lbn)
 {
 if (lbn == 0)
-    ks_read_fct (dma);                                  /* read FCT */
+    ks_read_fct (uptr, dma);                            /* read FCT */
 }
 
 void ks_read_dbn (UNIT *uptr, uint32 dma, uint32 lbn)
 {
+uint16 *dbn = (uint16 *) uptr->dbn;
 uint32 ptn = 0;
 
-PUTDW (dma + 0000, 0177777);
-for (int i = 0; i < 256; i++) {
-    PUTDW (dma + 0002 + (i << 1), ks_dbn[ptn++]);
-    if (ptn == 3)
-        ptn = 0;
+if (lbn > uptr->dbn_size) {                             /* read only group? */
+    PUTDW (dma + 0000, 0177777);
+    for (int i = 0; i < 256; i++) {
+        PUTDW (dma + 0002 + (i << 1), ks_dbn[ptn++]);
+        if (ptn == 3)
+            ptn = 0;
+        }
+    }
+else {
+    dbn = &dbn[lbn * 256];
+    for (int i = 0; i < 256; i++) {
+        PUTDW (dma + (i << 1), dbn[i]);
+        }
     }
 PUTDW (dma + 01000, ks_edc (dma));
 }
 
 void ks_write_dbn (UNIT *uptr, uint32 dma, uint32 lbn)
 {
+uint16 *dbn = (uint16 *) uptr->dbn;
+if (lbn > uptr->dbn_size)                               /* read only group? */
+    return;                                             /* yes, ignore write */
+dbn = &dbn[lbn * 256];
+for (int i = 0; i < 256; i++) {
+    dbn[i] = GETDW (dma + (i << 1));
+    }
 }
 
 const char *ot_names[] = {
@@ -1177,7 +1232,9 @@ const char *ot_names[] = {
 void ks_process_frb (UNIT *uptr, uint32 frb, uint32 cyl, uint32 sct)
 {
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+uint32 fmt = GET_FMT (uptr->flags);                     /* get drive format */
 struct drvtyp *dtab = &drv_tab[dtyp];
+struct drvfmt *ftab = &dtab->fmt[fmt];
 uint32 bd, scnt, dma, lbn, trk, rte, opc, ot;
 uint32 ks = ks_dib.cma;
 
@@ -1191,15 +1248,13 @@ rte = GETP (frb + F_RTE);                               /* get route */
 opc = GETB (rte + V_OPCD);                              /* get opcode from route */
 
 //ks_print_frb (frb);
-sim_printf ("FRB: %07o, %s: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d, OPC: %o\n", frb, ot_names[ot], lbn, cyl, trk, sct, scnt, opc);
-bd = GETP (frb + F_BFHD);
-if (bd == 0) {                                         /* no data buffer? */
+sim_debug_unit (DBG_FRB, uptr, "%07o, %s: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d, OPC: %o\n", frb, ot_names[ot], lbn, cyl, trk, sct, scnt, opc);
+if (opc == V_DR) {                                     /* disk read? */
     for (int i = 0; i < scnt; i++) {
         bd = GETP (ks_dib.cma + KG_FBU);               /* get a free data memory buffer */
         bd = kg_receive (bd);
         dma = GETW (bd + 002);
         dma = (dma << 6) & DMEMMASK;
-//        sim_printf ("DMEM addr = %o\n", dma);
 
         for (int j = 0; j < 288; j++) {                 /* clear buffer */
             PUTDW (dma + (j << 1), 0);
@@ -1234,12 +1289,11 @@ if (bd == 0) {                                         /* no data buffer? */
         lbn++;
         }
     }
-else {
-    /* This is used for writing */
+else if (opc == V_DW) {                                 /* disk write? */
+    bd = GETP (frb + F_BFHD);
     for (int k = 0; k < scnt; k++) {
         if (bd == 0)
             break;
-//        sim_printf ("FBU: %07o (old)\n", bd);
         dma = GETW (bd + 002);
         dma = (dma << 6) & DMEMMASK;
 
@@ -1257,8 +1311,10 @@ else {
         lbn++;
         }
     }
+else
+    sim_printf ("Unknown route opcode for K.sdi: %o\n", opc);
 
-if ((ot == OT_LBN) && (lbn >= dtab->lbn_16) && ((ks_mode & MODE_OB) == 0)) /* outside host area? */
+if ((ot == OT_LBN) && (lbn >= ftab->lbn) && ((ks_mode & MODE_OB) == 0)) /* outside host area? */
     PUTW (frb + F_ESUM, 1);
 //    kg_route_frb (ks, frb, FALSE);
 //else
@@ -1268,11 +1324,13 @@ if ((ot == OT_LBN) && (lbn >= dtab->lbn_16) && ((ks_mode & MODE_OB) == 0)) /* ou
 void ks_process_drat (UNIT *uptr, uint32 ks, uint32 port)
 {
 uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+uint32 fmt = GET_FMT (uptr->flags);                     /* get drive format */
 struct drvtyp *dtab = &drv_tab[dtyp];
+struct drvfmt *ftab = &dtab->fmt[fmt];
 uint32 ksh = ks + KS_0HD + (port * 4);                  /* DRAT queue */
 uint32 kfl = ks - KS_0FL - (port * 4);                  /* port flags */
 uint32 dt, cyl, fq, cnt, cq, frb, fc, flg, rte;
-uint32 sect = dtab->sect_16 + dtab->rbn;
+uint32 sect = ftab->sect + dtab->rbn;
 
 dt = GETP (ksh + Q_HEAD);                               /* get DRAT */
 if (dt == 0)
@@ -1294,8 +1352,8 @@ for (int j = 0; j < 50; j++) {                          /* prevent endless loop 
     cq = GETP (dt + DT_HST + 002);
     kg_send (cq, frb);
     }
-//if (fc > 0)
-//    sim_printf ("%d FRBs pre-processed\n", fc);
+if (fc > 0)
+    sim_debug_unit (DBG_DRAT, uptr, "%d FRBs pre-processed\n", fc);
 
 fc = 0;
 for (int k = 0; k < sect; k++) {                        /* for each sector */
@@ -1312,8 +1370,8 @@ for (int k = 0; k < sect; k++) {                        /* for each sector */
             cnt = cnt - 1;
         }
     }
-//if (fc > 0)
-//    sim_printf ("%d FRBs processed\n", fc);
+if (fc > 0)
+    sim_debug_unit (DBG_DRAT, uptr, "%d FRBs processed\n", fc);
 
 PUTW (dt + DT_CNT, cnt);                                /* update counter */
 
@@ -1324,7 +1382,7 @@ if (cnt == 0) {                                         /* all operation complet
     flg = GETW (kfl);
     flg = flg | 0100000;                                /* FIXME: This is expected by ILDISK */
     PUTW (kfl, flg);
-//    sim_printf ("DRAT completed\n");
+    sim_debug_unit (DBG_DRAT, uptr, "DRAT completed\n");
     }
 }
 
@@ -1338,11 +1396,12 @@ uint32 ksa, cq, dc;
 
 ksa = ks + KS_S0 + (port * 16);                         /* drive state area */
 if (GETW (ks + KG_RSL) == 0) {                          /* test started? */
-//    sim_printf ("Test started for port %d\n", port);
     PUTW (ks + KG_RSL, 1);                              /* KG$RSL - result of self test */
     dc = kg_receive (ksa + KSA_HEAD);                   /* get DCB from drive state area */
-    cq = GETP (dc + DC_0CQ);                            /* get completion queue */
-    kg_send (cq, dc);                                   /* put DCB to completion queue */
+    if (dc) {
+        cq = GETP (dc + DC_0CQ);                        /* get completion queue */
+        kg_send (cq, dc);                               /* put DCB to completion queue */
+        }
     }
 else if (!Q_LOCKED (ksa + KSA_LOCK)) {                  /* drive state area locked? */
     if ((GETB (ksa + KSA_FLGS) & FLGS_SVC) == 0)        /* drive not known to system? */
@@ -1373,16 +1432,51 @@ else fprintf (st, "write enabled");
 return SCPE_OK;
 }
 
+/* Set drive format */
+
+t_stat ks_set_fmt (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+struct drvtyp *dtab = &drv_tab[dtyp];
+
+if (dtab->fmt[FMT_18].lbn == 0)                         /* 18-bit not supported? */
+    return SCPE_NOFNC;
+if (uptr->flags & UNIT_ATT)
+    return SCPE_ALATT;
+if (val == FMT_18)
+    uptr->flags = uptr->flags | UNIT_FMT;
+else
+    uptr->flags = uptr->flags & ~UNIT_FMT;
+uptr->capac = (t_addr)dtab->fmt[val].lbn;
+return SCPE_OK;
+}
+
+/* Show drive format */
+
+t_stat ks_show_fmt (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+uint32 fmt = GET_FMT (uptr->flags);
+
+if (fmt == FMT_18)
+    fprintf (st, "18-bit format");
+else fprintf (st, "16-bit format");
+return SCPE_OK;
+}
+
 /* Set unit type */
 
 t_stat ks_set_type (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
+uint32 fmt = GET_FMT (uptr->flags);                     /* get drive format */
+
 if (val < 0)
     return SCPE_ARG;
 if (uptr->flags & UNIT_ATT)
     return SCPE_ALATT;
 uptr->flags = (uptr->flags & ~UNIT_DTYPE) | (val << UNIT_V_DTYPE);
-uptr->capac = (t_addr)drv_tab[val].lbn_16;
+uptr->flags = uptr->flags & ~UNIT_FMT;
+uptr->capac = (t_addr)drv_tab[val].fmt[fmt].lbn;
 return SCPE_OK;
 }
 
@@ -1443,11 +1537,16 @@ return SCPE_OK;
 
 t_stat ks_attach (UNIT *uptr, CONST char *cptr)
 {
+uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
+struct drvtyp *dtab = &drv_tab[dtyp];
 t_stat r;
 
 r = sim_disk_attach (uptr, cptr, KS_NUMBY, sizeof (uint16), (uptr->flags & UNIT_NOAUTO), DBG_DSK, drv_tab[GET_DTYPE (uptr->flags)].name, 0, 0);
 if (r != SCPE_OK)
     return r;
+uptr->dbn_size = ((dtab->dcyl * dtab->gpc) - dtab->drg) *
+    dtab->tpg * (dtab->fmt[FMT_16].sect + dtab->rbn);
+uptr->dbn = (uint16 *) calloc (uptr->dbn_size * 256, sizeof (uint16));
 return SCPE_OK;
 }
 
@@ -1460,6 +1559,7 @@ t_stat r;
 r = sim_disk_detach (uptr);                             /* detach unit */
 if (r != SCPE_OK)
     return r;
+free (uptr->dbn);
 return SCPE_OK;
 }
 

@@ -1067,7 +1067,7 @@ else if (opc == V_RD)                                   /* request data */
 else if (opc == 3)                                      /* send data? */
     kh_send_data (rsc);
 else
-    sim_printf ("Unknown route opcode in FRB: %o\n", opc);
+    sim_printf ("Unknown route opcode for K.ci: %o\n", opc);
 }
 
 void kh_process (uint32 rsc, uint32 *cq)
