@@ -40,6 +40,7 @@ extern DEVICE rom_dev;
 extern DEVICE pio_dev;
 extern DEVICE kh_dev;
 extern DEVICE ks_dev;
+extern DEVICE kt_dev;
 
 DEVICE *sim_devices[] = {
     &cpu_dev,
@@ -54,5 +55,6 @@ DEVICE *sim_devices[] = {
     &pio_dev,
     &kh_dev,
     &ks_dev,
+    &kt_dev,
     NULL
     };

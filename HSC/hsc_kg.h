@@ -113,14 +113,6 @@
 #define KG_FBU          0050                            /* free data memory buffers */
 #define KG_RSL          0074                            /* microdiagnostic result? */
 
-/* K.sti control area */
-
-#define KT_IPQ          0000
-#define KT_S0           0140                            /* drive state area (port 0) */
-#define KT_S1           0160                            /* drive state area (port 1) */
-#define KT_S2           0200                            /* drive state area (port 2) */
-#define KT_S3           0220                            /* drive state area (port 3) */
-
 /* data buffer */
 
 #define B_OERR          000000                          /* original error bits */
