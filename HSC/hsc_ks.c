@@ -220,22 +220,14 @@ struct drvtyp {
     uint16      hwr;                                    /* hardware revision */
     uint16      hps;                                    /* header pre-amble size */
     uint16      dps;                                    /* data pre-amble size */
-    uint16      sect_16;                                /* sectors (16-bit) */
-    uint16      sect_18;                                /* sectors (18-bit) */
     int32       surf;                                   /* surfaces */
     uint32      lcyl;                                   /* LBN cylinders */
     uint32      xcyl;                                   /* XBN cylinders */
     uint32      dcyl;                                   /* DBN cylinders */
     uint16      tpg;                                    /* trk/grp */
     uint16      gpc;                                    /* grp/cyl */
-    uint16      gof_16;                                 /* group offset (16-bit) */
-    uint16      gof_18;                                 /* group offset (18-bit) */
     uint16      drg;                                    /* DBN readonly groups */
-    uint32      lbn_16;                                 /* LBN size (16-bit) */
-    uint32      lbn_18;                                 /* LBN size (18-bit) */
     uint16      fcts;                                   /* FCT copy size */
-    uint16      rcts_16;                                /* RCT size (16-bit) */
-    uint16      rcts_18;                                /* RCT size (18-bit) */
     uint8       rctc;                                   /* RCT copies */
     uint8       rbn;                                    /* RBNs/track */
     uint16      revs;                                   /* drive revs/second */
@@ -246,27 +238,25 @@ struct drvtyp {
     const char  *name;                                  /* name */
     };
 
-#define RQ_DRV(d) \
-  { d##_SDIV,    d##_STO,      d##_LTO,     d##_RETRY, \
-    d##_XFRT,    d##_ERL,      d##_EET,     d##_SWR, \
-    d##_HWR,     d##_HPS,      d##_DPS,     d##_SECT_16, \
-    d##_SECT_18, d##_SURF,     d##_LCYL,    d##_XCYL, \
-    d##_DCYL,    d##_TPG,      d##_GPC,     d##_GOF_16, \
-    d##_GOF_18,  d##_DRG,      d##_LBN_16,  d##_LBN_18, \
-    d##_FCTS,    d##_RCTS_16,  d##_RCTS_18, d##_RCTC, \
-    d##_RBN,     d##_REVS,     d##_MOD,     d##_MED, \
-    d##_FLGS,    \
+#define KS_DRV(d) \
+  { d##_SDIV, d##_STO,  d##_LTO,  d##_RETRY, \
+    d##_XFRT, d##_ERL,  d##_EET,  d##_SWR, \
+    d##_HWR,  d##_HPS,  d##_DPS,  d##_SURF, \
+    d##_LCYL, d##_XCYL, d##_DCYL, d##_TPG, \
+    d##_GPC,  d##_DRG,  d##_FCTS, d##_RCTC, \
+    d##_RBN,  d##_REVS, d##_MOD,  d##_MED, \
+    d##_FLGS, \
     { { d##_SECT_16, d##_GOF_16, d##_LBN_16, d##_RCTS_16 }, \
       { d##_SECT_18, d##_GOF_18, d##_LBN_18, d##_RCTS_18 } }, \
     #d }
-#define RQ_SIZE(d)      d##_LBN_16                      /* FIXME: support 18-bit mode */
+#define KS_SIZE(d)      d##_LBN_16                      /* FIXME: support 18-bit mode */
 
 static struct drvtyp drv_tab[] = {
-    RQ_DRV (RA60),
-    RQ_DRV (RA70),
-    RQ_DRV (RA80),
-    RQ_DRV (RA81),
-    RQ_DRV (RA82),
+    KS_DRV (RA60),
+    KS_DRV (RA70),
+    KS_DRV (RA80),
+    KS_DRV (RA81),
+    KS_DRV (RA82),
     { 0 }
     };
 
@@ -316,13 +306,13 @@ HDIB ks_dib = {
 
 UNIT ks_unit[KS_MAXDR] = {
     { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
-            (RA80_DTYPE << UNIT_V_DTYPE), RQ_SIZE (RA80)) },
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
     { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
-            (RA80_DTYPE << UNIT_V_DTYPE), RQ_SIZE (RA80)) },
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
     { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
-            (RA80_DTYPE << UNIT_V_DTYPE), RQ_SIZE (RA80)) },
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
     { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
-            (RA80_DTYPE << UNIT_V_DTYPE), RQ_SIZE (RA80)) },
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
     };
 
 REG ks_reg[] = {
