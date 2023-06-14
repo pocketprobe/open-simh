@@ -367,10 +367,10 @@ MTAB ks_mod[] = {
 
 DEVICE ks_dev = {
     "KS", ks_unit, ks_reg, ks_mod,
-    KS_MAXDR, DEV_RDX, 16, 1, DEV_RDX, 16,
+    KS_MAXDR, DEV_RDX, T_ADDR_W, 2, DEV_RDX, 16,
     NULL, NULL, &ks_reset,
     NULL, &ks_attach, &ks_detach,
-    &ks_dib, DEV_DEBUG | DEV_HSC | DEV_DISABLE,
+    &ks_dib, DEV_DEBUG | DEV_HSC | DEV_DISABLE | DEV_DISK | DEV_SECTORS,
     0, ks_debug
     };
 
@@ -1079,13 +1079,13 @@ PUTDW (dma + 0006, 0);
 PUTDW (dma + 0010, 0);                                  /* flags */
 PUTDW (dma + 0012, 0);
 PUTDW (dma + 0014, 1000);                               /* LBN being replaced (low) */
-PUTDW (dma + 0016, 0);
-PUTDW (dma + 0020, 0);                                  /* LBN being replaced (high) */
-PUTDW (dma + 0022, 33);                                 /* replacement RBN (low) */
-PUTDW (dma + 0024, 0);                                  /* replacement RBN (high) */
-PUTDW (dma + 0026, 32);                                 /* bad RBN (low) */
-PUTDW (dma + 0030, 0);                                  /* bad RBN (high) */
-PUTDW (dma + 0032, 0);                                  /* cache ID */
+PUTDW (dma + 0016, 0);                                  /* LBN being replaced (high) */
+PUTDW (dma + 0020, 33)                                  /* replacement RBN (low) */;
+PUTDW (dma + 0022, 0);                                  /* replacement RBN (high) */
+PUTDW (dma + 0024, 32);                                 /* bad RBN (low) */
+PUTDW (dma + 0026, 0);                                  /* bad RBN (high) */
+PUTDW (dma + 0030, 0);                                  /* cache ID */
+PUTDW (dma + 0032, 0);
 PUTDW (dma + 0034, 0);
 PUTDW (dma + 0036, 0);
 PUTDW (dma + 0040, 0);                                  /* cache incarnation (low) */
@@ -1131,8 +1131,11 @@ t_seccnt sects, sectsread;
 uint16 *xbuf = (uint16 *)uptr->ksxb;
 t_stat r;
 
-if (lbn >= ftab->lbn)                                   /* outside host area? */
-    ks_read_rct (dma);                                  /* read RCT */
+if (lbn >= ftab->lbn) {                                 /* outside host area? */
+    lbn = lbn - ftab->lbn;
+    if ((lbn % ftab->rcts) == 0)                        /* first block of RCT? */
+        ks_read_rct (dma);                              /* read RCT */
+    }
 else {
     sects = 1;
     r = sim_disk_rdsect (uptr, lbn, (uint8 *)xbuf, &sectsread, sects);
