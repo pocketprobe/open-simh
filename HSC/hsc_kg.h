@@ -108,10 +108,42 @@
 
 /* K generic control area */
 
+#define KG_TLK          0040
+#define KG_SLT          0042
+#define KG_TYP          0043
 #define KG_VRS          0044                            /* microcode version */
 #define KG_FCB          0046                            /* free control memory buffers */
 #define KG_FBU          0050                            /* free data memory buffers */
-#define KG_RSL          0074                            /* microdiagnostic result? */
+#define KG_BWS          0052
+#define KG_TMR          0054
+#define KG_DMP          0056
+#define KG_DCA          0060
+#define KG_TST          0062
+#define KG_FRS          0064
+#define KG_LAS          0066
+#define KG_MDL          0070
+#define KG_MTY          0070
+#define KG_PFL          0072
+#define KG_RSL          0074                            /* microdiagnostic result */
+#define KG_LTR          0076
+#define KG_PSA          0100
+#define KG_PSB          0102
+#define KG_DSA          0104
+#define KG_MC0          0130
+#define KG_KSA          0140
+
+/* drive state area */
+
+#define KSA_SRV         0000                            /* service queue pointer */
+#define KSA_STA         0003                            /* state */
+#define KSA_DHD         0004                            /* DCB queue head */
+#define KSA_DTL         0006                            /* DCB queue tail */
+#define KSA_CSP         0010
+#define KSA_SFW         0012                            /* software context */
+#define KSA_FLG         0014
+#define KSA_CKS         0014
+#define KSA_IND         0016                            /* drive state area lock */
+#define KSA_LEN         0020                            /* size of drive state area */
 
 /* data buffer */
 
@@ -175,20 +207,33 @@
 
 /* debugging bitmaps */
 
-#define KG_DBG_TRC      0x0001                          /* trace routine calls */
+#define KG_DBG_TRC      0x1000                          /* trace routine calls */
+#define KG_DBG_STRUCT   0x2000                          /* dump structures */
+
+/* structure definitions */
+
+#define ST_INT          0                               /* integer */
+#define ST_STR          1                               /* string */
+#define ST_LNK          2                               /* link to another structure */
+
+typedef struct stdef {
+    char *name;                                         /* element name */
+    uint16 off;                                         /* offset */
+    uint16 len;                                         /* length */
+    uint8 typ;                                          /* type */
+    struct stdef *lnk;                                  /* link to embedded structure */
+} STDEF;
 
 extern uint32 kg_init (t_bool *run);
 extern t_stat kg_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat kg_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern t_stat kg_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern t_stat kg_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
-extern void kg_print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len);
-extern void kg_print_string (FILE *st, uint32 kg, char *name, int16 off, uint16 len);
-extern void kg_dec_ctr (uint32 ctr);
-extern void kg_route_frb (uint32 kg, uint32 frb, t_bool sts);
+extern void kg_print_struct (FILE *st, UNIT *uptr, uint32 kg, STDEF *stc);
+extern void kg_dec_ctr (UNIT *uptr, uint32 ctr);
+extern void kg_route_frb (UNIT *uptr, uint32 kg, uint32 frb, t_bool sts);
 extern uint32 kg_receive (uint32 q);
 extern void kg_send (uint32 q, uint32 itm);
 
 extern int16 inst_pc;
+extern STDEF kg_stc[];
 
 #endif

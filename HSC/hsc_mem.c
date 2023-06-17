@@ -92,8 +92,40 @@ if (ADDR_IS_CMEM (pa)) {
             trap_req = calc_ints (ipl, trap_req);       /* recalc int req */
             }
         else if (PCSR & PCSR_LCK) {                     /* lock cycle */
+            extern HDIB kh_dib;
+            extern HDIB ks_dib;
+            extern UNIT ks_unit[4];
+            extern UNIT kh_unit;
             CCYCLE = 04;
             WrxMemW (CM, pa, 0100000);                  /* indicate locked */
+            if (pa == kh_dib.cma + 0004) {
+//                sim_printf ("MEM: KH$3WK\n");
+                sim_activate_abs (&kh_unit, 100);
+                }
+            else if (pa == kh_dib.cma + 0010) {
+//                sim_printf ("MEM: KH$2WK\n");
+                sim_activate_abs (&kh_unit, 100);
+                }
+            else if (pa == kh_dib.cma + 0014) {
+//                sim_printf ("MEM: KH$1WK\n");
+                sim_activate_abs (&kh_unit, 100);
+                }
+            else if (pa == kh_dib.cma + 0020) {
+//                sim_printf ("MEM: KH$0WK\n");
+                sim_activate_abs (&kh_unit, 100);
+                }
+            else if (pa == ks_dib.cma + 0000) {
+//                sim_printf ("MEM: KS$0HD\n");
+                sim_activate_abs (&ks_unit[0], 100);
+                }
+            else if (pa == ks_dib.cma + 0002) {
+//                sim_printf ("MEM: KS$0TD\n");
+                sim_activate_abs (&ks_unit[0], 100);
+                }
+            else if (pa == ks_dib.cma + 0144) {
+//                sim_printf ("MEM: KS$KS0\n");
+                sim_activate_abs (&ks_unit[0], 100);
+                }
             }
         else CCYCLE = 01;                               /* read/write cycle */
         CDATA = data;                                   /* data history */

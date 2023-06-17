@@ -67,21 +67,65 @@
 
 /* K.sti control area */
 
+#define KT_BAS          0000
 #define KT_IPQ          0000
+#define KT_WQH          0004
+#define KT_WQT          0006
+#define KT_FLA          0010
+#define KT_SQP          0012
+#define KT_TCT          0014
+#define KT_LAH          0016
+#define KT_WAI          0020
+#define KT_SEM          0022
+#define KT_BW           0036
+#define KT_TLK          0040
 #define KT_S0           0140                            /* drive state area (port 0) */
 #define KT_S1           0160                            /* drive state area (port 1) */
 #define KT_S2           0200                            /* drive state area (port 2) */
 #define KT_S3           0220                            /* drive state area (port 3) */
+#define KT_DMP          0340
+#define KT_AQH          0442
+#define KT_AQT          0444
+#define KT_BCN          0446
+#define KT_TMO          0450
+#define KT_FCN          0452
+#define KT_FCT          0454
+#define KT_T1           0456
+#define KT_T2           0460
+#define KT_T3           0462
+#define KT_T4           0464
 
-/* Drive state area */
-
-#define KSA_SRVC        0000                            /* service queue pointer */
-#define KSA_FLGS        0003                            /* flags */
-#define KSA_HEAD        0004                            /* work queue head */
-#define KSA_TAIL        0006                            /* work queue tail */
-#define KSA_CTX         0012                            /* software context */
-#define KSA_LOCK        0016                            /* drive state area lock */
-#define KSA_LEN         0020                            /* size of drive state area */
+static STDEF kt_stc[] = {
+    { "KT$BAS", KT_BAS, 0, ST_INT },
+    { "KT$IPQ", KT_IPQ, 4, ST_INT },
+    { "KT$WQH", KT_WQH, 2, ST_INT },
+    { "KT$WQT", KT_WQT, 2, ST_INT },
+    { "KT$FLA", KT_FLA, 2, ST_INT },
+    { "KT$SQP", KT_SQP, 2, ST_INT },
+    { "KT$TCT", KT_TCT, 2, ST_INT },
+    { "KT$LAH", KT_LAH, 2, ST_INT },
+    { "KT$WAI", KT_WAI, 2, ST_INT },
+    { "KT$SEM", KT_SEM, 12, ST_INT },
+    { "KT$BW ", KT_BW, 2, ST_INT },
+    { "KT$TLK", KT_TLK, 0, ST_LNK, kg_stc },
+    { "KT$S0 ", KT_S0, 16, ST_INT },
+    { "KT$S1 ", KT_S1, 16, ST_INT },
+    { "KT$S2 ", KT_S2, 16, ST_INT },
+    { "KT$S3 ", KT_S3, 16, ST_INT },
+    { "UNUSED", 0240, 64, ST_INT },
+    { "KT$DMP", KT_DMP, 66, ST_INT },
+    { "KT$AQH", KT_AQH, 2, ST_INT },
+    { "KT$AQT", KT_AQT, 2, ST_INT },
+    { "KT$BCN", KT_BCN, 2, ST_INT },
+    { "KT$TMO", KT_TMO, 2, ST_INT },
+    { "KT$FCN", KT_FCN, 2, ST_INT },
+    { "KT$FCT", KT_FCT, 2, ST_INT },
+    { "KT$T1 ", KT_T1, 2, ST_INT },
+    { "KT$T2 ", KT_T2, 2, ST_INT },
+    { "KT$T3 ", KT_T3, 2, ST_INT },
+    { "KT$T4 ", KT_T4, 2, ST_INT },
+    { NULL }
+    };
 
 /* device control block */
 
@@ -103,6 +147,28 @@
 #define DC_TSN          0114
 #define DC_DSN          0115
 #define DC_RCT          0116
+
+static STDEF dc_stc[] = {
+    { "DC$LNK", DC_LNK, 2, ST_INT },
+    { "DC$CMD", DC_CMD, 2, ST_INT },
+    { "DC$RSB", DC_RSB, 2, ST_INT },
+    { "DC$FCT", DC_FCT, 2, ST_INT },
+    { "DC$STA", DC_STA, 2, ST_INT },
+    { "DC$TFC", DC_TFC, 2, ST_INT },
+    { "DC$0CQ", DC_0CQ, 2, ST_INT },
+    { "DC$STC", DC_STC, 0, ST_INT },
+    { "DC$1CQ", DC_1CQ, 2, ST_INT },
+    { "DC$ICT", DC_ICT, 14, ST_INT },
+    { "DC$THR", DC_THR, 0, ST_INT },
+    { "DC$RTY", DC_RTY, 1, ST_INT },
+    { "DC$RBS", DC_RBS, 1, ST_INT },
+    { "DC$IRT", DC_IRT, 44, ST_INT },
+    { "DC$SN",  DC_SN,  0, ST_INT },
+    { "DC$TSN", DC_TSN, 1, ST_INT },
+    { "DC$DSN", DC_DSN, 1, ST_INT },
+    { "DC$RCT", DC_RCT, 2, ST_INT },
+    { NULL }
+    };
 
 /* Realtime formatter status */
 
@@ -150,6 +216,31 @@
 #define F_TEMP          0066
 #define F_TCNT          0070
 
+static STDEF frb_stc[] = {
+    { "F$LINK", F_LINK, 2, ST_INT },
+    { "F$PCTR", F_PCTR, 2, ST_INT },
+    { "F$RTE ", F_RTE , 2, ST_INT },
+    { "UNUSED", 006,    2, ST_INT },
+    { "F$CTRL", F_CTRL, 2, ST_INT },
+    { "F$OFF ", F_OFF , 4, ST_INT },
+    { "UNUSED", 016,    2, ST_INT },
+    { "F$RT1 ", F_RT1 , 2, ST_INT },
+    { "UNUSED", 022,    8, ST_INT },
+    { "F$RSB ", F_RSB , 2, ST_INT },
+    { "F$SCNT", F_SCNT, 1, ST_INT },
+    { "UNUSED", 036,    2, ST_INT },
+    { "F$BFHD", F_BFHD, 2, ST_INT },
+    { "F$BFTL", F_BFTL, 2, ST_INT },
+    { "UNUSED", 044,   18, ST_INT },
+    { "F$TEMP", F_TEMP, 2, ST_INT },
+    { "F$TCNT", F_TCNT, 2, ST_INT },
+    { "UNUSED", 072,    2, ST_INT },
+    { "F$DSTR", F_DSTR, 2, ST_INT },
+    { "F$ESUM", F_ESUM, 2, ST_INT },
+    { "UNUSED", 0100,  16, ST_INT },
+    { NULL }
+    };
+
 /* Transfer block? */
 
 #define T_LINK          0000                            /* link to next */
@@ -180,6 +271,38 @@
 #define T_6FRB          0064                            /* ?? FRB queue */
 #define T_7FRB          0070                            /* ?? FRB queue */
 #define T_FRBE          0074
+
+static STDEF t_stc[] = {
+    { "T$LINK", T_LINK, 2, ST_INT },
+    { "T$PCTR", T_PCTR, 2, ST_INT },
+    { "T$SUCC", T_SUCC, 2, ST_INT },
+    { "T$FAIL", T_FAIL, 2, ST_INT },
+    { "T$FCNT", T_FCNT, 0, ST_INT },
+    { "T$FLAG", T_FLAG, 2, ST_INT },
+    { "T$LEV1", T_LEV1, 0, ST_INT },
+    { "T$UNIT", T_UNIT, 1, ST_INT },
+    { "T$OPCD", T_OPCD, 1, ST_INT },
+    { "T$REC ", T_REC , 2, ST_INT },
+    { "T$ERR ", T_ERR , 2, ST_INT },
+    { "T$BCL ", T_BCL , 2, ST_INT },
+    { "T$BCH ", T_BCH , 2, ST_INT },
+    { "T$PRIM", T_PRIM, 4, ST_INT },
+    { "T$SEQN", T_SEQN, 0, ST_INT },
+    { "T$TSN ", T_TSN , 1, ST_INT },
+    { "T$DSN ", T_DSN , 1, ST_INT },
+    { "T$ADR ", T_ADR , 2, ST_INT },
+    { "T$FRBQ", T_FRBQ, 0, ST_INT },
+    { "T$0FRB", T_0FRB, 4, ST_INT },
+    { "T$1FRB", T_1FRB, 4, ST_INT },
+    { "T$2FRB", T_2FRB, 4, ST_INT },
+    { "T$3FRB", T_3FRB, 4, ST_INT },
+    { "T$4FRB", T_4FRB, 4, ST_INT },
+    { "T$5FRB", T_5FRB, 4, ST_INT },
+    { "T$6FRB", T_6FRB, 4, ST_INT },
+    { "T$7FRB", T_7FRB, 4, ST_INT },
+    { "T$FRBE", T_FRBE, 0, ST_INT },
+    { NULL }
+    };
 
 #define KT_MAXDR        4                               /* max # drives */
 
@@ -357,23 +480,25 @@ t_stat kt_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 /* debugging bitmaps */
 
 #define DBG_TRC         KG_DBG_TRC                      /* trace routine calls */
-#define DBG_TAP         0x0010                          /* display sim_tape activities */
-#define DBG_STI         0x0020                          /* STI commands */
-#define DBG_FRB         0x0040                          /* FRB operations */
-#define DBG_DRAT        0x0080                          /* DRAT operations */
+#define DBG_STRUCT      KG_DBG_STRUCT                   /* dump structures */
+#define DBG_TAP         0x100000                        /* display sim_tape activities */
+#define DBG_STI         0x200000                        /* STI commands */
+#define DBG_FRB         0x400000                        /* FRB operations */
+#define DBG_TX          0x800000                        /* TX operations */
 #define DBG_STR         MTSE_DBG_STR                    /* display tape structure detail */
 #define DBG_POS         MTSE_DBG_POS                    /* display position activities */
 #define DBG_DAT         MTSE_DBG_DAT                    /* display transfer data */
 
 DEBTAB kt_debug[] = {
-    { "TRACE", DBG_TRC,  "trace routine calls" },
-    { "TAPE",  DBG_TAP,  "display sim_tape activities" },
-    { "STI",   DBG_STI,  "STI commands" },
-    { "FRB",   DBG_FRB,  "FRB operations" },
-    { "DRAT",  DBG_DRAT, "DRAT operations" },
-    { "STR",   DBG_STR,  "display tape structure detail" },
-    { "POS",   DBG_POS,  "display position activities" },
-    { "DATA",  DBG_DAT,  "display transfer data" },
+    { "TRACE",  DBG_TRC,    "trace routine calls" },
+    { "STRUCT", DBG_STRUCT, "dump structures" },
+    { "TAPE",   DBG_TAP,    "display sim_tape activities" },
+    { "STI",    DBG_STI,    "STI commands" },
+    { "FRB",    DBG_FRB,    "FRB operations" },
+    { "TX",     DBG_TX,     "TX operations" },
+    { "STR",    DBG_STR,    "display tape structure detail" },
+    { "POS",    DBG_POS,    "display position activities" },
+    { "DATA",   DBG_DAT,    "display transfer data" },
     { 0 }
 };
 
@@ -479,144 +604,12 @@ else {
 return SCPE_OK;
 }
 
-t_stat kt_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
-{
-DEVICE *dptr;
-HDIB *dibp;
-uint32 kt;
-t_stat r;
-
-if (uptr == NULL)
-    return SCPE_IERR;
-dptr = find_dev_from_unit (uptr);
-if (dptr == NULL)
-    return SCPE_IERR;
-dibp = (HDIB *) dptr->ctxt;
-if (dibp == NULL)
-    return SCPE_IERR;
-kt = dibp->cma;
-
-kg_print_word (st, kt, "KT$BAS", 0000, 0);
-kg_print_word (st, kt, "KT$IPQ", 0000, 4);
-kg_print_word (st, kt, "KT$WQH", 0004, 2);              /* work queue head? */
-kg_print_word (st, kt, "KT$WQT", 0006, 2);              /* work queue tail? */
-kg_print_word (st, kt, "KT$FLA", 0010, 2);
-kg_print_word (st, kt, "KT$SQP", 0012, 2);
-kg_print_word (st, kt, "KT$TCT", 0014, 2);
-kg_print_word (st, kt, "KT$LAH", 0016, 2);
-kg_print_word (st, kt, "KT$WAI", 0020, 2);
-kg_print_word (st, kt, "KT$SEM", 0022, 12);
-kg_print_word (st, kt, "KT$BW ", 0036, 2);
-
-r = kg_show_ctrl (st, uptr, val, desc);
-if (r != SCPE_OK)
-    return r;
-
-kg_print_word (st, kt, "KT$S0 ", 0140, 16);             /* drive state area */
-kg_print_word (st, kt, "KT$S1 ", 0160, 16);
-kg_print_word (st, kt, "KT$S2 ", 0200, 16);
-kg_print_word (st, kt, "KT$S3 ", 0220, 16);
-kg_print_word (st, kt, "UNUSED", 0240, 64);
-kg_print_word (st, kt, "KT$DMP", 0340, 66);
-kg_print_word (st, kt, "KT$AQH", 0442, 2);
-kg_print_word (st, kt, "KT$AQT", 0444, 2);
-kg_print_word (st, kt, "KT$BCN", 0446, 2);
-kg_print_word (st, kt, "KT$TMO", 0450, 2);
-kg_print_word (st, kt, "KT$FCN", 0452, 2);
-kg_print_word (st, kt, "KT$FCT", 0454, 2);
-kg_print_word (st, kt, "KT$T1 ", 0456, 2);
-kg_print_word (st, kt, "KT$T2 ", 0460, 2);
-kg_print_word (st, kt, "KT$T3 ", 0462, 2);
-kg_print_word (st, kt, "KT$T4 ", 0464, 2);
-
-return SCPE_OK;
-}
-
-void kt_print_tx (uint32 tb)
-{
-kg_print_word (NULL, tb, "T$LINK", T_LINK, 2);
-kg_print_word (NULL, tb, "T$PCTR", T_PCTR, 2);
-kg_print_word (NULL, tb, "T$SUCC", T_SUCC, 2);
-kg_print_word (NULL, tb, "T$FAIL", T_FAIL, 2);
-kg_print_word (NULL, tb, "T$FCNT", T_FCNT, 0);
-kg_print_word (NULL, tb, "T$FLAG", T_FLAG, 2);
-kg_print_word (NULL, tb, "T$LEV1", T_LEV1, 0);
-kg_print_word (NULL, tb, "T$UNIT", T_UNIT, 1);
-kg_print_word (NULL, tb, "T$OPCD", T_OPCD, 1);
-kg_print_word (NULL, tb, "T$REC ", T_REC , 2);
-kg_print_word (NULL, tb, "T$ERR ", T_ERR , 2);
-kg_print_word (NULL, tb, "T$BCL ", T_BCL , 2);
-kg_print_word (NULL, tb, "T$BCH ", T_BCH , 2);
-kg_print_word (NULL, tb, "T$PRIM", T_PRIM, 4);
-kg_print_word (NULL, tb, "T$SEQN", T_SEQN, 0);
-kg_print_word (NULL, tb, "T$TSN ", T_TSN , 1);
-kg_print_word (NULL, tb, "T$DSN ", T_DSN , 1);
-kg_print_word (NULL, tb, "T$ADR ", T_ADR , 2);
-kg_print_word (NULL, tb, "T$FRBQ", T_FRBQ, 0);
-kg_print_word (NULL, tb, "T$0FRB", T_0FRB, 4);
-kg_print_word (NULL, tb, "T$1FRB", T_1FRB, 4);
-kg_print_word (NULL, tb, "T$2FRB", T_2FRB, 4);
-kg_print_word (NULL, tb, "T$3FRB", T_3FRB, 4);
-kg_print_word (NULL, tb, "T$4FRB", T_4FRB, 4);
-kg_print_word (NULL, tb, "T$5FRB", T_5FRB, 4);
-kg_print_word (NULL, tb, "T$6FRB", T_6FRB, 4);
-kg_print_word (NULL, tb, "T$7FRB", T_7FRB, 4);
-kg_print_word (NULL, tb, "T$FRBE", T_FRBE, 0);
-}
-
-void kt_print_frb (uint32 frb)
-{
-kg_print_word (NULL, frb, "F$LINK", F_LINK, 2);
-kg_print_word (NULL, frb, "F$PCTR", F_PCTR, 2);
-kg_print_word (NULL, frb, "F$RTE ", F_RTE , 2);
-kg_print_word (NULL, frb, "UNUSED", 006,    2);
-kg_print_word (NULL, frb, "F$CTRL", F_CTRL, 2);
-kg_print_word (NULL, frb, "F$OFF ", F_OFF , 4);
-kg_print_word (NULL, frb, "UNUSED", 016,    2);
-kg_print_word (NULL, frb, "F$RT1 ", F_RT1 , 2);
-kg_print_word (NULL, frb, "UNUSED", 022,    8);
-kg_print_word (NULL, frb, "F$RSB ", F_RSB , 2);
-kg_print_word (NULL, frb, "F$SCNT", F_SCNT, 1);
-kg_print_word (NULL, frb, "UNUSED", 036,    2);
-kg_print_word (NULL, frb, "F$BFHD", F_BFHD, 2);
-kg_print_word (NULL, frb, "F$BFTL", F_BFTL, 2);
-kg_print_word (NULL, frb, "UNUSED", 044,   18);
-kg_print_word (NULL, frb, "F$TEMP", F_TEMP, 2);
-kg_print_word (NULL, frb, "F$TCNT", F_TCNT, 2);
-kg_print_word (NULL, frb, "UNUSED", 072,    2);
-kg_print_word (NULL, frb, "F$DSTR", F_DSTR, 2);
-kg_print_word (NULL, frb, "F$ESUM", F_ESUM, 2);
-kg_print_word (NULL, frb, "UNUSED", 0100,  16);
-}
-
-void kt_print_dcb (uint32 dc)
-{
-kg_print_word (NULL, dc, "DC$LNK", DC_LNK, 2);
-kg_print_word (NULL, dc, "DC$CMD", DC_CMD, 2);
-kg_print_word (NULL, dc, "DC$RSB", DC_RSB, 2);
-kg_print_word (NULL, dc, "DC$FCT", DC_FCT, 2);
-kg_print_word (NULL, dc, "DC$STA", DC_STA, 2);
-kg_print_word (NULL, dc, "DC$TFC", DC_TFC, 2);
-kg_print_word (NULL, dc, "DC$0CQ", DC_0CQ, 2);
-kg_print_word (NULL, dc, "DC$STC", DC_STC, 0);
-kg_print_word (NULL, dc, "DC$1CQ", DC_1CQ, 2);
-kg_print_word (NULL, dc, "DC$ICT", DC_ICT, 14);
-kg_print_word (NULL, dc, "DC$THR", DC_THR, 0);
-kg_print_word (NULL, dc, "DC$RTY", DC_RTY, 1);
-kg_print_word (NULL, dc, "DC$RBS", DC_RBS, 1);
-kg_print_word (NULL, dc, "DC$IRT", DC_IRT, 44);
-kg_print_word (NULL, dc, "DC$SN",  DC_SN,  0);
-kg_print_word (NULL, dc, "DC$TSN", DC_TSN, 1);
-kg_print_word (NULL, dc, "DC$DSN", DC_DSN, 1);
-kg_print_word (NULL, dc, "DC$RCT", DC_RCT, 2);
-}
-
 t_stat kt_notify (UNIT *uptr, uint32 kt, uint32 port)
 {
 uint32 ksa = kt + KT_S0 + (port * 16);                  /* drive state area */
 uint32 sq, fl;
 
-//fl = GETB (ksa + KSA_FLGS);                             /* get drive flags */
+//fl = GETB (ksa + KSA_STA);                              /* get drive flags */
 //if ((fl & FLGS_SVC) == 0) {                             /* drive not known to system? */
     sq = GETP (ksa);                                    /* get service queue pointer */
     if (sq == 0) {
@@ -629,9 +622,9 @@ uint32 sq, fl;
         }
     PUTW (ksa, 0);                                      /* clear service queue pointer */
 //    fl |= FLGS_SVC;
-//    PUTB (ksa + KSA_FLGS, fl);                          /* now on service queue */
+//    PUTB (ksa + KSA_STA, fl);                           /* now on service queue */
     kg_send (sq, ksa);                                  /* send drive state area to service queue */
-    sim_printf ("Drive state area sent to service queue\n");
+//    sim_printf ("Drive state area sent to service queue\n");
 //    }
 return SCPE_OK;
 }
@@ -655,7 +648,6 @@ uint16 kt_rewind (UNIT *uptr, uint32 cmd, uint32 rsp)
 uint8 flags = GETB (cmd + 002);
 
 sim_debug_unit (DBG_STI, uptr, "INITIATE REWIND, flags = %02X\n", flags);
-sim_printf ("INITIATE REWIND, flags = %02X\n", flags);
 if (flags & 0x80) 
     sim_tape_detach (uptr);                             /* rewind & unload */
 else if (flags & 0x40)
@@ -780,7 +772,6 @@ uint32 dtyp = GET_DTYPE (uptr->flags);                  /* get drive type */
 struct drvtyp *dtab = &drv_tab[dtyp];
 uint8 p1 = GETB (cmd + 002);
 sim_debug_unit (DBG_STI, uptr, "GET EXTENDED DRIVE STATUS, p1 = %02X\n", p1);
-sim_printf ("GET EXTENDED DRIVE STATUS, p1 = %02X\n", p1);
 PUTW (rsp + 000, 0x3A);                                 /* response opcode - DFL? */
 PUTW (rsp + 002, uptr->speed);                          /* SPE - current speed? */
 PUTW (rsp + 004, uptr->density);                        /* current density */
@@ -881,7 +872,6 @@ else
 if (p1 & 0x4)
     flags |= MTPOS_M_REV;                               /* reverse direction */
 sim_debug_unit (DBG_STI, uptr, "POSITION TAPE, flags = %02X, objs = %02X, p3 = %02X\n", p1, p2, p3);
-sim_printf ("POSITION TAPE, flags = %02X, objs = %02X, p3 = %02X\n", p1, p2, p3);
 sim_tape_position (uptr, flags, recs, &recskipped, files, &fileskipped, &objectsskipped);
 PUTW (rsp + 000, 0xB2);
 PUTW (rsp + 002, 0x01);                                 /* GAP? */
@@ -905,7 +895,6 @@ uint8 p2 = GETB (cmd + 004);
 uint8 p3 = GETB (cmd + 006);
 
 sim_debug_unit (DBG_STI, uptr, "SET UNIT EXECUTION MODE, p1 = %02X, p2 = %02X, p3 = %02X\n", p1, p2, p3);
-sim_printf ("SET UNIT EXECUTION MODE, p1 = %02X, p2 = %02X, p3 = %02X\n", p1, p2, p3);
 PUTW (rsp, 0xB1);
 return 004;
 }
@@ -937,7 +926,6 @@ uint16 kt_tmark (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
 uint8 p1 = GETB (cmd + 002);
 sim_debug_unit (DBG_STI, uptr, "WRITE TAPE MARK, p1 = %02X\n", p1);
-sim_printf ("WRITE TAPE MARK, p1 = %02X\n", p1);
 sim_tape_wrtmk (uptr);
 PUTW (rsp, 0xAC);
 return 003;
@@ -1081,7 +1069,7 @@ uint32 ksa = kt + KT_S0 + (port * 16);                  /* drive state area */
 uint32 dc, cq, rsp, opc, rsz, cmd, fct;
 
 for (int j = 0; j < 20; j++) {
-    dc = GETP (ksa + KSA_HEAD);                         /* get DCB */
+    dc = GETP (ksa + KSA_DHD);                          /* get DCB */
     if (dc == 0)
         break;
 
@@ -1092,9 +1080,9 @@ for (int j = 0; j < 20; j++) {
     if (Q_LOCKED (cq))                                  /* success queue locked? */
         break;
 
-    dc = kg_receive (ksa + KSA_HEAD);                   /* dequeue from drive state area */
+    dc = kg_receive (ksa + KSA_DHD);                    /* dequeue from drive state area */
 
-    kt_print_dcb (dc);
+    kg_print_struct (NULL, uptr, dc, dc_stc);
 
     rsp = GETP (dc + DC_RSB);                           /* get response buffer */
     opc = GETW (dc + DC_STA);
@@ -1153,7 +1141,7 @@ rte = GETP (frb + F_RTE);                               /* get route */
 rsb = GETW (frb + F_RSB);                               /* record size */
 opc = GETB (rte + V_OPCD);                              /* get opcode from route */
 
-kt_print_frb (frb);
+kg_print_struct (NULL, uptr, frb, frb_stc);
 sim_debug_unit (DBG_FRB, uptr, "%07o, SCNT: %d, OPC: %o T_OPC: %o\n", frb, scnt, opc, t_opc);
 if (t_opc == 027) {                                    /* read record forwards */
     for (int i = 0; i < scnt; i++) {
@@ -1175,8 +1163,6 @@ if (t_opc == 027) {                                    /* read record forwards *
         PUTDW (dma + 01040, kt_edc (dma));
 
         kg_send (frb + F_BFHD, bd);                     /* queue buffer to the FRB */
-        if (rsb < 01000)
-            PUTW (frb + F_ESUM, 0177777);
         }
     }
 else if (t_opc == 0216) {                               /* write record */
@@ -1200,21 +1186,19 @@ else if (t_opc == 0216) {                               /* write record */
 else
     sim_printf ("Unknown route opcode for K.sti: %o\n", opc);
 
-kg_route_frb (kt, frb, TRUE);
+kg_route_frb (uptr, kt, frb, TRUE);
 }
 
 void kt_process_ipq (UNIT *uptr, uint32 kt)
 {
-uint32 tb, cnt, cq, frb, fc, flg, rte, ctr, opc;
+uint32 tb, cnt, cq, frb, fc, flg, rte, ctr, opc, rsb;
 
 tb = GETP (kt + KT_IPQ);                                /* get T$ */
 if (tb == 0)
     return;
-//if (!sim_log)
-//    sim_set_logon (0, "hsc_ipq.log");
 
-kt_print_tx (tb);
-sim_printf ("T$ %07o\n", tb);
+kg_print_struct (NULL, uptr, tb, t_stc);
+sim_debug_unit (DBG_TX, uptr, "TS: %07o\n", tb);
 
 cnt = GETW (tb + T_FCNT);
 ctr = GETP (tb + T_PCTR);
@@ -1229,12 +1213,12 @@ for (int j = 0; j < 50; j++) {                          /* prevent endless loop 
     kt_process_frb (uptr, opc, frb);
     fc++;
     if (((flg & V_NC) == 0) && (cnt > 0)) {
-        kg_dec_ctr (ctr);
+        kg_dec_ctr (uptr, ctr);
         cnt = cnt - 1;
         }
     }
 if (fc > 0)
-    sim_debug_unit (DBG_DRAT, uptr, "%d FRBs processed\n", fc);
+    sim_debug_unit (DBG_TX, uptr, "%d FRBs processed\n", fc);
 
 fc = 0;
 for (int k = 0; k < 8; k++) {                           /* for each drive? */
@@ -1244,14 +1228,21 @@ for (int k = 0; k < 8; k++) {                           /* for each drive? */
             break;
         rte = GETP (frb + F_RTE);                       /* get route */
         flg = GETB (rte + V_FLGS);                      /* get flags from route */
-        kg_route_frb (kt, frb, TRUE);
+        rsb = GETW (frb + F_RSB);
+        if (rsb < 01000) {
+            PUTW (frb + F_ESUM, 0200);
+            kg_route_frb (uptr, kt, frb, FALSE);
+            }
+        else {
+            kg_route_frb (uptr, kt, frb, TRUE);
         fc++;
         if ((flg & V_NC) == 0)
-            kg_dec_ctr (ctr);
+            kg_dec_ctr (uptr, ctr);
+        }
         }
     }
 if (fc > 0)
-    sim_debug_unit (DBG_DRAT, uptr, "%d FRBs routed\n", fc);
+    sim_debug_unit (DBG_TX, uptr, "%d FRBs routed\n", fc);
 
 PUTW (tb + T_FCNT, cnt);                                /* update counter */
 
@@ -1259,7 +1250,7 @@ if (cnt == 0) {                                         /* all operation complet
     tb = kg_receive (kt + KT_IPQ);                      /* dequeue T$ */
     cq = GETP (tb + T_SUCC);                            /* get T$ success completion queue */
     kg_send (cq, tb);                                   /* send T$ to completion queue */
-    sim_debug_unit (DBG_DRAT, uptr, "T$ completed, dest = %o\n", cq);
+    sim_debug_unit (DBG_TX, uptr, "T$ completed, dest = %o\n", cq);
     }
 }
 
@@ -1274,14 +1265,14 @@ uint32 ksa, cq, dc;
 ksa = kt + KT_S0 + (port * 16);                         /* drive state area */
 if (GETW (kt + KG_RSL) == 0) {                          /* test started? */
     PUTW (kt + KG_RSL, 1);                              /* KG$RSL - result of self test */
-    dc = kg_receive (ksa + KSA_HEAD);                   /* get DCB from drive state area */
+    dc = kg_receive (ksa + KSA_DHD);                    /* get DCB from drive state area */
     if (dc) {
         cq = GETP (dc + DC_0CQ);                        /* get completion queue */
         kg_send (cq, dc);                               /* put DCB to completion queue */
         }
     }
-else if (!Q_LOCKED (ksa + KSA_LOCK)) {                  /* drive state area locked? */
-//    if ((GETB (ksa + KSA_FLGS) & FLGS_SVC) == 0)        /* drive not known to system? */
+else if (!Q_LOCKED (ksa + KSA_IND)) {                   /* drive state area locked? */
+//    if ((GETB (ksa + KSA_STA) & FLGS_SVC) == 0)         /* drive not known to system? */
     if ((uptr->flags & UNIT_ATP) == 0) {
         kt_notify (uptr, kt, port);                     /* notify drive present */
         uptr->flags |= UNIT_ATP;
@@ -1376,6 +1367,26 @@ t_stat kt_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 return SCPE_OK;
 }
 
+/* Show the K.sti control area */
+
+t_stat kt_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+DEVICE *dptr;
+HDIB *dibp;
+t_stat r;
+
+if (uptr == NULL)
+    return SCPE_IERR;
+dptr = find_dev_from_unit (uptr);
+if (dptr == NULL)
+    return SCPE_IERR;
+dibp = (HDIB *) dptr->ctxt;
+if (dibp == NULL)
+    return SCPE_IERR;
+kg_print_struct (st, uptr, dibp->cma, kt_stc);
+return SCPE_OK;
+}
+
 /* Device attach */
 
 t_stat kt_attach (UNIT *uptr, CONST char *cptr)
@@ -1405,11 +1416,8 @@ return SCPE_OK;
 t_stat kt_reset (DEVICE *dptr)
 {
 uint32 i;
-//int32 cidx;
 UNIT *uptr;
-//MSC *cp;
 static t_bool plugs_inited = FALSE;
-//DIB *dibp = (DIB *) dptr->ctxt;
 uint32 dtyp;
 
 sim_debug (DBG_TRC, dptr, "kt_reset\n");
@@ -1422,12 +1430,10 @@ if (!plugs_inited ) {
         dptr->units[d].unit_plug = u++;                 /* unique unit numbers */
         }
     }
-//cp->comm = 0;                                           /* no comm region */
 for (i = 0; i < dptr->numunits; i++) {                  /* init units */
     uptr = &dptr->units[i];
     sim_cancel (uptr);                                  /* clr activity */
     sim_tape_reset (uptr);
-//    uptr->cnum = cidx;                                  /* set ctrl index */
     uptr->flags = uptr->flags & ~(UNIT_ONL | UNIT_ATP);
     dtyp = GET_DTYPE (uptr->flags);                     /* get drive type */
     for (int j = 2; j >= 0; j--) {                      /* find highest supported density */
@@ -1437,7 +1443,6 @@ for (i = 0; i < dptr->numunits; i++) {                  /* init units */
             }
         }
     uptr->speed = drv_tab[dtyp].sp0;                    /* default to lowest speed */
-//    uptr->uf = 0;                                       /* clr unit flags */
     uptr->ktxb = (uint16 *) realloc (uptr->ktxb, (KT_MAXFR >> 1) * sizeof (uint16));
     if (uptr->ktxb == NULL)
         return SCPE_MEM;

@@ -33,6 +33,48 @@ extern HDIB *KSTS[10];
 
 extern int32 calc_ints (int32 nipl, int32 trq);
 
+STDEF kg_stc[] = {
+    { "KG$TLK", KG_TLK, 2, ST_INT },
+    { "KG$SLT", KG_SLT, 1, ST_INT },
+    { "KG$TYP", KG_TYP, 1, ST_INT },
+    { "KG$VRS", KG_VRS, 2, ST_INT },
+    { "KG$FCB", KG_FCB, 2, ST_INT },
+    { "KG$FBU", KG_FBU, 2, ST_INT },
+    { "KG$BWS", KG_BWS, 2, ST_INT },
+    { "KG$TMR", KG_TMR, 2, ST_INT },
+    { "KG$DMP", KG_DMP, 2, ST_INT },
+    { "KG$DCA", KG_DCA, 2, ST_INT },
+    { "KG$TST", KG_TST, 2, ST_INT },
+    { "KG$FRS", KG_FRS, 2, ST_INT },
+    { "KG$LAS", KG_LAS, 2, ST_INT },
+    { "KG$MDL", KG_MDL, 0, ST_INT },
+    { "KG$MTY", KG_MTY, 2, ST_INT },
+    { "KG$PFL", KG_PFL, 2, ST_INT },
+    { "KG$RSL", KG_RSL, 2, ST_INT },
+    { "KG$LTR", KG_LTR, 2, ST_INT },
+    { "KG$PSA", KG_PSA, 2, ST_INT },
+    { "KG$PSB", KG_PSB, 2, ST_INT },
+    { "KG$DSA", KG_DSA, 20, ST_INT },
+    { "KG$MC0", KG_MC0, 8, ST_INT },
+    { "KG$KSA", KG_KSA, 0, ST_INT },
+    { NULL }
+    };
+
+STDEF v_stc[] = {
+    { "V.FLGS", V_FLGS, 1, ST_INT },
+    { "V.OPCD", V_OPCD, 1, ST_INT },
+    { "V.SUCC", V_SUCC, 2, ST_INT },
+    { "V.CTX ", V_CTX , 2, ST_INT },
+    { "V.AERR", V_AERR, 2, ST_INT },
+    { NULL }
+    };
+
+STDEF c_stc[] = {
+    { "C.SRVC", C_SRVC, 2, ST_INT },
+    { "C.CNT ", C_CNT , 2, ST_INT },
+    { NULL }
+    };
+
 /* Search control memory to find the KI structure.
  * This starts with a pattern of alternating
  * 1s and 0s. The offset to the K control area can
@@ -60,27 +102,31 @@ for (ki = 0; ki < 20; ki = ki + 2) {                    /* search for KI structu
 return kg;
 }
 
+/* Show the control memory address of a K */
+
 t_stat kg_show_addr (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
 DEVICE *dptr;
 HDIB *dibp;
 
-if (uptr == NULL)
+if (uptr == NULL)                                       /* unit valid? */
     return SCPE_IERR;
-dptr = find_dev_from_unit (uptr);
-if (dptr == NULL)
+dptr = find_dev_from_unit (uptr);                       /* get associated device */
+if (dptr == NULL)                                       /* device valid? */
     return SCPE_IERR;
-dibp = (HDIB *) dptr->ctxt;
-if (dibp == NULL)
+dibp = (HDIB *) dptr->ctxt;                             /* get associated DIB */
+if (dibp == NULL)                                       /* DIB valid? */
     return SCPE_IERR;
-if (dibp->cma) {
-    fprintf (st, "address=");
+if (dibp->cma) {                                        /* control mem addr set? */
+    fprintf (st, "address=");                           /* yes, show address */
     fprint_val (st, (t_value) dibp->cma + CMEMBASE, DEV_RDX, 32, PV_LEFT);
     }
 else
-    fprintf (st, "halted");
+    fprintf (st, "halted");                             /* no, K is halted */
 return SCPE_OK;
 }
+
+/* Show the slot number of a K */
 
 t_stat kg_show_req (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
@@ -88,15 +134,15 @@ DEVICE *dptr;
 HDIB *dibp;
 uint32 slot, i;
 
-if (uptr == NULL)
+if (uptr == NULL)                                       /* unit valid? */
     return SCPE_IERR;
-dptr = find_dev_from_unit (uptr);
-if (dptr == NULL)
+dptr = find_dev_from_unit (uptr);                       /* get associated device */
+if (dptr == NULL)                                       /* device valid? */
     return SCPE_IERR;
-dibp = (HDIB *) dptr->ctxt;
-if (dibp == NULL)
+dibp = (HDIB *) dptr->ctxt;                             /* get associated DIB */
+if (dibp == NULL)                                       /* DIB valid? */
     return SCPE_IERR;
-for (i = 0; i < 10; i++) {
+for (i = 0; i < 10; i++) {                              /* find slot for this DIB */
     if (KSTS[i] == dibp) {
         slot = i;
         break;
@@ -107,174 +153,105 @@ fprint_val (st, (t_value) slot, 10, 32, PV_LEFT);
 return SCPE_OK;
 }
 
-t_stat kg_show_queue (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+/* Macro to allow print functions to be used for both debug and show routines */
+
+#define kg_printf(st, uptr, ...) \
+    do { \
+        if (st) \
+            fprintf (st, __VA_ARGS__); \
+        else \
+            sim_debug_unit (KG_DBG_STRUCT, uptr, __VA_ARGS__); \
+    } while (0)
+
+/* Print an integer element of a structure */
+
+void kg_print_word (FILE *st, UNIT *uptr, uint32 addr, char *name, uint16 len)
 {
-DEVICE *dptr;
-HDIB *dibp;
-uint32 qh;
-
-if (uptr == NULL)
-    return SCPE_IERR;
-dptr = find_dev_from_unit (uptr);
-if (dptr == NULL)
-    return SCPE_IERR;
-dibp = (HDIB *) dptr->ctxt;
-if (dibp == NULL)
-    return SCPE_IERR;
-
-qh = dibp->cma + val;
-for (;;) {
-    qh = GETP (qh);
-    if ((qh == 0) || qh == 0100000)
-        break;
-    kg_print_word (st, qh, "", 0000, 2);
-    kg_print_word (st, qh, "", 0002, 2);
-    kg_print_word (st, qh, "", 0004, 2);
-    kg_print_word (st, qh, "", 0006, 2);
-    kg_print_word (st, qh, "", 0010, 2);
-    kg_print_word (st, qh, "", 0012, 2);
-    kg_print_word (st, qh, "", 0014, 2);
-    kg_print_word (st, qh, "", 0016, 2);
-    kg_print_word (st, qh, "", 0020, 2);
-    fprintf (st, "   ---\n");
+if (len == 0)                                           /* overlay */
+    kg_printf (st, uptr, "%s %06o\n", name, addr);
+else if (len == 1) {                                    /* byte */
+    kg_printf (st, uptr, "%s %06o\\  %03o\n", name, addr, GETB (addr));
     }
-return SCPE_OK;
-}
-
-t_stat kg_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
-{
-DEVICE *dptr;
-HDIB *dibp;
-uint32 kg;
-t_stat r;
-
-if (uptr == NULL)
-    return SCPE_IERR;
-dptr = find_dev_from_unit (uptr);
-if (dptr == NULL)
-    return SCPE_IERR;
-dibp = (HDIB *) dptr->ctxt;
-if (dibp == NULL)
-    return SCPE_IERR;
-kg = dibp->cma;
-
-kg_print_word (st, kg, "KG$TLK", 0040, 2);
-kg_print_word (st, kg, "KG$SLT", 0042, 1);              /* structure type? */
-kg_print_word (st, kg, "KG$TYP", 0043, 1);              /* structure type? */
-kg_print_word (st, kg, "KG$VRS", 0044, 2);              /* version */
-kg_print_word (st, kg, "KG$FCB", 0046, 2);              /* free control memory buffers? */
-kg_print_word (st, kg, "KG$FBU", 0050, 2);
-kg_print_word (st, kg, "KG$BWS", 0052, 2);
-kg_print_word (st, kg, "KG$TMR", 0054, 2);
-kg_print_word (st, kg, "KG$DMP", 0056, 2);
-kg_print_word (st, kg, "KG$DCA", 0060, 2);
-kg_print_word (st, kg, "KG$TST", 0062, 2);
-kg_print_word (st, kg, "KG$FRS", 0064, 2);
-kg_print_word (st, kg, "KG$LAS", 0066, 2);
-kg_print_word (st, kg, "KG$MDL", 0070, 0);
-kg_print_word (st, kg, "KG$MTY", 0070, 2);
-kg_print_word (st, kg, "KG$PFL", 0072, 2);
-kg_print_word (st, kg, "KG$RSL", 0074, 2);              /* microdiagnostic test result */
-kg_print_word (st, kg, "KG$LTR", 0076, 2);
-kg_print_word (st, kg, "KG$PSA", 0100, 2);
-kg_print_word (st, kg, "KG$PSB", 0102, 2);
-kg_print_word (st, kg, "KG$DSA", 0104, 20);
-kg_print_word (st, kg, "KG$MC0", 0130, 8);
-kg_print_word (st, kg, "KG$KSA", 0140, 0);
-
-return SCPE_OK;
-}
-
-void sim_print_word (uint32 kg, char *name, int16 off, uint16 len)
-{
-if (len == 0)
-    sim_printf ("%s %06o\n", name, kg + off);
-else if (len == 1) {
-    sim_printf ("%s %06o\\  %03o\n", name, kg + off, GETB (kg + off));
-    }
-else {
-    sim_printf ("%s %06o/", name, kg + off);
+else {                                                  /* word or multi-word */
+    kg_printf (st, uptr, "%s %06o/", name, addr);
     for (int i = 1; i <= (len >> 1); i++) {
-        sim_printf ("  %06o", GETW (kg + off + ((i - 1) << 1)));
+        kg_printf (st, uptr, "  %06o", GETW (addr + ((i - 1) << 1)));
         if (i % 8 == 0)
-            sim_printf ("\r\n              ");
+            kg_printf (st, uptr, "\n              ");
         }
-    sim_printf ("\r\n");
+    kg_printf (st, uptr, "\n");
     }
 }
 
-void kg_print_word (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
-{
-if (st == NULL) {
-    sim_print_word (kg, name, off, len);
-    return;
-    }
-if (len == 0)
-    fprintf (st, "%s %06o\n", name, kg + off);
-else if (len == 1) {
-    fprintf (st, "%s %06o\\  %03o\n", name, kg + off, GETB (kg + off));
-    }
-else {
-    fprintf (st, "%s %06o/", name, kg + off);
-    for (int i = 1; i <= (len >> 1); i++) {
-        fprintf (st, "  %06o", GETW (kg + off + ((i - 1) << 1)));
-        if (i % 8 == 0)
-            fprintf (st, "\n              ");
-        }
-    fprintf (st, "\n");
-    }
-}
+/* Print a string element of a structure */
 
-void kg_print_string (FILE *st, uint32 kg, char *name, int16 off, uint16 len)
+void kg_print_string (FILE *st, UNIT *uptr, uint32 addr, char *name, uint16 len)
 {
-fprintf (st, "%s %06o   ", name, kg + off);
+kg_printf (st, uptr, "%s %06o   ", name, addr);
 for (int i = 0; i < len; i++)
-    fprintf (st, "%c", GETB (kg + off + i));
-fprintf (st, "\n");
+    kg_printf (st, uptr, "%c", GETB (addr + i));
+kg_printf (st, uptr, "\n");
 }
 
-void kg_print_route (uint32 rte)
+/* Print a control memory structure */
+
+void kg_print_struct (FILE *st, UNIT *uptr, uint32 kg, STDEF *stc)
 {
-kg_print_word (NULL, rte, "V.FLGS", V_FLGS, 1);
-kg_print_word (NULL, rte, "V.OPCD", V_OPCD, 1);
-kg_print_word (NULL, rte, "V.SUCC", V_SUCC, 2);
-kg_print_word (NULL, rte, "V.CTX ", V_CTX , 2);
-kg_print_word (NULL, rte, "V.AERR", V_AERR, 2);
+while (stc->name != NULL) {
+    if (stc->typ == ST_INT)                             /* integer element */
+        kg_print_word (st, uptr, kg + stc->off, stc->name, stc->len);
+    else if (stc->typ == ST_STR)                        /* string element */
+        kg_print_string (st, uptr, kg + stc->off, stc->name, stc->len);
+    else if (stc->typ == ST_LNK)                        /* link to another struct */
+        kg_print_struct (st, uptr, kg, stc->lnk);
+    stc++;
+    }
 }
 
-void kg_print_counter (uint32 ctr)
+/* Print the items on a queue */
+
+void kg_print_queue (FILE *st, UNIT *uptr, uint32 qh, STDEF *stc)
 {
-kg_print_word (NULL, ctr, "C.SRVC", C_SRVC, 2);
-kg_print_word (NULL, ctr, "C.CNT ", C_CNT , 2);
+for (;;) {
+    qh = GETP (qh);                                     /* get next queue item */
+    if ((qh == 0) || qh == 0100000)                     /* empty or locked? */
+        break;                                          /* done */
+    kg_print_struct (st, uptr, qh, stc);                /* print queue item */
+    kg_printf (st, uptr, "---\n");
+    }
 }
 
-void kg_dec_ctr (uint32 ctr)
+/* Decrement a counter queue */
+
+void kg_dec_ctr (UNIT *uptr, uint32 ctr)
 {
 uint32 val, cq;
 
-//kg_print_counter (ctr);
+kg_print_struct (NULL, uptr, ctr, c_stc);
 val = GETW (ctr + C_CNT);                               /* get counter value */
-//sim_printf ("CTR %d -> %d\n", val, (val - 1));
+sim_debug_unit (KG_DBG_TRC, uptr, "CTR %d -> %d\n", val, (val - 1));
 val = val - 1;                                          /* another operation completed */
 PUTW (ctr + C_CNT, val);                                /* update counter value */
 if (val == 0) {                                         /* all operations complete? */
     cq = GETP (ctr);
-//    sim_printf ("CTR dest = %07o\n", cq);
+    sim_debug_unit (KG_DBG_TRC, uptr, "CTR dest = %07o\n", cq);
     PUTP (ctr, 0);                                      /* clear queue pointer */
     kg_send (cq, ctr);                                  /* send counter to completion queue */
     }
 }
 
-void kg_route_frb (uint32 kg, uint32 frb, t_bool sts)
+/* Route a fragment request block to its next station */
+
+void kg_route_frb (UNIT *uptr, uint32 kg, uint32 frb, t_bool sts)
 {
 uint32 rte, ctr, flg, val, bd, sc, cq, fq;
     
 ctr = GETP (frb + F_PCTR);
 rte = GETP (frb + F_RTE);                               /* get route */
 
-//kg_print_route (rte);
-//kg_print_route (rte + 010);
-//kg_print_route (rte + 020);
+kg_print_struct (NULL, uptr, rte, v_stc);
+kg_print_struct (NULL, uptr, rte + 010, v_stc);
+kg_print_struct (NULL, uptr, rte + 020, v_stc);
 
 flg = GETW (rte);                                       /* get opcode/flags from route */
 
@@ -290,15 +267,13 @@ if (sts) {
             }
         }
     if (flg & V_DC)                                     /* decrement counter? */
-        kg_dec_ctr (ctr);
+        kg_dec_ctr (uptr, ctr);
     rte = rte + 010;                                    /* advance route pointer */
     PUTP (frb + F_RTE, rte);
     cq = GETW (rte + V_SUCC);                           /* get success destination */
     }
-else {
-    PUTW (frb + F_ESUM, 1);
+else
     cq = GETW (rte + V_AERR);                           /* get error destination */
-    }    
 
 if (cq & 0177400)
     cq = cq << 2;                                       /* direct address */
@@ -306,16 +281,20 @@ else {
     cq = frb + (cq << 2);                               /* offset into FRB */
     cq = GETP (cq);
     }
-//sim_printf ("OPC: %o, FLG: %o, STS: %d, DST: %o\n", (flg >> 8), (flg & 0377), sts, cq);
+sim_debug_unit (KG_DBG_TRC, uptr, "FRB - OPC: %o, FLG: %o, STS: %d, DST: %o\n", (flg >> 8), (flg & 0377), sts, cq);
 kg_send (cq, frb);                                      /* send FRB to completion queue */
 }
+
+/* Receive a resource from a transmission queue */
 
 uint32 kg_receive (uint32 q)
 {
 uint32 itm;
 
-if (Q_LOCKED (q + Q_HEAD))                              /* check if queue locked */
+if (Q_LOCKED (q + Q_HEAD)) {                            /* check if queue locked */
+    sim_printf ("kg_receive: queue at address %06o is locked\n", q);
     return 0;
+    }
 if (Q_EMPTY (q + Q_HEAD))                               /* check if queue empty */
     return 0;
 itm = GETP (q + Q_HEAD);
@@ -327,12 +306,14 @@ PUTP (itm, 0);                                          /* remove next link from
 return itm;
 }
 
+/* Send a resource to a transmission queue */
+
 void kg_send (uint32 q, uint32 itm)
 {
 uint32 qh, qt, qn, qf, tq, sq, mask, pcb;
 
 if (Q_LOCKED (q + Q_HEAD)) {
-    //sim_printf ("kg_send: queue at address %06o is locked\n", q);
+    sim_printf ("kg_send: queue at address %06o is locked\n", q);
     return;
     }
 qh = GETP (q + Q_HEAD);
@@ -371,24 +352,52 @@ if (qh == 1) {                                          /* software process wait
         }
     }
 if (qh == 0) {                                          /* queue empty */
+    extern HDIB kh_dib;
+    extern HDIB ks_dib;
+    extern UNIT ks_unit[4];
+    extern UNIT kh_unit;
+    uint32 dt;
     PUTP (q + Q_HEAD, itm);                             /* set head */
     PUTP (q + Q_TAIL, itm);                             /* set tail */
+    dt = GETP (ks_dib.cma + 0000 + Q_HEAD);
+    if ((q + Q_HEAD < dt) && (q + Q_HEAD > (dt - 0400))) {
+//        sim_printf ("KG: DRAT\n");
+        sim_activate_abs (&ks_unit[0], 0);
+        }
+    else if (q + Q_HEAD == kh_dib.cma + 0004) {
+//        sim_printf ("KG: KH$3WK\n");
+        sim_activate_abs (&kh_unit, 0);
+        }
+    else if (q + Q_HEAD == kh_dib.cma + 0010) {
+//        sim_printf ("KG: KH$2WK\n");
+        sim_activate_abs (&kh_unit, 0);
+        }
+    else if (q + Q_HEAD == kh_dib.cma + 0014) {
+//        sim_printf ("KG: KH$1WK\n");
+        sim_activate_abs (&kh_unit, 0);
+        }
+    else if (q + Q_HEAD == kh_dib.cma + 0020) {
+//        sim_printf ("KG: KH$0WK\n");
+        sim_activate_abs (&kh_unit, 0);
+        }
+    else if (q + Q_HEAD == ks_dib.cma + 0000) {
+//        sim_printf ("KG: KS$0HD\n");
+        sim_activate_abs (&ks_unit[0], 0);
+        }
+    else if (q + Q_HEAD == ks_dib.cma + 0144) {
+//        sim_printf ("KG: KS$KS0\n");
+        sim_activate_abs (&ks_unit[0], 0);
+        }
     }
 else {                                                  /* queue is not empty */
     qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
-#if 0
-    while (GETW (qt) != 0) {                            /* find the real end of the queue */
-        qn = GETP (qt);
-        if (qn == qt)                                   /* circular pointer? */
-            break;
-        qt = qn;                                        /* point to next */
-        }
-#endif
     PUTP (qt, itm);                                     /* add link to item */
     PUTP (q + Q_TAIL, itm);                             /* update queue tail pointer */
     }
 //sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
 }
+
+/* Build the dispatch table for the Ks */
 
 t_stat hsc_build_dib ()
 {
