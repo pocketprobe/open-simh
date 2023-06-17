@@ -649,7 +649,7 @@ while (xfrsz) {
     CI_PUT32 (pkt.data, PPD_XFRSZ, xfrsz);
     CI_PUT32 (pkt.data, PPD_SBOFF, bdt->boff);
     CI_PUT32 (pkt.data, PPD_RBOFF, rboff);
-    if (len <= CI_MAXDAT)
+    if (xfrsz <= CI_MAXDAT)
         pkt.data[PPD_FLAGS] |= PPD_LP;                  /* last packet */
     memcpy (&pkt.data[CI_DATHDR], &bdt->buf[bdt->boff], len);
     r = ci_send_ppd (&hsc_unit[0], &pkt);
