@@ -432,7 +432,7 @@ static STDEF frb_stc[] = {
     { NULL }
     };
 
-#define KS_MAXDR        4                               /* max # drives */
+#define KS_MAXDR        8                               /* max # drives */
 
 #define KS_NUMBY        512                             /* bytes per block */
 #define KS_MAXFR        (1 << 16)                       /* max xfer */
@@ -586,6 +586,14 @@ UNIT ks_unit[KS_MAXDR] = {
             (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
     { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
             (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
+    { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
+    { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
+    { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
+    { UDATA (&ks_svc, UNIT_FIX+UNIT_ATTABLE+UNIT_DISABLE+UNIT_ROABLE+
+            (RA80_DTYPE << UNIT_V_DTYPE), KS_SIZE (RA80)) },
     };
 
 REG ks_reg[] = {
@@ -627,9 +635,9 @@ MTAB ks_mod[] = {
       &ks_set_plug, &ks_show_plug, NULL, "Set/Display Unit plug value" },
     { MTAB_XTD|MTAB_VDV, K_SDI, NULL, "KSDI",
       &ks_set_ctype, NULL, NULL, "Set K.sdi Controller Type" },
-    { MTAB_XTD|MTAB_VDV, K_SI4, NULL, "KSI4",
+    { MTAB_XTD|MTAB_VDV, K_SI4_DISK, NULL, "KSI4",
       &ks_set_ctype, NULL, NULL, "Set K.si 4-port Controller Type" },
-    { MTAB_XTD|MTAB_VDV, K_SI8, NULL, "KSI8",
+    { MTAB_XTD|MTAB_VDV, K_SI8_MICRO, NULL, "KSI8",
       &ks_set_ctype, NULL, NULL, "Set K.si 8-port Controller Type" },
     { MTAB_XTD|MTAB_VDV, K_SCSI, NULL, "KSCSI",
       &ks_set_ctype, NULL, NULL, "Set K.scsi Controller Type" },
@@ -1531,6 +1539,28 @@ return SCPE_OK;
 
 t_stat ks_set_ctype (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
+DEVICE *dptr = find_dev_from_unit (uptr);
+HDIB *dibp = (HDIB *) dptr->ctxt;
+uint32 i;
+
+for (i = 0; i < KS_MAXDR; i++) {
+    if (dptr->units[i].flags & UNIT_ATT)
+        return sim_messagef (SCPE_ALATT, "Can't change controller type on %s with %s attached to %s.\n", 
+                                         dptr->name, sim_uname (&dptr->units[i]), dptr->units[i].filename);
+    }
+dibp->sts = val;
+if (dibp->sts == K_SI8) {
+    for (i = 4; i < KS_MAXDR; i++) {
+        dptr->units[i].flags &= ~UNIT_DIS;
+        dptr->units[i].flags |= UNIT_DISABLE;
+        }
+    }
+else {
+    for (i = 4; i < KS_MAXDR; i++) {
+        dptr->units[i].flags |= UNIT_DIS;
+        dptr->units[i].flags &= ~UNIT_DISABLE;
+        }
+    }
 return SCPE_OK;
 }
 
@@ -1538,6 +1568,24 @@ return SCPE_OK;
 
 t_stat ks_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
+DEVICE *dptr = find_dev_from_unit (uptr);
+HDIB *dibp = (HDIB *) dptr->ctxt;
+
+switch (dibp->sts) {
+    case K_SDI:
+        fprintf (st, "K.sdi disk data channel");
+        break;
+        
+    case K_SI4:
+    case K_SI4_DISK:
+        fprintf (st, "K.si 4-port data channel");
+        break;
+
+    case K_SI8:
+    case K_SI8_MICRO:
+        fprintf (st, "K.si 8-port data channel");
+        break;
+    }
 return SCPE_OK;
 }
 
@@ -1545,18 +1593,9 @@ return SCPE_OK;
 
 t_stat ks_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
-DEVICE *dptr;
-HDIB *dibp;
-t_stat r;
+DEVICE *dptr = find_dev_from_unit (uptr);
+HDIB *dibp = (HDIB *) dptr->ctxt;
 
-if (uptr == NULL)
-    return SCPE_IERR;
-dptr = find_dev_from_unit (uptr);
-if (dptr == NULL)
-    return SCPE_IERR;
-dibp = (HDIB *) dptr->ctxt;
-if (dibp == NULL)
-    return SCPE_IERR;
 kg_print_struct (st, uptr, dibp->cma, ks_stc);
 return SCPE_OK;
 }
@@ -1607,6 +1646,11 @@ if (!plugs_inited ) {
     plugs_inited  = TRUE;
     for (d = 0; d < dptr->numunits; d++) {
         dptr->units[d].unit_plug = u++;                 /* unique unit numbers */
+        if (d >= 4) {
+            dptr->units[d] = dptr->units[0];
+            dptr->units[d].flags |= UNIT_DIS;
+            dptr->units[d].flags &= ~UNIT_DISABLE;
+            }
         }
     }
 for (i = 0; i < dptr->numunits; i++) {                  /* init units */

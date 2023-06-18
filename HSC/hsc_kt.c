@@ -558,10 +558,8 @@ MTAB kt_mod[] = {
       &sim_tape_set_capac, &sim_tape_show_capac, NULL, "Set/Display capacity" },
     { MTAB_XTD|MTAB_VDV, K_STI, NULL, "KSTI",
       &kt_set_ctype, NULL, NULL, "Set K.sti Controller Type" },
-    { MTAB_XTD|MTAB_VDV, K_SI4, NULL, "KSI4",
+    { MTAB_XTD|MTAB_VDV, K_SI4_TAPE, NULL, "KSI4",
       &kt_set_ctype, NULL, NULL, "Set K.si 4-port Controller Type" },
-    { MTAB_XTD|MTAB_VDV, K_SI8, NULL, "KSI8",
-      &kt_set_ctype, NULL, NULL, "Set K.si 8-port Controller Type" },
     { MTAB_XTD | MTAB_VDV, 0, "TYPE", NULL,
       NULL, &kt_show_ctype, NULL, "Display controller type" },
     { 0 }
@@ -1357,6 +1355,16 @@ return SCPE_OK;
 
 t_stat kt_set_ctype (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 {
+DEVICE *dptr = find_dev_from_unit (uptr);
+HDIB *dibp = (HDIB *) dptr->ctxt;
+uint32 i;
+
+for (i = 0; i < KT_MAXDR; i++) {
+    if (dptr->units[i].flags & UNIT_ATT)
+        return sim_messagef (SCPE_ALATT, "Can't change controller type on %s with %s attached to %s.\n", 
+                                         dptr->name, sim_uname (&dptr->units[i]), dptr->units[i].filename);
+    }
+dibp->sts = val;
 return SCPE_OK;
 }
 
@@ -1364,6 +1372,19 @@ return SCPE_OK;
 
 t_stat kt_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
+DEVICE *dptr = find_dev_from_unit (uptr);
+HDIB *dibp = (HDIB *) dptr->ctxt;
+
+switch (dibp->sts) {
+    case K_STI:
+        fprintf (st, "K.sti tape data channel");
+        break;
+        
+    case K_SI4:
+    case K_SI4_TAPE:
+        fprintf (st, "K.si 4-port data channel");
+        break;
+    }
 return SCPE_OK;
 }
 
