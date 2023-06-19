@@ -147,16 +147,6 @@ extern int32 ReadB (int32 va);
 extern void PWriteB (int32 data, int32 addr);
 extern void WriteB (int32 data, int32 addr);
 
-t_stat hsc_find (int32 flag, CONST char *ptr);
-
-/* Special boot command, overrides regular boot */
-
-CTAB hsc_cmd[] = {
-    { "FIND", &hsc_find, 0,
-      "find                  find datastructures\n", NULL, NULL },
-    { NULL }
-    };
-
 /* Fixed I/O address table entries */
 
 DIB cwin_dib = { IOBA_CWIN, IOLN_CWIN, &cwin_rd, &cwin_wr, 0 };
@@ -289,39 +279,6 @@ for ( ; val != 0; val = val >> 1) {
         odd = odd ^ 1;
     }
 return odd;
-}
-
-t_stat hsc_find (int32 flag, CONST char *ptr)
-{
-uint32 i, j;
-uint16 p[12] = {
-    0000035,
-    0035316,
-    0001444,
-    0140010,
-    0000024,
-    0001064,
-    0160100,
-    0006775,
-    0167770,
-    0177777,
-    0177750,
-    0177710
-    };
-
-for (i = 0; i < (CMEMSIZE >> 1); i++) {
-    for (j = 0; j < 12; j++) {
-        if (CM[i + j] != p[j]) {
-            i = i + j;
-            break;
-            }
-        }
-    if (j == 12) {
-        sim_printf ("Pattern found at %06o\n", (i << 1));
-        break;
-        }
-    }
-return SCPE_OK;
 }
 
 t_stat pio_rd (int32 *data, int32 pa, int32 access)
@@ -931,7 +888,6 @@ if (DM == NULL) {                                       /* First time init */
     if (DM == NULL)
         return SCPE_MEM;
     }
-sim_vm_cmd = hsc_cmd;
 return SCPE_OK;
 }
 
