@@ -458,18 +458,17 @@ t_bool run;
 if (act == K_RUN) {
     kh_dib.cma = kg_init (&run);
     sim_debug (DBG_TRC, &kh_dev, "K.ci startup: KH = %06o at %o\n", kh_dib.cma, (uint16)inst_pc);
+//    PUTW (kh_dib.cma + KG_RSL, 1);                      /* KG$RSL - result of self test */
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
     if (!run)
         return SCPE_OK;
     ci_set_state (&kh_unit, PORT_INIT);
     ci_set_state (&kh_unit, PORT_ENABLED);
-    sim_clock_coschedule (&kh_unit, tmxr_poll);         /* activate */
     }
 else {
     sim_debug (DBG_TRC, &kh_dev, "K.ci halt at %o\n", (uint16)inst_pc);
     ci_set_state (&kh_unit, PORT_UNINIT);
-    sim_cancel (&kh_unit);
     kh_dib.cma = 0;
     }
 return SCPE_OK;

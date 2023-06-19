@@ -138,7 +138,7 @@
 #define SOP_HSC70       (BUS_Q|OPT_EIS|OPT_FPP|OPT_MMU)
 #define OPT_HSC70       0
 
-#define MOD_MAX         22
+#define MOD_MAX         25
 
 /* MFPT codes */
 

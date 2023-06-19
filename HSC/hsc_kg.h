@@ -31,6 +31,8 @@
 
 #define K_PIO           0000
 #define K_CI            0001                            /* K.ci host interface */
+#define K_CI2           0010                            /* K.ci2 host interface - no microcode loaded */
+#define K_CI2_MICRO     0211                            /* K.ci2 host interface - microcode loaded */
 #define K_SDI           0002                            /* K.sdi disk data channel */
 #define K_STI           0203                            /* K.sti tape data channel */
 #define K_SI4           0004                            /* K.si 4-port data channel - no microcode loaded */

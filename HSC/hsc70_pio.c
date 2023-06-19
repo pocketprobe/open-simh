@@ -25,8 +25,31 @@
 */
 
 #include "pdp11_defs.h"
+#include "pdp11_cpumod.h"
 #include "hsc_hsc70_bin.h"
 #include "hsc_kg.h"
+
+/* switch/display register */
+
+#define SDR_LMP0        0000001                         /* lamp 0 */
+#define SDR_LMP1        0000002                         /* lamp 0 */
+#define SDR_LMP2        0000004                         /* lamp 0 */
+#define SDR_LMP3        0000010                         /* lamp 0 */
+#define SDR_LMP4        0000020                         /* lamp 0 */
+#define SDR_INHP        0000040                         /* inhibit parity traps */
+#define SDR_NXM         0000100                         /* force NXM on control/data memory access */
+#define SDR_DIA         0000200                         /* diagnostics passed/failed LED */
+#define SDR_SW0         0000400                         /* switch 0 */
+#define SDR_SW1         0001000                         /* switch 1 */
+#define SDR_SW2         0002000                         /* online switch */
+#define SDR_SW3         0004000                         /* fault switch */
+
+#define UNIT_V_INIT     (UNIT_V_UF)                     /* media init (hold fault switch) */
+#define UNIT_V_ONL      (UNIT_V_UF + 1)                 /* online */
+#define UNIT_INIT       (1u << UNIT_V_INIT)
+#define UNIT_ONL        (1u << UNIT_V_ONL)
+
+/* floppy control/status register */
 
 #define FLCSR_PE        0100000                         /* parity err */
 #define FLCSR_NXM       0040000                         /* non-existant mem err */
@@ -43,16 +66,22 @@
 #define FLSTS_TRK0      0000004                         /* track 0 */
 #define FLSTS_BSY       0000001                         /* busy */
 
+/* floppy memory address register 0 */
+
 #define FLMA0_V_A0      8                               /* mem addr 0-7 */
 #define FLMA0_M_A0      0377
 #define FLMA0_A0        (FLMA0_M_A0 << FLMA0_V_A0)
 #define FLMA0_CT        0000377                         /* current track */
 #define FLMA0_RW        0177400
 
+/* floppy memory address register 1 */
+
 #define FLMA1_V_A8      8                               /* mem addr 8-15 */
 #define FLMA1_M_A8      0377
 #define FLMA1_A8        (FLMA1_M_A8 << FLMA1_V_A8)
 #define FLMA1_DS        0000377                         /* desired sector */
+
+/* floppy memory address register 2 */
 
 #define FLMA2_GRN       0100000                         /* green LED */
 #define FLMA2_DMA       0040000                         /* DMA test */
@@ -97,6 +126,10 @@ extern int16 inst_pc;
 
 t_stat pio_rd (int32 *data, int32 pa, int32 access);
 t_stat pio_wr (int32 data, int32 pa, int32 access);
+t_stat pio_set_init (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat pio_show_init (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
+t_stat pio_set_onl (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat pio_show_onl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat pio_reset (DEVICE *dptr);
 t_stat cwin_rd (int32 *data, int32 va, int32 access);
 t_stat cwin_wr (int32 data, int32 va, int32 access);
@@ -143,7 +176,7 @@ HDIB pio_dib = {
     K_PIO, 0, NULL
     };
 
-UNIT pio_unit = { UDATA (NULL, 0, 0) };
+UNIT pio_unit = { UDATA (NULL, UNIT_ONL, 0) };
 
 REG pio_reg[] = {
     { ORDATA (SDR, SDR, 16) },
@@ -152,17 +185,29 @@ REG pio_reg[] = {
     };
 
 MTAB pio_mod[] = {
-    { MTAB_XTD|MTAB_VDV, 004, "SLOT", "SLOT",
+    { MTAB_XTD|MTAB_VDV, 0, "SLOT", "SLOT",
       NULL, &kg_show_req, NULL },
-    { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
+    { MTAB_XTD|MTAB_VDV, 0, "ADDRESS", "ADDRESS",
       &set_addr, &show_addr, NULL },
+    { UNIT_ONL, 0, NULL, "OFFLINE",
+      &pio_set_onl, NULL, NULL, "Set HSC state to offline" },
+    { UNIT_ONL, UNIT_ONL, NULL, "ONLINE",
+      &pio_set_onl, NULL, NULL, "Set HSC state to online" },
+    { MTAB_XTD|MTAB_VDV, 0, "STATUS", NULL,
+      NULL, &pio_show_onl, NULL, "Display HSC online status" },
+    { UNIT_INIT, 0, NULL, "NOINIT",
+      &pio_set_init, NULL, NULL, "Don't reset media to factory defaults" },
+    { UNIT_INIT, UNIT_INIT, NULL, "INIT",
+      &pio_set_init, NULL, NULL, "Reset media to factory defaults (hold fault switch)" },
+    { MTAB_XTD|MTAB_VDV, 0, "INIT", NULL,
+      NULL, &pio_show_init, NULL, "Display media reset status" },
     { 0 }
     };
 
 DEVICE pio_dev = {
     "PIO", &pio_unit, pio_reg, pio_mod,
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
-    NULL, NULL, NULL,
+    NULL, NULL, &pio_reset,
     NULL, NULL, NULL,
     &pio_dib, DEV_DEBUG | DEV_UBUS | DEV_HSC,
     0, pio_debug
@@ -219,8 +264,10 @@ REG fl_reg[] = {
 MTAB fl_mod[] = {
     { UNIT_WLK, 0, "write enabled", "WRITEENABLED", NULL },
     { UNIT_WLK, UNIT_WLK, "write locked", "LOCKED", NULL },
-    { MTAB_XTD|MTAB_VDV, 004, "ADDRESS", "ADDRESS",
+    { MTAB_XTD|MTAB_VDV, 0, "ADDRESS", "ADDRESS",
       &set_addr, &show_addr, NULL },
+    { MTAB_XTD|MTAB_VDV, 0, "VECTOR", "VECTOR",
+      &set_vec, &show_vec, NULL },
     { MTAB_XTD|MTAB_VDV, 0, "VECTOR", "VECTOR",
       &set_vec, &show_vec, NULL },
     { 0 }
@@ -320,11 +367,21 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 020:                                           /* Pio CSR */
         *data = PCSR | PCSR_ENA;
+        if (CPUT (CPUT_HSC40))                          /* set HSC type bits */
+            *data = *data | PCSR_HSC40;
+        if (CPUT (CPUT_HSC60))
+            *data = *data | PCSR_HSC60;
+        if (CPUT (CPUT_HSC90))
+            *data = *data | PCSR_HSC90;
         sim_debug (DBG_REG, &pio_dev, "Pio CSR rd: %o\n", *data);
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
         *data = SDR & 07777;
+        if (pio_unit.flags & UNIT_INIT)
+            *data = *data | SDR_SW3;                    /* fault switch pressed */
+        if (pio_unit.flags & UNIT_ONL)                  /* HSC online? */
+            *data = *data | SDR_SW2;                    /* online switch pressed */
         sim_debug (DBG_REG, &pio_dev, "SDR rd: %o\n", *data);
         return SCPE_OK;
 
@@ -401,6 +458,7 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 021:                                           /* switch/display reg */
         sim_debug (DBG_REG, &pio_dev, "SDR wr: %o\n", data);
+        pio_unit.flags &= ~UNIT_INIT;                   /* clear init flag */
         SDR = (SDR & ~0377) | (data & 0377);
         return SCPE_OK;
 
@@ -525,6 +583,11 @@ int32 unitno = (fl_csr >> FLCSR_V_SEL) & 1;             /* get drive select */
 
 if ((fl_csr & FLCSR_ME) == 0) {                         /* motor not enabled? */
     *data = 0;                                          /* controller held in reset state */
+    if (rg == 003) {                                    /* MADR2 */
+        if (CPUT (CPUT_HSC60|CPUT_HSC90))               /* HSC60 or HSC90? */
+            *data = 2;                                  /* M.std4 present */
+        }
+    sim_debug (DBG_REG, &fl_dev, "fl_madr2 rd: %o\n", *data);
     return SCPE_OK;
     }
 switch (rg) {                                           /* decode pa<2:1> */
@@ -774,6 +837,8 @@ fl_madr2 = 0;
 return SCPE_OK;
 }
 
+/* Direct boot from floppy device (bypass ROM) */
+
 t_stat fl_boot (int32 unitno, DEVICE *dptr)
 {
 extern int32 REGFILE[6][2];
@@ -810,6 +875,39 @@ saved_PC = IOBA_ROM;
 return SCPE_OK;
 }
 
+/* Set/clear media reset */
+
+t_stat pio_set_init (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+return SCPE_OK;
+}
+
+/* Show media reset status */
+
+t_stat pio_show_init (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+if (uptr->flags & UNIT_INIT)
+    fprintf (st, "media init on next boot (hold fault switch)");
+return SCPE_OK;
+}
+
+/* Set HSC online/offline */
+
+t_stat pio_set_onl (UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+return SCPE_OK;
+}
+
+/* Show HSC online status */
+
+t_stat pio_show_onl (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+if (uptr->flags & UNIT_ONL)
+    fprintf (st, "online");
+else fprintf (st, "offline");
+return SCPE_OK;
+}
+
 /* Build I/O space entries for P.ioj */
 
 t_stat pio_build_dib (void)
@@ -834,5 +932,12 @@ if (DM == NULL) {                                       /* First time init */
         return SCPE_MEM;
     }
 sim_vm_cmd = hsc_cmd;
+return SCPE_OK;
+}
+
+t_stat pio_reset (DEVICE *dptr)
+{
+if (dptr->units[0].flags & UNIT_INIT)
+    SDR = SDR | SDR_SW3;                                /* hold fault switch */
 return SCPE_OK;
 }

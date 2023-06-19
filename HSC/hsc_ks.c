@@ -664,14 +664,14 @@ t_bool run;
 if (act == K_RUN) {
     ks_dib.cma = kg_init (&run);
     sim_debug (DBG_TRC, &ks_dev, "K.sdi %d startup: KH = %06o at %o\n", req, ks_dib.cma, (uint16)inst_pc);
-    PUTW (ks_dib.cma + KG_RSL, 1);                        /* KG$RSL - result of self test */
-    PUTW (ks_dib.cma + KG_VRS, 01452);                    /* KG$VRS - version (DS = 3, MC = 42) */
+    PUTW (ks_dib.cma + KG_RSL, 1);                      /* KG$RSL - result of self test */
+    PUTW (ks_dib.cma + KG_VRS, 01452);                  /* KG$VRS - version (DS = 3, MC = 42) */
     if (!run)
         return SCPE_OK;
-    sim_clock_coschedule (&ks_unit[0], tmxr_poll);        /* activate */
-    sim_clock_coschedule (&ks_unit[1], tmxr_poll);        /* activate */
-    sim_clock_coschedule (&ks_unit[2], tmxr_poll);        /* activate */
-    sim_clock_coschedule (&ks_unit[3], tmxr_poll);        /* activate */
+    sim_clock_coschedule (&ks_unit[0], tmxr_poll);      /* activate */
+    sim_clock_coschedule (&ks_unit[1], tmxr_poll);      /* activate */
+    sim_clock_coschedule (&ks_unit[2], tmxr_poll);      /* activate */
+    sim_clock_coschedule (&ks_unit[3], tmxr_poll);      /* activate */
     }
 else {
     sim_debug (DBG_TRC, &ks_dev, "K.sdi %d halt at %o\n", req, (uint16)inst_pc);

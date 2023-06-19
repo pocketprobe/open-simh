@@ -225,6 +225,12 @@ CPUTAB cpu_tab[MOD_MAX] = {
     { "HSC50", SOP_HSC50, OPT_HSC50, MAXMEMSIZE, PSW_F,
        MFPT_F, PAR_F, PDR_F, MM0_F, MM3_F },
     { "HSC70", SOP_HSC70, OPT_HSC70, MAXMEMSIZE, PSW_J,
+       MFPT_J, PAR_J, PDR_J, MM0_J, MM3_J },
+    { "HSC40", SOP_HSC70, OPT_HSC70, MAXMEMSIZE, PSW_J,
+       MFPT_J, PAR_J, PDR_J, MM0_J, MM3_J },
+    { "HSC60", SOP_HSC70, OPT_HSC70, MAXMEMSIZE, PSW_J,
+       MFPT_J, PAR_J, PDR_J, MM0_J, MM3_J },
+    { "HSC90", SOP_HSC70, OPT_HSC70, MAXMEMSIZE, PSW_J,
        MFPT_J, PAR_J, PDR_J, MM0_J, MM3_J }
     };
 
@@ -751,7 +757,7 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
             *data |= MAINT_KDJB | MAINT_POROM;
         if (CPUT (CPUT_93|CPUT_94))
             *data |= MAINT_KDJE | MAINT_POROM;
-        if (CPUT (CPUT_HSC70))
+        if (CPUT (CPUT_HSC70|CPUT_HSC40|CPUT_HSC60|CPUT_HSC90))
             *data |= MAINT_KPIO | MAINT_POROM;
         return SCPE_OK;
 

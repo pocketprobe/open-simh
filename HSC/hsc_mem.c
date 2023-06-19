@@ -98,6 +98,7 @@ if (ADDR_IS_CMEM (pa)) {
             extern UNIT kh_unit;
             CCYCLE = 04;
             WrxMemW (CM, pa, 0100000);                  /* indicate locked */
+#if 0
             if (pa == kh_dib.cma + 0004) {
 //                sim_printf ("MEM: KH$3WK\n");
                 sim_activate_abs (&kh_unit, 100);
@@ -126,6 +127,7 @@ if (ADDR_IS_CMEM (pa)) {
 //                sim_printf ("MEM: KS$KS0\n");
                 sim_activate_abs (&ks_unit[0], 100);
                 }
+#endif
             }
         else CCYCLE = 01;                               /* read/write cycle */
         CDATA = data;                                   /* data history */

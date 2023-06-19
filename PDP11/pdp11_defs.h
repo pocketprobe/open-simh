@@ -136,7 +136,10 @@
 #define MOD_1194        19
 #define MOD_HSC50       20
 #define MOD_HSC70       21
-#define MOD_T           22
+#define MOD_HSC40       22
+#define MOD_HSC60       23
+#define MOD_HSC90       24
+#define MOD_T           25
 
 #define CPUT_03         (1u << MOD_1103)                /* LSI-11 */
 #define CPUT_04         (1u << MOD_1104)                /* 11/04 */
@@ -160,13 +163,17 @@
 #define CPUT_94         (1u << MOD_1194)                /* 11/94 */
 #define CPUT_HSC50      (1u << MOD_HSC50)               /* HSC50 */
 #define CPUT_HSC70      (1u << MOD_HSC70)               /* HSC70 */
+#define CPUT_HSC40      (1u << MOD_HSC40)               /* HSC40 */
+#define CPUT_HSC60      (1u << MOD_HSC60)               /* HSC60 */
+#define CPUT_HSC90      (1u << MOD_HSC90)               /* HSC90 */
 #define CPUT_T          (1u << MOD_T)                   /* T-11 */
 
 #define CPUT_F          (CPUT_23|CPUT_23P|CPUT_24| \
                          CPUT_HSC50)                    /* all F11's */
 #define CPUT_J          (CPUT_53|CPUT_73|CPUT_73B| \
                          CPUT_83|CPUT_84|CPUT_93| \
-                         CPUT_94|CPUT_HSC70)
+                         CPUT_94|CPUT_HSC70|CPUT_HSC40| \
+                         CPUT_HSC60|CPUT_HSC90)
 #define CPUT_JB         (CPUT_73B|CPUT_83|CPUT_84)      /* KDJ11B */
 #define CPUT_JE         (CPUT_93|CPUT_94)               /* KDJ11E */
 #define CPUT_JU         (CPUT_84|CPUT_94)               /* KTJ11B UBA */

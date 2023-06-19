@@ -619,6 +619,9 @@ MTAB cpu_mod[] = {
 #if defined (HSC)
     { MTAB_XTD|MTAB_VDV, MOD_HSC50, NULL, "HSC50", &cpu_set_model, NULL, NULL, "Set CPU type to HSC50" },
     { MTAB_XTD|MTAB_VDV, MOD_HSC70, NULL, "HSC70", &cpu_set_model, NULL, NULL, "Set CPU type to HSC70" },
+    { MTAB_XTD|MTAB_VDV, MOD_HSC40, NULL, "HSC40", &cpu_set_model, NULL, NULL, "Set CPU type to HSC40" },
+    { MTAB_XTD|MTAB_VDV, MOD_HSC60, NULL, "HSC60", &cpu_set_model, NULL, NULL, "Set CPU type to HSC60" },
+    { MTAB_XTD|MTAB_VDV, MOD_HSC90, NULL, "HSC90", &cpu_set_model, NULL, NULL, "Set CPU type to HSC90" },
 #elif !defined (UC15)
     { MTAB_XTD|MTAB_VDV, MOD_1103, NULL, "11/03", &cpu_set_model, NULL, NULL, "Set CPU type to 11/03" },
     { MTAB_XTD|MTAB_VDV, MOD_1104, NULL, "11/04", &cpu_set_model, NULL, NULL, "Set CPU type to 11/04" },

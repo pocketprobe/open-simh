@@ -106,6 +106,9 @@ extern uint16 *DM;                                      /* Data memory */
 /* P.ioj control/status register */
 
 #define PCSR_ENA        0100000                         /* OCP secure/enable */
+#define PCSR_HSC40      0040000                         /* HSC40 controller type */
+#define PCSR_HSC90      0010000                         /* HSC90 controller type */
+#define PCSR_HSC60      0050000                         /* HSC60 controller type */
 #define PCSR_CBK        0004000                         /* control mem bank swap */
 #define PCSR_PBK        0002000                         /* program mem bank swap */
 #define PCSR_PG2        0000400                         /* boot ROM page select */

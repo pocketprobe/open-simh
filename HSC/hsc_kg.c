@@ -25,6 +25,7 @@
 */
 
 #include "pdp11_defs.h"
+#include "pdp11_cpumod.h"
 #include "hsc_kg.h"
 
 extern int32 trap_req;
@@ -360,6 +361,7 @@ if (qh == 0) {                                          /* queue empty */
     PUTP (q + Q_HEAD, itm);                             /* set head */
     PUTP (q + Q_TAIL, itm);                             /* set tail */
     dt = GETP (ks_dib.cma + 0000 + Q_HEAD);
+#if 0
     if ((q + Q_HEAD < dt) && (q + Q_HEAD > (dt - 0400))) {
 //        sim_printf ("KG: DRAT\n");
         sim_activate_abs (&ks_unit[0], 0);
@@ -388,6 +390,7 @@ if (qh == 0) {                                          /* queue empty */
 //        sim_printf ("KG: KS$KS0\n");
         sim_activate_abs (&ks_unit[0], 0);
         }
+#endif
     }
 else {                                                  /* queue is not empty */
     qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
@@ -417,8 +420,16 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* locate all HSC device
     dibp = (HDIB *)dptr->ctxt;
     if (dibp->init == NULL)                             /* K.pio? */
         KSTS[0] = dibp;                                 /* must be in slot 0 */
-    else if (dibp->sts == K_CI)                         /* K.ci? */
+    else if (dibp->sts == K_CI) {                       /* K.ci? */
+        if (CPUT (CPUT_HSC60|CPUT_HSC90))               /* HSC60 or HSC90? */
+            dibp->sts = K_CI2_MICRO;                    /* change type to K.ci2 */
         KSTS[1] = dibp;                                 /* must be in slot 1 */
+        }
+    else if (dibp->sts == K_CI2_MICRO) {                /* K.ci2? */
+        if (CPUT (CPUT_HSC40|CPUT_HSC70))               /* HSC40 or HSC70? */
+            dibp->sts = K_CI;                           /* change type to K.ci */
+        KSTS[1] = dibp;                                 /* must be in slot 1 */
+        }
     else {
         for (j = 2; j < 10; j++) {                      /* find a free slot */
             if (KSTS[j] == NULL) {
