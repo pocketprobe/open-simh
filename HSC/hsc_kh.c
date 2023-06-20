@@ -933,7 +933,6 @@ t_stat r;
 
 sim_debug (DBG_TRC, &kh_dev, "FRB: %07o, send data\n", frb);
 
-kg_print_struct (NULL, &kh_unit, frb, frb_stc);
 hm = GETP (frb + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
@@ -988,7 +987,6 @@ uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
-kg_print_struct (NULL, &kh_unit, frb, frb_stc);
 hm = GETP (frb + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
@@ -1021,17 +1019,28 @@ if (r != SCPE_OK)
 
 void kh_process_frb (uint32 frb, uint32 *cq)
 {
-uint32 rte, opc;
+uint32 rte, opc, bd, scnt;
+uint32 kh = kh_dib.cma;
 
 *cq = 0;
 rte = GETP (frb + F_RTE);                               /* get route */
 opc = GETB (rte + V_OPCD);                              /* get opcode */
+kg_print_struct (NULL, &kh_unit, frb, frb_stc);
 if (opc == V_SD)                                        /* send data */
     kh_send_data (frb);
 else if (opc == V_RD)                                   /* request data */
     kh_request_data (frb);
 else if (opc == 3)                                      /* send data? */
     kh_send_data (frb);
+else if (opc == 4) {                                    /* just allocate buffers */
+    scnt = GETB (frb + F_SCNT);                         /* sector count */
+    for (int i = 0; i < scnt; i++) {
+        bd = GETP (kh + KG_FBU);                        /* get a free data memory buffer */
+        bd = kg_receive (bd);
+        kg_send (frb + F_BFHD, bd);
+        kg_route_frb (&kh_unit, kh, frb, TRUE);
+        }
+    }
 else
     sim_printf ("Unknown route opcode for K.ci: %o\n", opc);
 }
