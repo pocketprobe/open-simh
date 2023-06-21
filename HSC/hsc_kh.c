@@ -391,6 +391,7 @@ t_stat kh_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_set_node (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat kh_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
 DEBTAB kh_debug[] = {
     { "REG",    DBG_REG },
@@ -425,6 +426,8 @@ MTAB kh_mod[] = {
       NULL, &kg_show_req, NULL },
     { MTAB_XTD|MTAB_VDV, 0, "ADDRESS", "ADDRESS",
       NULL, &kg_show_addr, NULL },
+    { MTAB_XTD | MTAB_VDV, 0, "TYPE", NULL,
+      NULL, &kh_show_ctype, NULL, "Display controller type" },
     { MTAB_XTD|MTAB_VDV, 0, "NODE", "NODE",
       &ci_set_node, &ci_show_node },
     { MTAB_XTD|MTAB_VDV, 0, "GROUP", "GROUP",
@@ -441,7 +444,7 @@ MTAB kh_mod[] = {
     };
 
 DEVICE kh_dev = {
-    "KCI", &kh_unit, kh_reg, kh_mod,
+    "KH", &kh_unit, kh_reg, kh_mod,
     1, DEV_RDX, 16, 1, DEV_RDX, 16,
     NULL, NULL, &kh_reset,
     NULL, &ci_attach, &ci_detach,
@@ -1213,6 +1216,26 @@ while (cb != 0) {
     cb = GETP (cb + CB_TLK);                            /* get next connection */
     }
 
+return SCPE_OK;
+}
+
+/* Show controller type */
+
+t_stat kh_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+DEVICE *dptr = find_dev_from_unit (uptr);
+HDIB *dibp = (HDIB *) dptr->ctxt;
+
+switch (dibp->sts) {
+    case K_CI:
+        fprintf (st, "K.ci host interface");
+        break;
+
+    case K_CI2:
+    case K_CI2_MICRO:
+        fprintf (st, "K.ci2 host interface");
+        break;
+    }
 return SCPE_OK;
 }
 
