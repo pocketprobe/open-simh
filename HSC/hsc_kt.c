@@ -465,6 +465,7 @@ extern int32 tmxr_poll;                                 /* calibrated delay */
 t_stat kt_svc (UNIT *uptr);
 t_stat kt_reset (DEVICE *dptr);
 t_stat kt_init (uint16 req, uint16 act);
+t_stat kt_poll (DEVICE *dptr, uint32 addr, int32 interval);
 t_stat kt_attach (UNIT *uptr, CONST char *cptr);
 t_stat kt_detach (UNIT *uptr);
 t_stat kt_set_wlk (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -505,7 +506,7 @@ DEBTAB kt_debug[] = {
 HDIB kt_dib = {
     { 0, 0, NULL, NULL,
       0, 0, 0, { NULL } },
-    NULL, K_STI, 0, &kt_init, NULL
+    NULL, K_STI, 0, &kt_init, &kt_poll
     };
 
 UNIT kt_unit[KT_MAXDR] = {
@@ -598,6 +599,30 @@ else {
 //    sim_cancel (&kt_unit[2]);
 //    sim_cancel (&kt_unit[3]);
     kt_dib.cma = 0;
+    }
+return SCPE_OK;
+}
+
+t_stat kt_poll (DEVICE *dptr, uint32 addr, int32 interval)
+{
+HDIB *dibp = (HDIB *)dptr->ctxt;
+uint32 ksa, tb, i;
+
+for (i = 0; i < dptr->numunits; i++) {
+    if (addr == dibp->cma + KT_IPQ) {                   /* addr = IPQ? */
+        sim_activate_abs (&dptr->units[i], interval);   /* yes, activate unit */
+        break;
+        }
+    tb = GETP (dibp->cma + KT_IPQ);                     /* get T$ pointer */
+    if ((addr > (tb + T_FRBQ)) && (addr < (tb + T_FRBE))) { /* addr within T$? */
+        sim_activate_abs (&dptr->units[i], interval);   /* yes, activate unit */
+        break;
+        }
+    ksa = dibp->cma + KT_S0 + KSA_DHD + (i * 16);       /* drive state area */
+    if (addr == ksa) {
+        sim_activate_abs (&dptr->units[i], interval);   /* yes, activate unit */
+        break;
+        }
     }
 return SCPE_OK;
 }
