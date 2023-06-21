@@ -1291,7 +1291,7 @@ opc = GETB (rte + V_OPCD);                              /* get opcode from route
 
 kg_print_struct (NULL, uptr, frb, frb_stc);
 sim_debug_unit (DBG_FRB, uptr, "%07o, %s: %d, CYL: %d, TRK: %d, SCT: %d, SCNT: %d, OPC: %o\n", frb, ot_names[ot], lbn, cyl, trk, sct, scnt, opc);
-if (opc == V_DR) {                                     /* disk read? */
+if (opc == V_DR) {                                     /* disk read */
     for (int i = 0; i < scnt; i++) {
         bd = GETP (ks_dib.cma + KG_FBU);               /* get a free data memory buffer */
         bd = kg_receive (bd);
@@ -1331,7 +1331,7 @@ if (opc == V_DR) {                                     /* disk read? */
         lbn++;
         }
     }
-else if (opc == V_DW) {                                 /* disk write? */
+else if (opc == V_DW) {                                 /* disk write */
     bd = GETP (frb + F_BFHD);
     for (int k = 0; k < scnt; k++) {
         if (bd == 0)
@@ -1352,6 +1352,9 @@ else if (opc == V_DW) {                                 /* disk write? */
         sct++;
         lbn++;
         }
+    }
+else if ((opc == V_FI) || (opc == V_FS)) {              /* format */
+    /* no operation */
     }
 else
     sim_printf ("Unknown route opcode for K.sdi: %o\n", opc);

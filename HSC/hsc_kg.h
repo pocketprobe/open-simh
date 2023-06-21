@@ -95,8 +95,10 @@
 #define V_OPCD          0001                            /* opcode */
 #define  V_SD           0001                            /* send data to host */
 #define  V_RD           0002                            /* request data from host */
-#define  V_DR           0027                            /* disk read */
-#define  V_DW           0245                            /* disk write */
+#define  V_DR           0027                            /* select head and read */
+#define  V_FI           0053                            /* format on index */
+#define  V_FS           0115                            /* format on sector */
+#define  V_DW           0245                            /* select head and write */
 #define V_SUCC          0002                            /* success destination address */
 #define V_CTX           0004                            /* context */
 #define V_AERR          0006                            /* error destination address */
