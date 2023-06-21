@@ -235,6 +235,7 @@ extern void kg_route_frb (UNIT *uptr, uint32 kg, uint32 frb, t_bool sts);
 extern uint32 kg_receive (uint32 q);
 extern void kg_send (uint32 q, uint32 itm);
 extern void kg_poll (uint32 addr, int32 interval);
+extern t_stat kg_svc (UNIT *uptr);
 
 extern int16 inst_pc;
 extern STDEF kg_stc[];

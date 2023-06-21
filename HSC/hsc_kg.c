@@ -28,11 +28,7 @@
 #include "pdp11_cpumod.h"
 #include "hsc_kg.h"
 
-extern int32 trap_req;
-extern int32 ipl;
-extern HDIB *KSTS[10];
-
-extern int32 calc_ints (int32 nipl, int32 trq);
+#define KG_MAX_QUEUE    20
 
 STDEF kg_stc[] = {
     { "KG$TLK", KG_TLK, 2, ST_INT },
@@ -75,6 +71,19 @@ STDEF c_stc[] = {
     { "C.CNT ", C_CNT , 2, ST_INT },
     { NULL }
     };
+
+typedef struct {
+    uint32 q;
+    uint32 itm;
+} KG_LKQ;
+
+KG_LKQ kg_lkq[KG_MAX_QUEUE];
+
+extern int32 trap_req;
+extern int32 ipl;
+extern HDIB *KSTS[10];
+
+extern int32 calc_ints (int32 nipl, int32 trq);
 
 /* Search control memory to find the KI structure.
  * This starts with a pattern of alternating
@@ -311,10 +320,19 @@ return itm;
 
 void kg_send (uint32 q, uint32 itm)
 {
-uint32 qh, qt, qn, qf, tq, sq, mask, pcb;
+uint32 qh, qt, qn, qf, tq, sq, mask, pcb, i;
 
 if (Q_LOCKED (q + Q_HEAD)) {
     sim_printf ("kg_send: queue at address %06o is locked\n", q);
+    for (i = 0; i < KG_MAX_QUEUE; i++) {
+        if (kg_lkq[i].q == 0) {                         /* free entry? */
+            kg_lkq[i].q = q;                            /* add to lock queue */
+            kg_lkq[i].itm = itm;
+            q = 0;
+            }
+        }
+    if (q != 0)
+        sim_printf ("kg_send: not enough free entries in lock queue\n");
     return;
     }
 qh = GETP (q + Q_HEAD);
@@ -365,6 +383,8 @@ else {                                                  /* queue is not empty */
 //sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
 }
 
+/* Notify K devices of control memory activity */
+
 void kg_poll (uint32 addr, int32 interval)
 {
 uint32 i;
@@ -383,6 +403,27 @@ for (i = 0; i < 10; i++) {                              /* for each HSC device *
     }
 }
 
+/* Generic K service routine */
+
+t_stat kg_svc (UNIT *uptr)
+{
+uint32 i, q, itm;
+
+for (i = 0; i < KG_MAX_QUEUE; i++) {
+    q = kg_lkq[i].q;                                    /* get queue head */
+    if (q != 0) {                                       /* valid entry? */
+        if (!Q_LOCKED (q + Q_HEAD)) {                   /* not locked? */
+            itm = kg_lkq[i].itm;                        /* get item */
+            kg_lkq[i].q = 0;                            /* clear lock queue entry */
+            kg_lkq[i].itm = 0;
+            sim_printf ("kg_svc: completing send for item %07o to queue %07o\n", itm, q);
+            kg_send (q, itm);                           /* send to transmission queue */
+            }
+        }
+    }
+return SCPE_OK;
+}
+
 /* Build the dispatch table for the Ks */
 
 t_stat hsc_build_dib ()
@@ -391,6 +432,11 @@ DEVICE *dptr;
 HDIB *dibp;
 t_stat r;
 uint32 i, j;
+
+for (i = 0; i < KG_MAX_QUEUE; i++) {                    /* clear lock queue */
+    kg_lkq[i].q = 0;
+    kg_lkq[i].itm = 0;
+    }
 
 for (j = 0; j < 10; j++)
     KSTS[j] = NULL;                                     /* set all slots empty */

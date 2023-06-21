@@ -526,11 +526,11 @@ REG kt_reg[] = {
 
 MTAB kt_mod[] = {
     { MTAB_XTD|MTAB_VDV, 0, "SLOT", "SLOT",
-      NULL, &kg_show_req, NULL },
+      NULL, &kg_show_req, NULL, "Backplane slot number" },
     { MTAB_XTD|MTAB_VDV, 0, "ADDRESS", "ADDRESS",
-      NULL, &kg_show_addr, NULL },
-    { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "CONTROL", "CONTROL",
-      NULL, &kt_show_ctrl, NULL },
+      NULL, &kg_show_addr, NULL, "Control memory address" },
+    { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "CONTROL", NULL,
+      NULL, &kt_show_ctrl, NULL, "Display K.sti control memory area" },
     { UNIT_WLK, 0, NULL, "WRITEENABLED",
       &kt_set_wlk, NULL, NULL, "Write enable tape drive" },
     { UNIT_WLK, UNIT_WLK, NULL, "LOCKED",
@@ -1303,6 +1303,7 @@ else if (!Q_LOCKED (ksa + KSA_IND)) {                   /* drive state area lock
     kt_process_dcb (uptr, kt, port);                    /* process DCB queue */
     kt_process_ipq (uptr, kt);                          /* process transfer queue */
     }
+kg_svc (uptr);
 sim_clock_coschedule (uptr, tmxr_poll);                 /* reactivate */
 return SCPE_OK;
 }

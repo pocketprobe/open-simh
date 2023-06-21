@@ -423,23 +423,23 @@ REG kh_reg[] = {
 
 MTAB kh_mod[] = {
     { MTAB_XTD|MTAB_VDV, 0, "SLOT", "SLOT",
-      NULL, &kg_show_req, NULL },
+      NULL, &kg_show_req, NULL, "Backplane slot number" },
     { MTAB_XTD|MTAB_VDV, 0, "ADDRESS", "ADDRESS",
-      NULL, &kg_show_addr, NULL },
+      NULL, &kg_show_addr, NULL, "Control memory address" },
     { MTAB_XTD | MTAB_VDV, 0, "TYPE", NULL,
       NULL, &kh_show_ctype, NULL, "Display controller type" },
     { MTAB_XTD|MTAB_VDV, 0, "NODE", "NODE",
-      &ci_set_node, &ci_show_node },
+      &ci_set_node, &ci_show_node, NULL, "Display CI node number" },
     { MTAB_XTD|MTAB_VDV, 0, "GROUP", "GROUP",
-      &ci_set_group, &ci_show_group },
+      &ci_set_group, &ci_show_group, NULL, "Display CI group" },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "LINKS", NULL,
-      NULL, &ci_show_links, NULL },
+      NULL, &ci_show_links, NULL, "Display established CI links" },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO, 0, "CONTROL", NULL,
-      NULL, &kh_show_ctrl, NULL },
+      NULL, &kh_show_ctrl, NULL, "Display K.ci control memory area" },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "SB", NULL,
-      NULL, &kh_show_sb, NULL },
+      NULL, &kh_show_sb, NULL, "Display system block for a specific node" },
     { MTAB_XTD|MTAB_VDV|MTAB_NMO|MTAB_SHP, 0, "CB", NULL,
-      NULL, &kh_show_cb, NULL },
+      NULL, &kh_show_cb, NULL, "Display connection blocks for a specific node" },
     { 0 }
     };
 
@@ -462,7 +462,6 @@ t_bool run;
 if (act == K_RUN) {
     kh_dib.cma = kg_init (&run);
     sim_debug (DBG_TRC, &kh_dev, "K.ci startup: KH = %06o at %o\n", kh_dib.cma, (uint16)inst_pc);
-//    PUTW (kh_dib.cma + KG_RSL, 1);                      /* KG$RSL - result of self test */
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
     if (!run)
@@ -1139,6 +1138,7 @@ for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
         return r;
     };
 
+kg_svc (uptr);
 return ci_port_svc (uptr);
 }
 

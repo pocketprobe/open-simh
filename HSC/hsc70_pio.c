@@ -153,7 +153,7 @@ DIB cwin_dib = { IOBA_CWIN, IOLN_CWIN, &cwin_rd, &cwin_wr, 0 };
 
 /* debugging bitmaps */
 
-#define DBG_REG         0x0001                          /* trace routine calls */
+#define DBG_REG         0x0001                          /* display register read/writes */
 
 DEBTAB pio_debug[] = {
     { "REG",  DBG_REG,   "register access" },
@@ -176,9 +176,9 @@ REG pio_reg[] = {
 
 MTAB pio_mod[] = {
     { MTAB_XTD|MTAB_VDV, 0, "SLOT", "SLOT",
-      NULL, &kg_show_req, NULL },
+      NULL, &kg_show_req, NULL, "Backplane slot number" },
     { MTAB_XTD|MTAB_VDV, 0, "ADDRESS", "ADDRESS",
-      &set_addr, &show_addr, NULL },
+      &set_addr, &show_addr, NULL, "Bus address" },
     { UNIT_ONL, 0, NULL, "OFFLINE",
       &pio_set_onl, NULL, NULL, "Set HSC state to offline" },
     { UNIT_ONL, UNIT_ONL, NULL, "ONLINE",
