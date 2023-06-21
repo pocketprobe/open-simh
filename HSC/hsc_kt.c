@@ -505,7 +505,7 @@ DEBTAB kt_debug[] = {
 HDIB kt_dib = {
     { 0, 0, NULL, NULL,
       0, 0, 0, { NULL } },
-    K_STI, 0, &kt_init
+    NULL, K_STI, 0, &kt_init, NULL
     };
 
 UNIT kt_unit[KT_MAXDR] = {

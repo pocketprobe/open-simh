@@ -163,7 +163,7 @@ DEBTAB pio_debug[] = {
 HDIB pio_dib = {
     { IOBA_PIO, IOLN_PIO, &pio_rd, &pio_wr,
       0, 0, 0, { NULL } },
-    K_PIO, 0, NULL
+    NULL, K_PIO, 0, NULL, NULL
     };
 
 UNIT pio_unit = { UDATA (NULL, UNIT_ONL, 0) };

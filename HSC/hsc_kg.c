@@ -353,44 +353,9 @@ if (qh == 1) {                                          /* software process wait
         }
     }
 if (qh == 0) {                                          /* queue empty */
-    extern HDIB kh_dib;
-    extern HDIB ks_dib;
-    extern UNIT ks_unit[4];
-    extern UNIT kh_unit;
-    uint32 dt;
     PUTP (q + Q_HEAD, itm);                             /* set head */
     PUTP (q + Q_TAIL, itm);                             /* set tail */
-    dt = GETP (ks_dib.cma + 0000 + Q_HEAD);
-#if 0
-    if ((q + Q_HEAD < dt) && (q + Q_HEAD > (dt - 0400))) {
-//        sim_printf ("KG: DRAT\n");
-        sim_activate_abs (&ks_unit[0], 0);
-        }
-    else if (q + Q_HEAD == kh_dib.cma + 0004) {
-//        sim_printf ("KG: KH$3WK\n");
-        sim_activate_abs (&kh_unit, 0);
-        }
-    else if (q + Q_HEAD == kh_dib.cma + 0010) {
-//        sim_printf ("KG: KH$2WK\n");
-        sim_activate_abs (&kh_unit, 0);
-        }
-    else if (q + Q_HEAD == kh_dib.cma + 0014) {
-//        sim_printf ("KG: KH$1WK\n");
-        sim_activate_abs (&kh_unit, 0);
-        }
-    else if (q + Q_HEAD == kh_dib.cma + 0020) {
-//        sim_printf ("KG: KH$0WK\n");
-        sim_activate_abs (&kh_unit, 0);
-        }
-    else if (q + Q_HEAD == ks_dib.cma + 0000) {
-//        sim_printf ("KG: KS$0HD\n");
-        sim_activate_abs (&ks_unit[0], 0);
-        }
-    else if (q + Q_HEAD == ks_dib.cma + 0144) {
-//        sim_printf ("KG: KS$KS0\n");
-        sim_activate_abs (&ks_unit[0], 0);
-        }
-#endif
+    kg_poll (q + Q_HEAD, 0);                            /* poll devices */
     }
 else {                                                  /* queue is not empty */
     qt = GETP (q + Q_TAIL);                             /* get the tail pointer */
@@ -398,6 +363,24 @@ else {                                                  /* queue is not empty */
     PUTP (q + Q_TAIL, itm);                             /* update queue tail pointer */
     }
 //sim_printf ("Item %06o added to queue at address %06o\n", itm, q);
+}
+
+void kg_poll (uint32 addr, int32 interval)
+{
+uint32 i;
+HDIB *dibp;
+
+for (i = 0; i < 10; i++) {                              /* for each HSC device */
+    dibp = KSTS[i];
+    if (dibp != NULL) {                                 /* device in this slot? */
+        if (dibp->dptr->flags & DEV_DIS)                /* disabled? */
+            continue;                                   /* skip */
+        if (dibp->cma == 0)                             /* not initialised? */
+            continue;                                   /* skip */
+        if (dibp->poll)                                 /* supports poll? */
+            dibp->poll (dibp->dptr, addr, interval);    /* notify device */
+        }
+    }
 }
 
 /* Build the dispatch table for the Ks */
@@ -418,6 +401,7 @@ for (i = 0; (dptr = sim_devices[i]) != NULL; i++) {     /* locate all HSC device
     if (dptr->flags & DEV_DIS)                          /* skip if disabled */
         continue;
     dibp = (HDIB *)dptr->ctxt;
+    dibp->dptr = dptr;                                  /* setup back pointer */
     if (dibp->init == NULL)                             /* K.pio? */
         KSTS[0] = dibp;                                 /* must be in slot 0 */
     else if (dibp->sts == K_CI) {                       /* K.ci? */

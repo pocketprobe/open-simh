@@ -538,6 +538,7 @@ uint8 ks_mode = 0;
 t_stat ks_svc (UNIT *uptr);
 t_stat ks_reset (DEVICE *dptr);
 t_stat ks_init (uint16 req, uint16 act);
+t_stat ks_poll (DEVICE *dptr, uint32 addr, int32 interval);
 t_stat ks_attach (UNIT *uptr, CONST char *cptr);
 t_stat ks_detach (UNIT *uptr);
 t_stat ks_set_wlk (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
@@ -574,7 +575,7 @@ DEBTAB ks_debug[] = {
 HDIB ks_dib = {
     { 0, 0, NULL, NULL,
       0, 0, 0, { NULL } },
-    K_SDI, 0, &ks_init
+    NULL, K_SDI, 0, &ks_init, &ks_poll
     };
 
 UNIT ks_unit[KS_MAXDR] = {
@@ -680,6 +681,31 @@ else {
     sim_cancel (&ks_unit[2]);
     sim_cancel (&ks_unit[3]);
     ks_dib.cma = 0;
+    }
+return SCPE_OK;
+}
+
+t_stat ks_poll (DEVICE *dptr, uint32 addr, int32 interval)
+{
+HDIB *dibp = (HDIB *)dptr->ctxt;
+uint32 ksh, ksa, dt, i;
+
+for (i = 0; i < dptr->numunits; i++) {
+    ksh = dibp->cma + KS_0HD + (i * 4);
+    if (addr == ksh) {                                  /* addr = DRAT queue? */
+        sim_activate_abs (&dptr->units[i], interval);   /* yes, activate unit */
+        break;
+        }
+    dt = GETP (ksh);                                    /* get DRAT pointer */
+    if ((addr < dt) && (addr > (dt - 0400))) {          /* addr within DRAT? */
+        sim_activate_abs (&dptr->units[i], interval);   /* yes, activate unit */
+        break;
+        }
+    ksa = dibp->cma + KS_S0 + KSA_DHD + (i * 16);       /* drive state area */
+    if (addr == ksa) {
+        sim_activate_abs (&dptr->units[i], interval);   /* yes, activate unit */
+        break;
+        }
     }
 return SCPE_OK;
 }
@@ -1392,6 +1418,8 @@ if (fc > 0)
 PUTW (dt + DT_CNT, cnt);                                /* update counter */
 
 if (cnt == 0) {                                         /* all operation complete? */
+    if (Q_LOCKED (cq))                                  /* completion queue locked? */
+        return;                                         /* try again later */
     dt = kg_receive (ksh + Q_HEAD);                     /* dequeue DRAT */
     cq = GETP (dt + DT_CQ);                             /* get DRAT completion queue */
     kg_send (cq, dt);                                   /* send DRAT to completion queue */

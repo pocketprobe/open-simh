@@ -76,9 +76,11 @@
 
 struct hsc_dib {
     DIB                 dib;                            /* PDP-11 device information block */
+    DEVICE              *dptr;                          /* device back pointer */
     uint16              sts;                            /* status code */
     uint32              cma;                            /* control memory address */
     t_stat              (*init)(uint16 req, uint16 act);
+    t_stat              (*poll)(DEVICE *dptr, uint32 addr, int32 interval);
     };
 
 typedef struct hsc_dib HDIB;

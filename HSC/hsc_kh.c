@@ -384,12 +384,13 @@ uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags
 
 t_stat kh_svc (UNIT *uptr);
 t_stat kh_reset (DEVICE *dptr);
+t_stat kh_init (uint16 req, uint16 act);
+t_stat kh_poll (DEVICE *dptr, uint32 addr, int32 interval);
 t_stat kh_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_set_node (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
-t_stat kh_init (uint16 req, uint16 act);
 
 DEBTAB kh_debug[] = {
     { "REG",    DBG_REG },
@@ -410,7 +411,7 @@ DEBTAB kh_debug[] = {
 HDIB kh_dib = {
     { 0, 0, NULL, NULL,
       0, 0, 0, { NULL } },
-    K_CI, 0, &kh_init
+    NULL, K_CI, 0, &kh_init, &kh_poll
     };
 
 UNIT kh_unit = { UDATA (&kh_svc, 0, 0) };
@@ -471,6 +472,19 @@ else {
     ci_set_state (&kh_unit, PORT_UNINIT);
     kh_dib.cma = 0;
     }
+return SCPE_OK;
+}
+
+t_stat kh_poll (DEVICE *dptr, uint32 addr, int32 interval)
+{
+if (addr == kh_dib.cma + KH_3WK)
+    sim_activate_abs (&kh_unit, interval);
+else if (addr == kh_dib.cma + KH_2WK)
+    sim_activate_abs (&kh_unit, interval);
+else if (addr == kh_dib.cma + KH_1WK)
+    sim_activate_abs (&kh_unit, interval);
+else if (addr == kh_dib.cma + KH_0WK)
+    sim_activate_abs (&kh_unit, interval);
 return SCPE_OK;
 }
 
