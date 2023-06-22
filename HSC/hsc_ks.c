@@ -1421,8 +1421,6 @@ if (fc > 0)
 PUTW (dt + DT_CNT, cnt);                                /* update counter */
 
 if (cnt == 0) {                                         /* all operation complete? */
-    if (Q_LOCKED (cq))                                  /* completion queue locked? */
-        return;                                         /* try again later */
     dt = kg_receive (ksh + Q_HEAD);                     /* dequeue DRAT */
     cq = GETP (dt + DT_CQ);                             /* get DRAT completion queue */
     kg_send (cq, dt);                                   /* send DRAT to completion queue */
