@@ -177,6 +177,65 @@ static STDEF hmct_stc[] = {
 #define HM_OFF          0034                            /* buffer offset */
 #define HM_BNM          0040                            /* buffer name */
 #define HM_CON          0044                            /* connection ID */
+#define HM_BLK          0050
+#define HM_SCT          0060
+#define HM_SLB          0064
+#define HM_RSB          0064
+#define HM_RPL          0066
+#define HM_ISC          0070
+#define HM_RF           0070
+#define HM_SCA          0072
+#define HM_OMD          0074
+#define HM_OBC          0076
+#define HM_CST          0102
+#define HM_VUP          0102
+#define HM_DCH          0104
+#define HM_SCQ          0104
+#define HM_CCX          0104
+#define HM_XTN          0106
+#define HM_FLG          0106
+#define HM_CFL          0107
+#define HM_XFL          0110
+#define HM_DUB          0112
+#define HM_SCX          0114
+#define HM_RTN          0116
+
+static STDEF hmxf_stc[] = {
+    { "HM$CR ", HM_CR,  4, ST_INT },
+    { "HM$DX ", HM_DX,  2, ST_INT },
+    { "UNUSED", 0006,   2, ST_INT },
+    { "HM$LOF", HM_LOF, 2, ST_INT },
+    { "HM$CB ", HM_CB,  2, ST_INT },
+    { "UNUSED", 0014,  12, ST_INT },
+    { "HM$BCT", HM_BCT, 4, ST_INT },
+    { "HM$OFF", HM_OFF, 4, ST_INT },
+    { "HM$BNM", HM_BNM, 4, ST_INT },
+    { "HM$CON", HM_CON, 4, ST_INT },
+    { "HM$BLK", HM_BLK, 4, ST_INT },
+    { "UNUSED", 0054,   4, ST_INT },
+    { "HM$SCT", HM_SCT, 4, ST_INT },
+    { "HM$SLB", HM_SLB, 0, ST_INT },
+    { "HM$RSB", HM_RSB, 2, ST_INT },
+    { "HM$RPL", HM_RPL, 2, ST_INT },
+    { "HM$ISC", HM_ISC, 0, ST_INT },
+    { "HM$RF ", HM_RF,  2, ST_INT },
+    { "HM$SCA", HM_SCA, 2, ST_INT },
+    { "HM$OMD", HM_OMD, 2, ST_INT },
+    { "HM$OBC", HM_OBC, 4, ST_INT },
+    { "HM$CST", HM_CST, 0, ST_INT },
+    { "HM$VUP", HM_VUP, 2, ST_INT },
+    { "HM$DCH", HM_DCH, 0, ST_INT },
+    { "HM$SCQ", HM_SCQ, 0, ST_INT },
+    { "HM$CCX", HM_CCX, 2, ST_INT },
+    { "HM$XTN", HM_XTN, 0, ST_INT },
+    { "HM$FLG", HM_FLG, 1, ST_INT },
+    { "HM$CFL", HM_CFL, 1, ST_INT },
+    { "HM$XFL", HM_XFL, 2, ST_INT },
+    { "HM$DUB", HM_DUB, 2, ST_INT },
+    { "HM$SCX", HM_SCX, 2, ST_INT },
+    { "HM$RTN", HM_RTN, 2, ST_INT },
+    { NULL }
+    };
 
 /* system block */
 
@@ -952,6 +1011,7 @@ sim_debug (DBG_TRC, &kh_dev, "FRB: %07o, send data\n", frb);
 hm = GETP (frb + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
+kg_print_struct (NULL, &kh_unit, hm, hmxf_stc);
 pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
 pkt.data[PPD_STATUS] = 0;                               /* status */
 pkt.data[PPD_OPC] = OPC_SNDDAT;                         /* opcode */
@@ -960,9 +1020,9 @@ pkt.data[PPD_FLAGS] = 0;                                /* flags */
 
 con = GETL (hm + HM_CON);
 bnm = GETL (hm + HM_BNM);
-bct = GETL (hm + HM_BCT);
-roff = GETL (hm + HM_OFF);
+bct = GETB (frb + F_SCNT) * 512;
 soff = GETL (frb + F_OFF);
+roff = GETL (hm + HM_OFF) + soff;
 
 CI_PUT32 (pkt.data, PPD_LCONID, con);                   /* local connection ID */
 CI_PUT32 (pkt.data, PPD_RSPID, 1);                      /* local response ID */
@@ -1006,6 +1066,7 @@ t_stat r;
 hm = GETP (frb + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
+kg_print_struct (NULL, &kh_unit, hm, hmxf_stc);
 pkt.length = CI_DATHDR;
 pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
 pkt.data[PPD_STATUS] = 0;                               /* status */
@@ -1015,9 +1076,9 @@ pkt.data[PPD_FLAGS] = 0;                                /* flags */
 
 con = GETL (hm + HM_CON);
 bnm = GETL (hm + HM_BNM);
-bct = GETL (hm + HM_BCT);
+bct = GETB (frb + F_SCNT) * 512;
 roff = GETL (hm + HM_OFF);
-soff = GETL (frb + F_OFF);
+soff = GETL (frb + F_OFF) + roff;
 
 CI_PUT32 (pkt.data, PPD_LCONID, con);                   /* local connection ID */
 CI_PUT32 (pkt.data, PPD_RSPID, 1);                      /* local response ID */
