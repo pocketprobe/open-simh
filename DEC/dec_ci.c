@@ -1377,7 +1377,7 @@ for (i = 0; i < CI_MAX_NODES; i++) {
             }
         pkt->offset = pkt->offset + r;
         if (pkt->offset < pkt->length)                  /* not all bytes received? */
-            return SCPE_OK;                             /* try again later */
+            break;                                      /* try again later */
         if (pkt->length == PPD_HDR) {
             pkt->length = CI_GET16 (pkt->data, 0);      /* get total packet length */
             if (pkt->length > CI_MAXFR) {               /* check length is valid */
