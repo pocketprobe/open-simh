@@ -83,6 +83,7 @@
 #define PPD_SBOFF       0x20                            /* send buffer offset */
 #define PPD_RBNAM       0x24                            /* receive buffer name */
 #define PPD_RBOFF       0x28                            /* receive buffer offset */
+#define PPD_DATA        0x2C                            /* block data */
 
 /* Transmit Opcodes */
 

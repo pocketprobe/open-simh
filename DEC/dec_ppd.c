@@ -182,7 +182,6 @@ t_stat r = SCPE_OK;
 pkt.node = bdt->node;                                   /* dest port */
 pkt.path = CI_PATH_AUTO;
 pkt.data[CI_OPC] = OPC_SNTDAT;                          /* opcode */
-// TODO: Need to set flags (multiple)
 CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
 CI_PUTL (pkt.data, PPD_LCONID, bdt->bd[BD_CON]);        /* local connection ID */
 CI_PUTL (pkt.data, PPD_RSPID, bdt->rspid);              /* local response ID */
@@ -223,7 +222,6 @@ pkt.length = LEN_DATREQ;
 pkt.node = bdt->node;                                   /* dest port */
 pkt.path = CI_PATH_AUTO;
 CI_PUTB (pkt.data, CI_OPC, OPC_DATREQ0);                /* opcode */
-// TODO: Need to set flags (multiple, last packet)
 CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
 CI_PUTL (pkt.data, PPD_LCONID, bdt->bd[BD_CON]);        /* local connection ID */
 CI_PUTL (pkt.data, PPD_RSPID, bdt->rspid);              /* local response ID */

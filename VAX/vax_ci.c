@@ -386,8 +386,10 @@ ci_mmu.glr = (ci_mmu.glr << 2);
 
 t_stat ci_send_data (UNIT *uptr, PPD_PKT *pkt)
 {
-uint32 len, xfrsz, bd, sboff, rboff, pte;
-uint16 sbnam, snd_key, flags, key;
+uint32 len, xfrsz, bd, sbnam, sboff, rbnam, rboff, pte, opc;
+uint32 xctid[2];
+uint16 snd_key, flags, key;
+CI_PKT blk;
 t_stat r;
 
 xfrsz = CI_GETL (pkt->data, PPD_XFRSZ);
@@ -405,20 +407,33 @@ sboff = sboff + (flags & BD_M_OFF);                     /* add page offset */
 if (snd_key != key)                                     /* check buffer key */
     sim_printf ("CI: wrong buffer key\n");
 
+opc = CI_GETB (pkt->data, PPD_OPC);
+rbnam = CI_GETL (pkt->data, PPD_RBNAM);                 /* BDT table offset */
+xctid[0] = CI_GETL (pkt->data, PPD_LCONID);
+xctid[1] = CI_GETL (pkt->data, PPD_RSPID);
+
+blk.node = CI_GETB (pkt->data, PPD_PORT);               /* dest port */
+blk.path = CI_PATH_AUTO;
+if (opc == OPC_SNDDAT)                                  /* set return opcode */
+    blk.data[CI_OPC] = OPC_SNTDAT;
+else if (opc == OPC_REQDATREC)
+    blk.data[CI_OPC] = OPC_RETDAT;
+CI_PUTB (blk.data, CI_FLAGS, 0);                        /* flags */
+CI_PUTL (blk.data, CI_XCTID + 0, xctid[0]);             /* local connection ID */
+CI_PUTL (blk.data, CI_XCTID + 4, xctid[1]);             /* local response ID */
+CI_PUTL (blk.data, CI_RBNAM, rbnam);                    /* receive buffer name */
+
 while (xfrsz > 0) {
     if (xfrsz > CI_MAXDAT)                              /* limit to max transfer */
         len = CI_MAXDAT;
     else
         len = xfrsz;
-    ci_readb (pte, len, sboff, &pkt->data[CI_DATA]);    /* FIXME: transfer from buffer */
-    if (pkt->data[PPD_OPC] == OPC_REQDATREC)
-        pkt->data[PPD_OPC] = OPC_RETDAT;                /* set return opcode */
-    CI_PUTL (pkt->data, PPD_XFRSZ, xfrsz);              /* update packet */
-    CI_PUTL (pkt->data, PPD_RBOFF, rboff);
+    ci_readb (pte, len, sboff, &blk.data[CI_DATA]);     /* transfer from buffer */
+    CI_PUTL (blk.data, CI_RBOFF, rboff);                /* update packet */
     if (xfrsz <= CI_MAXDAT)
-        pkt->data[PPD_FLAGS] |= PPD_LP;                 /* last packet */
+        blk.data[CI_FLAGS] |= CI_LP;                    /* last packet */
     pkt->length = len + CI_DATA;
-    r = ci_send_ppd (uptr, pkt);                        /* send data */
+    r = ci_send (uptr, &blk);                           /* send data */
     if (r != SCPE_OK)
         return r;
     xfrsz -= len;
@@ -430,11 +445,10 @@ return SCPE_OK;
 
 t_stat ci_receive_data (UNIT *uptr, PPD_PKT *pkt)
 {
-uint32 len, xfrsz, bd, rboff, pte;
+uint32 len, bd, rboff, pte;
 uint16 rbnam, rec_key, flags, key;
 t_stat r;
 
-xfrsz = CI_GETL (pkt->data, PPD_XFRSZ);
 rbnam = CI_GETW (pkt->data, PPD_RBNAM);                /* BDT table offset */
 rec_key = CI_GETW (pkt->data, PPD_RBNAM + 2);
 rboff = CI_GETL (pkt->data, PPD_RBOFF);                /* receive buffer offset */
@@ -448,15 +462,14 @@ rboff = rboff + (flags & BD_M_OFF);                     /* add page offset */
 if (rec_key != key)                                     /* check buffer key */
     sim_printf ("CI: wrong buffer key\n");
 
-if (xfrsz > CI_MAXDAT)                                  /* limit to max transfer */
+len = pkt->length - PPD_DATA;
+if (len > CI_MAXDAT)                                    /* limit to max transfer */
     len = CI_MAXDAT;
-else
-    len = xfrsz;
 
-ci_writeb (pte, len, rboff, &pkt->data[CI_DATA]);       /* FIXME: transfer to buffer */
+ci_writeb (pte, len, rboff, &pkt->data[PPD_DATA]);      /* transfer to buffer */
 
 if (pkt->data[PPD_FLAGS] & PPD_LP) {                    /* last packet? */
-    pkt->length = CI_DATA;
+    pkt->length = PPD_DATA;
     if (pkt->data[PPD_OPC] == OPC_SNDDATREC) {
         pkt->data[PPD_OPC] = OPC_RETCNF;
         return ci_send_ppd (uptr, pkt);                 /* send confirmation */
@@ -539,7 +552,11 @@ return SCPE_OK;
 t_stat ci_lbrec (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 port = pkt->data[PPD_PORT];
-ci_vcd[port] |= (VCD_PAG | VCD_PBG);                    /* path A and B good */
+uint32 path = GET_PATH (pkt->data[PPD_FLAGS]);
+if (path == PPD_PS0)
+    ci_vcd[port] |= VCD_PAG;                            /* path A good */
+else if (path == PPD_PS1)
+    ci_vcd[port] |= VCD_PBG;                            /* path B good */
 return SCPE_OK;
 }
 
@@ -870,9 +887,9 @@ t_stat r;
 CI_PKT pkt;
 
 do {
-    r = ci_receive (uptr, &pkt);                        /* TODO: convert to PPD format, set path flags etc */
+    r = ci_receive (uptr, &pkt);                        /* try to receive anothe packet */
     if (r == SCPE_OK)
-        r = ci_fmt_receive (uptr, &pkt);
+        r = ci_fmt_receive (uptr, &pkt);                /* convert to PPD format */
 } while (r == SCPE_OK);
 // TODO: handle errors from ci_receive
 return ci_port_svc (uptr);
