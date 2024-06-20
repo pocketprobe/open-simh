@@ -1789,16 +1789,16 @@ return 0;
 
 /* Read word buffer from memory */
 
-int32 rf_readw (uint32 *bd, int32 bc, uint16 *buf, UNIT *uptr)
+int32 rf_readw (MSC *cp, uint32 *bd, int32 bc, uint16 *buf, UNIT *uptr)
 {
-return hsc_reqdat (bd, (uint8*)buf, bc, uptr);
+return scs_read (cp->uptr, bd, (uint8*)buf, bc, uptr);
 }
 
 /* Write word buffer to memory */
 
-int32 rf_writew (uint32 *bd, int32 bc, uint16 *buf, UNIT *uptr)
+int32 rf_writew (MSC *cp, uint32 *bd, int32 bc, uint16 *buf, UNIT *uptr)
 {
-return hsc_snddat (bd, (uint8*)buf, bc, uptr);
+return scs_write (cp->uptr, bd, (uint8*)buf, bc, uptr);
 }
 
 /* Unit service for data transfer commands */
@@ -1860,7 +1860,7 @@ if (!uptr->io_complete) { /* Top End (I/O Initiation) Processing */
         }
 
     else if (cmd == OP_WR) {                            /* write? */
-        t = rf_readw (bd, tbc, (uint16 *)uptr->rfxb, uptr);   /* fetch buffer */
+        t = rf_readw (cp, bd, tbc, (uint16 *)uptr->rfxb, uptr);   /* fetch buffer */
         if (t < 0) {
             // TODO: Wait until reactivated
             return SCPE_OK;
@@ -1901,7 +1901,7 @@ else { /* Bottom End (After I/O processing) */
     else {
         sim_disk_data_trace(uptr, (uint8 *)uptr->rfxb, bl, tbc, "sim_disk_rdsect", DBG_DAT & rf_devmap[cp->cnum]->dctrl, DBG_REQ);
         if ((cmd == OP_RD) && !err) {                   /* read? */
-            t = rf_writew (bd, tbc, (uint16 *)uptr->rfxb, uptr);
+            t = rf_writew (cp, bd, tbc, (uint16 *)uptr->rfxb, uptr);
             if (t < 0) {
                 uptr->io_complete = 1;
                 return SCPE_OK;
@@ -2211,7 +2211,7 @@ return rf_putdesc (cp, &cp->cq, desc);                  /* release desc */
 
 t_bool rf_putpkt (MSC *cp, uint16 pkt, t_bool qt)
 {
-hsc_mscp_done (cp, pkt);
+app_mscp_done (cp, pkt);
 #if 0
 uint32 addr, desc, lnt, cr;
 DEVICE *dptr = rf_devmap[cp->cnum];

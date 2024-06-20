@@ -41,6 +41,7 @@ struct rfpkt {
     };
 
 typedef struct {
+    UNIT                *uptr;                          /* FIXME: controller */
     uint32              cid;                            /* connection id */
     uint32              wait;                           /* ctrl number - ctlr */
     uint32              sa;                             /* status, addr - uq */
@@ -69,9 +70,9 @@ typedef struct {
 t_bool rf_mscp (MSC *cp, uint16 pkt, t_bool q);
 t_bool rf_deqf (MSC *cp, uint16 *pkt);
 void rf_enqh (MSC *cp, uint16 *lh, uint16 pkt);
-t_stat hsc_mscp_done (MSC *cp, uint16 rf_pkt);
-int32 hsc_snddat (uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *uptr);
-int32 hsc_reqdat (uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *uptr);
+extern t_stat app_mscp_done (MSC *cp, uint16 rf_pkt);
+extern int32 scs_write (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr);
+extern int32 scs_read (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr);
 
 extern MSC rf_ctx;
 

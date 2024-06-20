@@ -1,6 +1,6 @@
 /* hsc_kh.c: HSC K.ci simulation
 
-   Copyright (c) 2023, Matt Burke
+   Copyright (c) 2023-2024, Matt Burke
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -27,6 +27,8 @@
 #include "pdp11_defs.h"
 #include "hsc_kg.h"
 #include "dec_ci.h"
+#include "dec_ppd.h"
+#include "dec_scs.h"
 
 /* K.ci control area */
 
@@ -440,6 +442,7 @@ extern int32 tmxr_poll;                                 /* calibrated delay */
 
 uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
+uint8  kh_rstnode;
 
 t_stat kh_svc (UNIT *uptr);
 t_stat kh_reset (DEVICE *dptr);
@@ -452,18 +455,18 @@ t_stat kh_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_set_node (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat kh_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
-DEBTAB kh_debug[] = {
-    { "REG",    DBG_REG },
-    { "WARN",   DBG_WRN },
-    { "REQID",  DBG_REQID },
-    { "SCSDG",  DBG_SCSDG },
-    { "SCSMSG", DBG_SCSMSG },
-    { "PPDDG",  DBG_PPDDG },
-    { "BLKTF",  DBG_BLKTF },
-    { "LCMD",   DBG_LCMD },
-    { "CONN",   DBG_CONN },
-    { "TRACE",  DBG_TRC,       "trace routine calls" },
-    { "PKT",    DBG_PKT },
+DEBTAB KH_debug[] = {
+    { "REG",   DBG_REG },
+    { "WARN",  DBG_WRN },
+    { "DIAG",  DBG_DIAG },
+    { "CONF",  DBG_CONF },
+    { "PPD",   DBG_PPD },
+    { "SCS",   DBG_SCS },
+    { "BLK",   DBG_BLK },
+    { "LCMD",  DBG_LCMD },
+    { "CONN",  DBG_CONN },
+    { "TRACE", DBG_TRC, "trace routine calls" },
+    { "PKT",   DBG_PKT },
     { "STRUCT", KG_DBG_STRUCT, "dump structures" },
     { 0 }
     };
@@ -553,23 +556,19 @@ return SCPE_OK;
 
 t_stat kh_request_id (CI_PKT *pkt)
 {
-pkt->data[PPD_STATUS] = 0;                              /* status: OK */
-pkt->data[PPD_OPC] = OPC_RETID;                         /* set opcode */
-if (ci_check_vc (&kh_unit, pkt->data[PPD_PORT])) {      /* don't send ID once VC is open? */
-    CI_PUT32 (pkt->data, 0x10, 1);                      /* transaction ID low (MBZ to trigger START) */
-    }
-else {
-    CI_PUT32 (pkt->data, 0x10, 0);                      /* transaction ID low (MBZ to trigger START) */
-    }
-CI_PUT32 (pkt->data, 0x14, 0);                          /* transaction ID high (MBZ to trigger START) */
-CI_PUT32 (pkt->data, 0x18, (CI_DUALPATH | CI_HSC));     /* remote port type */
-CI_PUT32 (pkt->data, 0x1C, 0x03060D22);                 /* code revision */
-CI_PUT32 (pkt->data, 0x20, 0xFFFF0D00);                 /* function mask */
-pkt->data[0x24] = kh_unit.ci_node;                      /* resetting port */
-// TODO: should also respond when disabled?
-pkt->data[0x25] = 0x4;                                  /* port state (maint = 0, state = enabled) */
-pkt->length = 0x26;  // TODO: check length, add #define
-return ci_send_ppd (&kh_unit, pkt);
+CI_PUTB (pkt->data, CI_OPC, OPC_ID);                    /* set opcode */
+if (pkt->path == CI_PATH_A)
+    CI_PUTB (pkt->data, CI_FLAGS, CI_PATH_0);           /* same as received path */
+else
+    CI_PUTB (pkt->data, CI_FLAGS, CI_PATH_1);
+CI_PUTL (pkt->data, CI_MAINT_ID, (ID_DUAL | ID_HSC));   /* remote port type */
+CI_PUTL (pkt->data, CI_CODE_REV, 0x03060D22);           /* code revision */
+CI_PUTL (pkt->data, CI_PORT_FCN, 0xFFFF0D00);           /* function mask */
+CI_PUTB (pkt->data, CI_RST_PORT, kh_rstnode);           /* resetting port */
+CI_PUTB (pkt->data, CI_SYS_STATE, CI_PTST_ENA);         /* port state */
+pkt->length = LEN_ID;
+
+return ci_send (&kh_unit, pkt);
 }
 
 /* Block data received */
@@ -579,9 +578,8 @@ t_stat kh_receive_data (CI_PKT *pkt)
 uint32 bct, len, bd, dma, frb;
 uint32 kh = kh_dib.cma;
 
-frb = CI_GET32 (pkt->data, PPD_RBNAM);
-bct = CI_GET32 (pkt->data, PPD_XFRSZ);
-len = (bct > CI_MAXDAT) ? CI_MAXDAT : bct;
+frb = CI_GETL (pkt->data, CI_RBNAM);
+len = CI_GETL (pkt->data, pkt->length - CI_DATA);
 
 sim_debug (DBG_TRC, &kh_dev, "FRB: %07o, receive data\n", frb);
 
@@ -591,10 +589,10 @@ dma = GETW (bd + 002);
 dma = (dma << 6) & DMEMMASK;                            /* data memory address */
 dma = dma + B_DATA;                                     /* point to sector data */
 //sim_printf ("DMEM addr = %o\n", dma);
-memcpy (&DM[dma >> 1], &pkt->data[CI_DATHDR], len);     /* copy to packet buffer */
+memcpy (&DM[dma >> 1], &pkt->data[CI_DATA], len);       /* copy to data memory */
 kg_send (frb + F_BFHD, bd);
 
-if (pkt->data[PPD_FLAGS] & PPD_LP)                      /* last packet? */
+if (pkt->data[CI_FLAGS] & CI_LP)                        /* last packet? */
     kg_route_frb (&kh_unit, kh, frb, TRUE);
 return SCPE_OK;
 }
@@ -606,7 +604,7 @@ t_stat kh_cnfrec (CI_PKT *pkt)
 uint32 frb;
 uint32 kh = kh_dib.cma;
 
-frb = CI_GET32 (pkt->data, PPD_SBNAM);
+frb = CI_GETL (pkt->data, CI_XCTID + 4);                /* local response ID */
 kg_route_frb (&kh_unit, kh, frb, TRUE);
 return SCPE_OK;
 }
@@ -643,14 +641,11 @@ return hm;
 t_stat kh_appmsg (CI_PKT *pkt)
 {
 uint32 srccon, dstcon;
-uint32 node = pkt->data[PPD_PORT];
 uint32 kh = kh_dib.cma;
 uint32 sb, cb, cq;
-uint32 hm, dma, opc, lof, len, rcc;
+uint32 hm, dma, lof, len, rcc;
 
-opc = pkt->data[PPD_OPC] & ~OPC_M_RECV;
-
-sb = GETP (kh - (32 * 2) + (node * 2));                 /* get system block for source node */
+sb = GETP (kh - (32 * 2) + (pkt->node * 2));            /* get system block for source node */
 if (sb == 0)
     return SCPE_OK;
 cb = GETP (sb + SB_NCB) - CB_TLK;                       /* get connection block */
@@ -660,8 +655,8 @@ for (;;) {
     srccon = GETW (cb + CB_CID);
     srccon = srccon | (GETW (cb + CB_CID + 002) << 16);
     dstcon = GETW (cb + CB_VTI) | (GETW (cb + CB_INC) << 16);
-    if ((srccon == CI_GET32 (pkt->data, SCS_SRCCON)) &&
-        (dstcon == CI_GET32 (pkt->data, SCS_DSTCON)))
+    if ((srccon == CI_GETL (pkt->data, SCS_SRCCON)) &&
+        (dstcon == CI_GETL (pkt->data, SCS_DSTCON)))
         break;                                          /* valid connection found */
     cb = GETP (cb + CB_TLK) - CB_TLK;                   /* try next connection */
     }
@@ -679,10 +674,10 @@ if (hm == 0) {
     }
 
 rcc = GETW (cb + CB_RCC);
-rcc = rcc + CI_GET16 (pkt->data, SCS_CREDIT);
+rcc = rcc + CI_GETW (pkt->data, SCS_CREDIT);
 PUTW (cb + CB_RCC, rcc);
 PUTW (hm + HM_CTX, GETW (cb + CB_CTX));
-PUTP (hm + HM_CB, cb);                                 /* save connection block */
+PUTP (hm + HM_CB, cb);                                  /* save connection block */
 PUTP (hm + HM_CQ, 0);
 PUTW (hm + HM_LOF, lof);
 
@@ -700,21 +695,17 @@ t_stat kh_receive_int (CI_PKT *pkt)
 {
 uint32 kh = kh_dib.cma;
 uint32 hm, dma, opc, lof, len, sb, node, cq;
-uint16 dg_type = CI_GET16 (pkt->data, PPD_MTYPE) & DG_MTYPE;
-uint16 scs_type = CI_GET16 (pkt->data, PPD_STYPE);
+uint16 dg_type = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
+uint16 scs_type = CI_GETW (pkt->data, SCS_MTYPE);
 
-opc = pkt->data[PPD_OPC] & ~OPC_M_RECV;
-node = pkt->data[PPD_PORT];
+opc = pkt->data[CI_OPC];
+node = pkt->node;
+len = pkt->length - LEN_HEADER;
 
-if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
-    len = pkt->length - PPD_HDR;
-else
-    len = pkt->length - PPD_HDR + 2;
-
-if (opc == OPC_SNDMSG) {
-    if ((dg_type == DG_SCSMSG) && (scs_type == SCS_APPMSG))
+if (opc == OPC_MSG) {
+    if ((dg_type == PPD_SCSMSG) && (scs_type == SCS_APPMSG))
         return kh_appmsg (pkt);
-    if ((kh_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* SCS response packet? */
+    if ((kh_req[node]) && (dg_type == PPD_SCSMSG) && (scs_type & 0x1)) {  /* SCS response packet? */
         hm = kh_req[node];
         lof = GETW (hm + HM_LOF);
         lof = lof & ~0074000;
@@ -730,7 +721,7 @@ if (opc == OPC_SNDMSG) {
         }
     }
 else {
-    hm = kg_receive (kh + KH_DRR);                     /* datagram */
+    hm = kg_receive (kh + KH_DRR);                      /* datagram */
     lof = 0044000 | 077;
     }
 
@@ -741,22 +732,17 @@ if (hm == 0) {
 
 PUTW (hm + HM_CQ, 0);
 PUTW (hm + HM_LOF, lof);
-PUTB (hm + HM_CB + 00, node);                          /* source */
-PUTB (hm + HM_CB + 01, ~node);                         /* complement */
+PUTB (hm + HM_CB + 00, node);                           /* source */
+PUTB (hm + HM_CB + 01, ~node);                          /* complement */
 
-if (((lof & 077) != 077) && (opc == OPC_SNDMSG)) {
+if (((lof & 077) != 077) && (opc == OPC_MSG)) {
 //    sim_printf ("Receive packet to control memory\n");
-    PUTB (hm + HM_MSG + 000, opc);
-    PUTB (hm + HM_MSG + 001, pkt->data[PPD_FLAGS]);
-    if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
-        memcpy (&CM[(hm + HM_MSG + 002) >> 1], &pkt->data[PPD_MTYPE], (pkt->length - PPD_MTYPE));
-    else
-        memcpy (&CM[(hm + HM_MSG + 002) >> 1], &pkt->data[PPD_LENGTH], (pkt->length - PPD_LENGTH));
+    memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[CI_OPC], (pkt->length - CI_OPC));
     kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
     }
 else {
     PUTW (hm + HM_BC, len);
-    dma = GETW (hm + HM_BMB);                          /* data mem addr */
+    dma = GETW (hm + HM_BMB);                           /* data mem addr */
     dma = (dma << 6);
 
     if (!ADDR_IS_DMEM (dma)) {
@@ -766,16 +752,11 @@ else {
     dma = dma & DMEMMASK;
 //    sim_printf ("Receive packet to data memory: %o\n", dma);
 
-    PUTDB (dma + 000, opc);
-    PUTDB (dma + 001, pkt->data[PPD_FLAGS]);
-    if ((opc == OPC_SNDDG) || (opc == OPC_SNDMSG))
-        memcpy (&DM[(dma + 002) >> 1], &pkt->data[PPD_MTYPE], (pkt->length - PPD_MTYPE));
-    else
-        memcpy (&DM[(dma + 002) >> 1], &pkt->data[PPD_LENGTH], (pkt->length - PPD_LENGTH));
+    memcpy (&DM[dma >> 1], &pkt->data[CI_OPC], (pkt->length - CI_OPC));
     kg_print_struct (NULL, &kh_unit, hm, hmd_stc);
     }
 
-if ((kh_req[node]) && (dg_type == DG_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
+if ((kh_req[node]) && (dg_type == PPD_SCSMSG) && (scs_type & 0x1)) {  /* pending request? */
     sim_debug (DBG_TRC, &kh_dev, "Complete pending request for %07o\n", kh_req[node]);
     kh_req[node] = 0;
     }
@@ -793,21 +774,21 @@ t_stat kh_receive (UNIT *uptr, CI_PKT *pkt)
 uint32 dg_type;
 
 /* LOADER-E K.ci loopback microcode loaded */
-if (pkt->data[PPD_PORT] == ci_get_node (uptr))          /* from local node? */
+if (pkt->node == ci_get_node (uptr))                    /* from local node? */
     return SCPE_OK;                                     /* ignore */
-switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by port */
-    case OPC_IDREC:
-        if (ci_check_vc (uptr, pkt->data[PPD_PORT]))    /* VC open? */
+switch (pkt->data[CI_OPC]) {                            /* opcodes handled by port */
+    case OPC_ID:
+        if (ci_check_vc (uptr, pkt->node))              /* VC open? */
             return SCPE_OK;                             /* discard */
         break;
 
-    case OPC_CNFREC:
+    case OPC_CNF:
         return kh_cnfrec (pkt);
 
-    case OPC_DATREC:
+    case OPC_RETDAT:
         return kh_receive_data (pkt);
 
-    case OPC_REQREC:
+    case OPC_IDREQ:
         return kh_request_id (pkt);
         }
 return kh_receive_int (pkt);
@@ -900,23 +881,23 @@ flgs = GETW (hm + HM_LOF) & 03700;
 len = GETW (hm + HM_LOF) & 077;
 node = GETB (hm + HM_CB);                               /* destination node */
 
-pkt.data[PPD_PORT] = GETB (hm + HM_CB);
+pkt.node = GETB (hm + HM_CB);
 
 sim_debug (DBG_TRC, &kh_dev, "Host message: %07o\n", hm);
 
 if ((opc == 020000) || (opc == 040000)) {               /* SCS application message */
     cb = GETP (hm + HM_CB);                             /* get connection block */
-    pkt.data[PPD_PORT] = GETB (cb + CB_NOD);
+    pkt.node = GETB (cb + CB_NOD);
     srccon = GETW (cb + CB_CID);
     srccon = srccon | (GETW (cb + CB_CID + 002) << 16);
     dstcon = GETW (cb + CB_VTI) | (GETW (cb + CB_INC) << 16);
-    pkt.data[PPD_OPC] = OPC_SNDMSG;
-    pkt.data[PPD_FLAGS] = 0;
-    CI_PUT16 (pkt.data, PPD_MTYPE, DG_SCSMSG);
-    CI_PUT16 (pkt.data, SCS_MTYPE, SCS_APPMSG);
-    CI_PUT16 (pkt.data, SCS_CREDIT, 1);
-    CI_PUT32 (pkt.data, SCS_DSTCON, srccon);
-    CI_PUT32 (pkt.data, SCS_SRCCON, dstcon);
+    pkt.data[CI_OPC] = OPC_MSG;
+    pkt.data[CI_FLAGS] = 0;
+    CI_PUTW (pkt.data, PPD_MTYPE, PPD_SCSMSG);
+    CI_PUTW (pkt.data, SCS_MTYPE, SCS_APPMSG);
+    CI_PUTW (pkt.data, SCS_CREDIT, 1);
+    CI_PUTL (pkt.data, SCS_DSTCON, srccon);
+    CI_PUTL (pkt.data, SCS_SRCCON, dstcon);
     if (len == 077) {                                   /* packet in data memory */
         len = GETW (hm + HM_BC);                        /* actual packet length */
         dma = GETW (hm + HM_BMB);
@@ -928,7 +909,6 @@ if ((opc == 020000) || (opc == 040000)) {               /* SCS application messa
         memcpy (&pkt.data[SCS_APPL], &CM[(hm + HM_MSG) >> 1], len);
         kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
         }
-    CI_PUT16 (pkt.data, PPD_LENGTH, len + SCS_APPL - PPD_MSGHDR);
     len = len + SCS_APPL;
 
     rcc = GETW (cb + CB_RCC);                           /* adjust credits */
@@ -939,42 +919,25 @@ else {
         len = GETW (hm + HM_BC);                        /* actual packet length */
         dma = GETW (hm + HM_BMB);
         dma = (dma << 6) & DMEMMASK;                    /* data memory address */
-        pkt.data[PPD_OPC] = GETDB (dma + 000);          /* opcode */
-        pkt.data[PPD_FLAGS] = GETDB (dma + 001);
-        if (pkt.data[PPD_OPC] <= OPC_SNDMSG)            /* datagram or message? */
-            off = PPD_MTYPE;
-        else
-            off = PPD_LENGTH;
-        memcpy (&pkt.data[off], &DM[(dma + 002) >> 1], len - 2);
+        memcpy (&pkt.data[CI_OPC], &DM[dma >> 1], len);
         kg_print_struct (NULL, &kh_unit, hm, hmd_stc);
         }
     else {
-        pkt.data[PPD_OPC] = GETB (hm + HM_MSG);         /* opcode */
-        pkt.data[PPD_FLAGS] = GETB (hm + HM_MSG + 001);
-        if (pkt.data[PPD_OPC] <= OPC_SNDMSG)            /* datagram or message? */
-            off = PPD_MTYPE;
-        else
-            off = PPD_LENGTH;
-        memcpy (&pkt.data[off], &CM[(hm + HM_MSG + 002) >> 1], len - 2);
+        memcpy (&pkt.data[CI_OPC], &CM[(hm + HM_MSG) >> 1], len);
         kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
         }
 
-    if (pkt.data[PPD_OPC] <= OPC_SNDMSG) {              /* datagram or message? */
-        CI_PUT16 (pkt.data, PPD_LENGTH, len - 2);
-        len = len + PPD_HDR;                            /* length field + header - opcode and flags */
-        }
-    else
-        len = len + PPD_HDR - 2;                        /* header - opcode and flags */
+    len = len + CI_OPC;                                 /* add length of CI header */
     }
 
 if (opc == 034000)                                      /* send datagram path A */
-    pkt.data[PPD_FLAGS] |= (PPD_PS0 << PPD_V_PS);
+    pkt.path = CI_PATH_A;
 else if (opc == 054000)                                 /* send datagram path B */
-    pkt.data[PPD_FLAGS] |= (PPD_PS1 << PPD_V_PS);
+    pkt.path = CI_PATH_B;
 else
-    pkt.data[PPD_FLAGS] |= (PPD_PSAUTO << PPD_V_PS);    /* path auto? */
+    pkt.path = CI_PATH_AUTO;                            /* path auto? */
 pkt.length = len;
-r = ci_send_ppd (&kh_unit, &pkt);
+r = ci_send (&kh_unit, &pkt);
 
 if (opc == 020000)                                      /* FIXME: APPMSG always goes to SRR? */
     *cq = kh + KH_SRR;
@@ -985,7 +948,7 @@ if (opc == 040000) {
     }
 if (*cq == 0) {
     if (GETW (hm + HM_CTX) == 0) {
-        if (pkt.data[PPD_OPC] == OPC_SNDMSG)
+        if (pkt.data[CI_OPC] == OPC_MSG)
             *cq = kh + KH_SRR;
         else
             *cq = kh + KH_DRR;
@@ -1012,11 +975,10 @@ hm = GETP (frb + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
 kg_print_struct (NULL, &kh_unit, hm, hmxf_stc);
-pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
-pkt.data[PPD_STATUS] = 0;                               /* status */
-pkt.data[PPD_OPC] = OPC_SNDDAT;                         /* opcode */
+pkt.node = GETB (cb + CB_NOD);                          /* dest port */
+pkt.data[CI_OPC] = OPC_SNTDAT;                          /* opcode */
 // TODO: Need to set flags (multiple)
-pkt.data[PPD_FLAGS] = 0;                                /* flags */
+pkt.data[CI_FLAGS] = 0;                                 /* flags */
 
 con = GETL (hm + HM_CON);
 bnm = GETL (hm + HM_BNM);
@@ -1024,26 +986,23 @@ bct = GETB (frb + F_SCNT) * 512;
 soff = GETL (frb + F_OFF);
 roff = GETL (hm + HM_OFF) + soff;
 
-CI_PUT32 (pkt.data, PPD_LCONID, con);                   /* local connection ID */
-CI_PUT32 (pkt.data, PPD_RSPID, 1);                      /* local response ID */
-CI_PUT32 (pkt.data, PPD_SBNAM, frb);                    /* send buffer name */
-CI_PUT32 (pkt.data, PPD_RBNAM, bnm);                    /* receive buffer name */
+CI_PUTL (pkt.data, CI_XCTID + 0, con);                  /* local connection ID */
+CI_PUTL (pkt.data, CI_XCTID + 4, frb);                  /* local response ID */
+CI_PUTL (pkt.data, CI_RBNAM, bnm);                      /* receive buffer name */
 
 bd = frb + F_BFHD;                                      /* initial buffer descriptor */
 while (bct) {
     len = (bct > CI_MAXDAT) ? CI_MAXDAT : bct;
-    pkt.length = len + CI_DATHDR;
-    CI_PUT32 (pkt.data, PPD_XFRSZ, bct);                /* total transfer size */
-    CI_PUT32 (pkt.data, PPD_SBOFF, soff);               /* send buffer offset */
-    CI_PUT32 (pkt.data, PPD_RBOFF, roff);               /* receive buffer offset */
+    pkt.length = len + CI_DATA;
+    CI_PUTL (pkt.data, CI_RBOFF, roff);                 /* receive buffer offset */
     if (bct <= CI_MAXDAT)
-        pkt.data[PPD_FLAGS] |= PPD_LP;                  /* last packet */
+        pkt.data[CI_FLAGS] |= CI_LP;                    /* last packet */
     bd = GETP (bd);                                     /* get next buffer descriptor */
     dma = GETW (bd + 002);
     dma = (dma << 6) & DMEMMASK;                        /* data memory address */
     dma = dma + B_DATA;                                 /* point to sector data */
-    memcpy (&pkt.data[CI_DATHDR], &DM[dma >> 1], len);  /* copy to packet buffer */
-    r = ci_send_ppd (&kh_unit, &pkt);                   /* send to host */
+    memcpy (&pkt.data[CI_DATA], &DM[dma >> 1], len);    /* copy to packet buffer */
+    r = ci_send (&kh_unit, &pkt);                       /* send to host */
     if (r != SCPE_OK) {
         sim_printf ("K.ci stalled during SNDDAT operation\n");
         break;
@@ -1067,12 +1026,11 @@ hm = GETP (frb + F_PCTR);                               /* get host message */
 cb = GETP (hm + HM_CB);                                 /* get connection block */
 
 kg_print_struct (NULL, &kh_unit, hm, hmxf_stc);
-pkt.length = CI_DATHDR;
-pkt.data[PPD_PORT] = GETB (cb + CB_NOD);                /* dest port */
-pkt.data[PPD_STATUS] = 0;                               /* status */
-pkt.data[PPD_OPC] = OPC_REQDAT;                         /* opcode */
+pkt.length = LEN_DATREQ;
+pkt.node = GETB (cb + CB_NOD);                          /* dest port */
+pkt.data[CI_OPC] = OPC_DATREQ0;                         /* opcode */
 // TODO: Need to set flags (multiple, last packet)
-pkt.data[PPD_FLAGS] = 0;                                /* flags */
+pkt.data[CI_FLAGS] = 0;                                 /* flags */
 
 con = GETL (hm + HM_CON);
 bnm = GETL (hm + HM_BNM);
@@ -1080,16 +1038,16 @@ bct = GETB (frb + F_SCNT) * 512;
 roff = GETL (hm + HM_OFF);
 soff = GETL (frb + F_OFF) + roff;
 
-CI_PUT32 (pkt.data, PPD_LCONID, con);                   /* local connection ID */
-CI_PUT32 (pkt.data, PPD_RSPID, 1);                      /* local response ID */
-CI_PUT32 (pkt.data, PPD_XFRSZ, bct);                    /* total transfer size */
-CI_PUT32 (pkt.data, PPD_SBNAM, bnm);                    /* send buffer name */
-CI_PUT32 (pkt.data, PPD_SBOFF, soff);                   /* send buffer offset */
-CI_PUT32 (pkt.data, PPD_RBNAM, frb);                    /* receive buffer name */
-CI_PUT32 (pkt.data, PPD_RBOFF, roff);                   /* receive buffer offset */
-r = ci_send_ppd (&kh_unit, &pkt);
+CI_PUTL (pkt.data, CI_XCTID + 0, con);                  /* local connection ID */
+CI_PUTL (pkt.data, CI_XCTID + 4, frb);                  /* local response ID */
+CI_PUTL (pkt.data, CI_REQ_XFRSZ, bct);                  /* total transfer size */
+CI_PUTL (pkt.data, CI_REQ_SBNAM, bnm);                  /* send buffer name */
+CI_PUTL (pkt.data, CI_REQ_SBOFF, soff);                 /* send buffer offset */
+CI_PUTL (pkt.data, CI_REQ_RBNAM, frb);                  /* receive buffer name */
+CI_PUTL (pkt.data, CI_REQ_RBOFF, roff);                 /* receive buffer offset */
+r = ci_send (&kh_unit, &pkt);
 if (r != SCPE_OK)
-    sim_printf ("K.ci stalled during REQDAT operation\n");
+    sim_printf ("K.ci stalled during DATREQ operation\n");
 }
 
 /* Process a fragment request block */
@@ -1190,7 +1148,7 @@ if (r != SCPE_OK)
     return r;
 
 for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
-    r = ci_receive_ppd (uptr, &pkt);                    /* get next packet */
+    r = ci_receive (uptr, &pkt);                        /* get next packet */
     // TODO: handle errors from ci_receive
     if (r != SCPE_OK)
         break;
@@ -1302,6 +1260,7 @@ return SCPE_OK;
 
 t_stat kh_reset (DEVICE *dptr)
 {
+kh_rstnode = 0;
 for (int i = 0; i < CI_MAX_NODES; i++) {
     kh_req[i] = 0;
     kh_vcf[i] = 0;

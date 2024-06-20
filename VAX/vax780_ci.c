@@ -160,17 +160,17 @@ MTAB ci_mod[] = {
     };
 
 DEBTAB ci_debug[] = {
-    { "REG",    DBG_REG },
-    { "WARN",   DBG_WRN },
-    { "REQID",  DBG_REQID },
-    { "SCSDG",  DBG_SCSDG },
-    { "SCSMSG", DBG_SCSMSG },
-    { "PPDDG",  DBG_PPDDG },
-    { "BLKTF",  DBG_BLKTF },
-    { "LCMD",   DBG_LCMD },
-    { "CONN",   DBG_CONN },
-    { "TRACE",  DBG_TRC },
-    { "PKT",    DBG_PKT },
+    { "REG",   DBG_REG },
+    { "WARN",  DBG_WRN },
+    { "DIAG",  DBG_DIAG },
+    { "CONF",  DBG_CONF },
+    { "PPD",   DBG_PPD },
+    { "SCS",   DBG_SCS },
+    { "BLK",   DBG_BLK },
+    { "LCMD",  DBG_LCMD },
+    { "CONN",  DBG_CONN },
+    { "TRACE", DBG_TRC },
+    { "PKT",   DBG_PKT },
     { 0 }
     };
 
