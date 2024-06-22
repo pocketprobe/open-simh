@@ -816,7 +816,7 @@ if (opc <= OPC_MSG) {                                   /* datagram or message *
     ppd.data[PPD_FLAGS] = pkt->data[CI_FLAGS];
     memcpy (&ppd.data[PPD_TEXT], &pkt->data[CI_TEXT], pkt->length - CI_TEXT);
     CI_PUTW (ppd.data, PPD_LENGTH, pkt->length - PPD_TEXT);
-    ppd.length += 2;                                    /* add length field */
+    ppd.length += 2;                                    /* length field added */
     }
 else memcpy (&ppd.data[PPD_OPC], &pkt->data[CI_OPC], pkt->length - CI_OPC);
 
@@ -870,6 +870,7 @@ if (opc <= OPC_SNDMSG) {                                /* datagram or message *
     pkt.data[CI_FLAGS] = ppd->data[PPD_FLAGS];
     memcpy (&pkt.data[CI_TEXT], &ppd->data[PPD_TEXT], ppd->length - PPD_TEXT);
     pkt.length = CI_GETW (ppd->data, PPD_LENGTH);       /* get length */
+    pkt.length -= 2;                                    /* length field removed */
     pkt.length += PPD_TEXT;                             /* add header */
     }
 else memcpy (&pkt.data[CI_OPC], &ppd->data[PPD_OPC], ppd->length - PPD_OPC);

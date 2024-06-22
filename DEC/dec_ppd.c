@@ -17,6 +17,15 @@ t_stat ppd_sndmsg (UNIT *uptr, CI_PKT *pkt)
     return ci_send (uptr, pkt);
 }
 
+/* Request remote port ID */
+
+t_stat ppd_reqid (UNIT *uptr, CI_PKT *pkt)
+{
+pkt->length = LEN_IDREQ;
+pkt->data[CI_OPC] = OPC_IDREQ;
+return ci_send (uptr, pkt);
+}
+
 /* Process START datagram */
 
 t_stat ppd_start (UNIT *uptr, CI_PKT *pkt, uint32 dg_type)
@@ -83,6 +92,9 @@ switch (mtype) {
             scs_fail_vc (uptr, port);                   /* notify SCS */
             ci_close_vc (uptr, port);                   /* close VC */
             pb->vc_state = VC_CLOSED;
+            }
+        else if (pb->vc_state = VC_CLOSED) {
+            ppd_reqid (uptr, pkt);                      /* request ID */
             }
         break;
 
@@ -290,15 +302,6 @@ switch (opcode) {
         return ppd_cnfrec (uptr, pkt);
         }
 return SCPE_IERR;
-}
-
-/* Request remote port ID */
-
-t_stat ppd_reqid (UNIT *uptr, CI_PKT *pkt)
-{
-pkt->length = LEN_IDREQ;
-pkt->data[CI_OPC] = OPC_IDREQ;
-return ci_send (uptr, pkt);
 }
 
 t_stat ppd_reset (DEVICE *dptr)

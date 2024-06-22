@@ -51,6 +51,8 @@
 
 #define port_ctx        up7                             /* port context */
 
+#define LEN_TCP_PORT    5
+
 const char* ci_types[] = {                              /* OPC debug definitions */
     "(invalid)",                                        /* 00 */
     "DG",
@@ -566,7 +568,6 @@ for (;;) {
         if (opc == OPC_IDREQ) {
             sprintf (cp->nodes[src].host, "[%s]:%.5s",
                 src_addr, &rcv_pkt.data[LEN_IDREQ]);    /* get remote TCP port */
-            rcv_pkt.length -= 5;                        /* adjust packet length */
             }
         ciq_insert (&cp->rx_queue, &rcv_pkt);
         }
@@ -623,7 +624,7 @@ CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
 CI_LINK *link;
 CI_PKT *pkt;
 uint32 i;
-uint8 src, dst;
+uint8 src, dst, opc;
 t_stat r;
 
 for (i = 0; i < CI_MAX_NODES; i++) {
@@ -637,17 +638,17 @@ for (i = 0; i < CI_MAX_NODES; i++) {
         if (cp->rx_queue.count == CI_QUE_MAX)           /* queue full? */
             return SCPE_OK;                             /* yes, don't receive any more */
         if (pkt->offset == 0)                           /* new packet? */
-            pkt->length = LEN_HEADER;                   /* yes, get header first */
+            pkt->length = LEN_HEADER + 2;               /* yes, get header first (plus opcode) */
         r = sim_read_sock (link->socket, &pkt->data[pkt->offset], (pkt->length - pkt->offset));
         if (r < 0) {
-            sim_debug_unit (DBG_CONN, uptr, "Node %d closed VC, socket: %d\n", i, link->socket);
+            sim_debug_unit (DBG_CONN, uptr, "Node at link ID %d closed VC, socket: %d\n", i, link->socket);
             ci_link_fail (uptr, link);                  /* notify VC failure */
             break;
             }
         pkt->offset = pkt->offset + r;
         if (pkt->offset < pkt->length)                  /* not all bytes received? */
             break;                                      /* try again later */
-        if (pkt->length == LEN_HEADER) {
+        if (pkt->length == LEN_HEADER + 2) {
             pkt->length = ((pkt->data[CI_LEN_HI] & 0xF) << 8);
             pkt->length |= pkt->data[CI_LEN_LO];        /* get total packet length */
             if (pkt->length > CI_MAXFR) {               /* check length is valid */
@@ -655,6 +656,9 @@ for (i = 0; i < CI_MAX_NODES; i++) {
                 ci_link_fail (uptr, link);              /* close the VC */
                 break;
                 }
+            opc = CI_GETB (pkt->data, CI_OPC);          /* get opcode */
+            if (opc == OPC_IDREQ)                       /* ID request? */
+                pkt->length += LEN_TCP_PORT;            /* yes, get remote TCP port field too */
             if (pkt->offset < pkt->length)              /* more to receive? */
                 continue;                               /* yes, receive packet body */
             }
@@ -708,8 +712,8 @@ if (node->uptr) {                                       /* loopback? */
     }
 
 if (opcode == OPC_IDREQ) {
-    strncpy (&tpkt.data[LEN_IDREQ], cp->tcp_port, 5);   /* append local TCP port to IDREQ packets */
-    tpkt.length += 5;
+    strncpy (&tpkt.data[LEN_IDREQ], cp->tcp_port, LEN_TCP_PORT);
+    tpkt.length += LEN_TCP_PORT;                        /* append local TCP port to IDREQ packets */
     }
 tpkt.offset = 0;                                        /* initial send offset */
 
@@ -736,9 +740,10 @@ return SCPE_OK;                                         /* FIXME: return "no pat
 t_stat ci_receive_packet (UNIT *uptr, CI_PKT *pkt)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+CI_ITEM *item;
+uint8 opc;
 uint32 path;
 t_stat r;
-CI_ITEM *item;
 
 if (cp->rx_queue.count == 0) {                          /* receive queue empty? */
     if (uptr->flags & UNIT_ATT) {
@@ -758,6 +763,9 @@ if (cp->rx_queue.count > 0) {                           /* process receive queue
     item = &cp->rx_queue.item[cp->rx_queue.head];
     memcpy (pkt, &item->pkt, sizeof (CI_PKT));          /* copy to output packet */
     ciq_remove (&cp->rx_queue);                         /* remove processed packet from queue */
+    opc = pkt->data[CI_OPC];
+    if (opc == OPC_IDREQ)                               /* check for ID request */
+        pkt->length -= LEN_TCP_PORT;                    /* remove remote TCP port */
     return SCPE_OK;
     }
 
