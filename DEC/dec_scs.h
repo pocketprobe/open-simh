@@ -63,7 +63,6 @@
 #define SCS_BALANCE     0x29                            /* load balance disconnect */
 #define SCS_UAP         0x2A                            /* use alternate port */
 
-extern void scs_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt);
 extern void scs_fail_vc (UNIT *uptr, uint32 port);
 extern t_stat scs_send_msg (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 extern int32 scs_write (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr);

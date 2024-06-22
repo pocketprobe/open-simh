@@ -56,7 +56,6 @@
 #define LEN_STACK       (PPD_TIME + 8)
 #define LEN_ACK         (PPD_MTYPE + 2)
 
-extern void ppd_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt);
 extern t_stat ppd_sndmsg (UNIT *uptr, CI_PKT *pkt);
 extern int32 ppd_snddat (UNIT *uptr, uint32 sbnam);
 extern int32 ppd_reqdat (UNIT *uptr, uint32 rbnam);

@@ -455,7 +455,7 @@ t_stat kh_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_set_node (UNIT *uptr, int32 val, CONST char *cptr, void *desc);
 t_stat kh_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 
-DEBTAB KH_debug[] = {
+DEBTAB kh_debug[] = {
     { "REG",   DBG_REG },
     { "WARN",  DBG_WRN },
     { "DIAG",  DBG_DIAG },

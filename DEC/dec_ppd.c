@@ -5,28 +5,7 @@
 #include "dec_scs.h"
 #include "dec_sca.h"
 
-const char* ppd_types[] = {                             /* PPD debug definitions */
-    "START",
-    "STACK",
-    "ACK",
-    "SCSDG",
-    "SCSMSG",
-    "ELOG",
-    "HOSTSHUT",
-    "FU_DG"
-    };
-
 extern int32 tmxr_poll;
-
-void ppd_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt)
-{
-uint32 mtype = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
-
-if (mtype == PPD_SCSMSG)
-    scs_debug_pkt (dctrl, uptr, pkt);                   /* show SCS layer */
-else
-    sim_debug_unit (dctrl, uptr, "%s", ppd_types[mtype]); /* show PPD layer */
-}
 
 /* Send SCS message */
 

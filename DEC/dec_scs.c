@@ -5,20 +5,6 @@
 #include "dec_scs.h"
 #include "dec_sca.h"
 
-const char* scs_types[] = {                             /* SCS message debug definitions */
-    "Connect Request",
-    "Connect Response",
-    "Accept Request",
-    "Accept Response",
-    "Reject Request",
-    "Reject Response",
-    "Disconnect Request",
-    "Disconnect Response",
-    "Credit Request",
-    "Credit Response",
-    "Application Sequenced Message"
-    };
-
 extern t_stat app_scsdir (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 extern t_stat app_mscp (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 
@@ -27,12 +13,6 @@ SYSAP scs_sysap[] = {
     { "MSCP$DISK", 10, 1, app_mscp },
     { 0 }
     };
-
-void scs_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt)
-{
-uint32 mtype = CI_GETW (pkt->data, SCS_MTYPE);
-sim_debug_unit (dctrl, uptr, "%s", scs_types[mtype]);   /* show SCS layer */
-}
 
 /* Find a connection with the given id */
 

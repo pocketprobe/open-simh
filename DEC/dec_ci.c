@@ -38,6 +38,7 @@
 #include "sim_sock.h"
 #include "dec_ci.h"
 #include "dec_ppd.h"
+#include "dec_scs.h"
 #include <time.h>
 
 /* CI Link States */
@@ -71,6 +72,31 @@ const char* ci_types[] = {                              /* OPC debug definitions
     "RETDAT",
     "SNTMDAT",
     "RETMDAT"
+    };
+
+const char* ppd_types[] = {                             /* PPD debug definitions */
+    "START",
+    "STACK",
+    "ACK",
+    "SCSDG",
+    "SCSMSG",
+    "ELOG",
+    "HOSTSHUT",
+    "FU_DG"
+    };
+
+const char* scs_types[] = {                             /* SCS message debug definitions */
+    "Connect Request",
+    "Connect Response",
+    "Accept Request",
+    "Accept Response",
+    "Reject Request",
+    "Reject Response",
+    "Disconnect Request",
+    "Disconnect Response",
+    "Credit Request",
+    "Credit Response",
+    "Application Sequenced Message"
     };
 
 const char* ci_path_names[] = {
@@ -172,6 +198,22 @@ for (i = 0; i < length; i+=4) {
         }
     sim_debug_unit (DBG_PKT, uptr, "\n");
     }
+}
+
+void scs_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt)
+{
+uint32 mtype = CI_GETW (pkt->data, SCS_MTYPE);
+sim_debug_unit (dctrl, uptr, "%s", scs_types[mtype]);   /* show SCS layer */
+}
+
+void ppd_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt)
+{
+uint32 mtype = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
+
+if (mtype == PPD_SCSMSG)
+    scs_debug_pkt (dctrl, uptr, pkt);                   /* show SCS layer */
+else
+    sim_debug_unit (dctrl, uptr, "%s", ppd_types[mtype]); /* show PPD layer */
 }
 
 void ci_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt, int rcv)
@@ -621,6 +663,7 @@ for (i = 0; i < CI_MAX_NODES; i++) {
         dst = pkt->data[CI_DEST];
         if (dst != uptr->ci_node) {                     /* not for this node? */
             sim_printf ("Received packet not destined for this node: %d\n", dst);
+            ci_dump_pkt (DBG_PKT, uptr, pkt->data, pkt->length);
             return SCPE_IERR;                           /* should not happen */
             }
         if ((cp->nodes[src].link == NULL) && (cp->nodes[src].conn < LINK_OPEN)) {
