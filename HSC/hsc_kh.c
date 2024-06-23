@@ -579,7 +579,7 @@ uint32 bct, len, bd, dma, frb;
 uint32 kh = kh_dib.cma;
 
 frb = CI_GETL (pkt->data, CI_RBNAM);
-len = CI_GETL (pkt->data, pkt->length - CI_DATA);
+len = pkt->length - CI_DATA;
 
 sim_debug (DBG_TRC, &kh_dev, "FRB: %07o, receive data\n", frb);
 
@@ -976,8 +976,8 @@ cb = GETP (hm + HM_CB);                                 /* get connection block 
 
 kg_print_struct (NULL, &kh_unit, hm, hmxf_stc);
 pkt.node = GETB (cb + CB_NOD);                          /* dest port */
+pkt.path = CI_PATH_AUTO;
 pkt.data[CI_OPC] = OPC_SNTDAT;                          /* opcode */
-// TODO: Need to set flags (multiple)
 pkt.data[CI_FLAGS] = 0;                                 /* flags */
 
 con = GETL (hm + HM_CON);
@@ -1028,8 +1028,8 @@ cb = GETP (hm + HM_CB);                                 /* get connection block 
 kg_print_struct (NULL, &kh_unit, hm, hmxf_stc);
 pkt.length = LEN_DATREQ;
 pkt.node = GETB (cb + CB_NOD);                          /* dest port */
+pkt.path = CI_PATH_AUTO;
 pkt.data[CI_OPC] = OPC_DATREQ0;                         /* opcode */
-// TODO: Need to set flags (multiple, last packet)
 pkt.data[CI_FLAGS] = 0;                                 /* flags */
 
 con = GETL (hm + HM_CON);
