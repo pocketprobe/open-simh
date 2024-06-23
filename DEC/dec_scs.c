@@ -126,7 +126,7 @@ if (bdt == NULL) {
             bdt->boff = 0;
             bdt->bd = bd;
             bdt->node = cb->node;
-            bdt->uptr = uptr;
+            bdt->uptr = aptr;
             bdt->rspid = ctx->rspid++;
             break;
             }
