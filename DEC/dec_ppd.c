@@ -12,6 +12,7 @@ extern int32 tmxr_poll;
 t_stat ppd_sndmsg (UNIT *uptr, CI_PKT *pkt)
 {
     CI_PUTB (pkt->data, CI_OPC, OPC_MSG);
+    CI_PUTB (pkt->data, CI_FLAGS, 0);
     CI_PUTW (pkt->data, PPD_MTYPE, PPD_SCSMSG);
     pkt->path = CI_PATH_AUTO;
     return ci_send (uptr, pkt);
@@ -23,6 +24,9 @@ t_stat ppd_reqid (UNIT *uptr, CI_PKT *pkt)
 {
 pkt->length = LEN_IDREQ;
 pkt->data[CI_OPC] = OPC_IDREQ;
+pkt->data[CI_FLAGS] = 0;
+CI_PUTL (pkt->data, CI_XCTID + 0, 0);
+CI_PUTL (pkt->data, CI_XCTID + 4, 0);
 return ci_send (uptr, pkt);
 }
 
@@ -33,6 +37,8 @@ t_stat ppd_start (UNIT *uptr, CI_PKT *pkt, uint32 dg_type)
     SCA_CTX *ctx = uptr->sca_ctx;
     SCA_SB *sb = &ctx->sb[uptr->ci_node];
 
+    CI_PUTB (pkt->data, CI_OPC, OPC_DG);
+    CI_PUTB (pkt->data, CI_FLAGS, 0);
     CI_PUTW (pkt->data, PPD_MTYPE, dg_type);            /* send START */
     CI_PUTL (pkt->data, PPD_SYSID, sb->sysid);          /* sending system ID */
     CI_PUTW (pkt->data, PPD_SYSID + 4, 0x0800);
@@ -62,6 +68,8 @@ t_stat ppd_start (UNIT *uptr, CI_PKT *pkt, uint32 dg_type)
 
 t_stat ppd_stack (UNIT *uptr, CI_PKT *pkt)
 {
+    CI_PUTB (pkt->data, CI_OPC, OPC_DG);
+    CI_PUTB (pkt->data, CI_FLAGS, 0);
     CI_PUTW (pkt->data, PPD_MTYPE, PPD_ACK);
     pkt->length = LEN_ACK;
     pkt->path = CI_PATH_AUTO;
@@ -93,7 +101,7 @@ switch (mtype) {
             ci_close_vc (uptr, port);                   /* close VC */
             pb->vc_state = VC_CLOSED;
             }
-        else if (pb->vc_state = VC_CLOSED) {
+        else if (pb->vc_state == VC_CLOSED) {
             ppd_reqid (uptr, pkt);                      /* request ID */
             }
         break;
@@ -112,6 +120,7 @@ switch (mtype) {
         else if (pb->vc_state == VC_OPEN) {
             ppd_stack (uptr, pkt);                      /* send ACK */
             }
+        break;
 
     case PPD_ACK:
         if (pb->vc_state == START_REC) {
@@ -155,8 +164,8 @@ CI_PUTL (pkt->data, CI_CODE_REV, 0x03060D22);           /* code revision */
 CI_PUTL (pkt->data, CI_PORT_FCN, 0xFFFF0D00);           /* function mask */
 CI_PUTB (pkt->data, CI_RST_PORT, 0);                    /* resetting port */
 CI_PUTB (pkt->data, CI_SYS_STATE, CI_PTST_ENA);         /* port state */
+memset (&pkt->data[CI_ID_MBZ], 0, LEN_ID - CI_ID_MBZ);
 pkt->length = LEN_ID;
-
 return ci_send (uptr, pkt);
 }
 

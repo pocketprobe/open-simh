@@ -100,6 +100,7 @@ typedef struct {
     uint8 data[CI_MAXFR];                               /* packet data */
 } CI_PKT;
 
+extern void ci_dump_pkt (uint32 dctrl, UNIT *uptr, char* buffer, uint32 length);
 void ci_set_state (UNIT *uptr, uint32 state);
 t_stat ci_send (UNIT *uptr, CI_PKT *pkt);
 t_stat ci_receive (UNIT *uptr, CI_PKT *pkt);

@@ -166,11 +166,11 @@ void ciq_clear  (CI_QUE *que);                          /* clear FIFO queue */
 void ciq_remove (CI_QUE *que);                          /* remove item from FIFO queue */
 void ciq_insert (CI_QUE *que, CI_PKT *pkt);             /* insert item into FIFO queue */
 
-
 void ci_dump_pkt (uint32 dctrl, UNIT *uptr, char* buffer, uint32 length)
 {
 uint8 tbyte;
-int32 i, j;
+uint32 i;
+int32 j;
 
 if ((uptr->dptr->dctrl & (DBG_PKT | dctrl)) != (DBG_PKT | dctrl))
     return;
@@ -184,7 +184,7 @@ for (i = 0; i < length; i+=4) {
             sim_debug_unit (DBG_PKT, uptr, "%02X ", tbyte);
             }
         else
-            sim_debug_unit (DBG_PKT, uptr, "   ", tbyte);
+            sim_debug_unit (DBG_PKT, uptr, "   ");
         }
     sim_debug_unit (DBG_PKT, uptr, " ");
     for (j = 0; j < 4; j++) {
@@ -1037,7 +1037,7 @@ if (uptr->flags & UNIT_ATT)
 node = (uint32) get_uint (cptr, 10, CI_MAX_NODES, &r);
 if (r != SCPE_OK)
     return r;
-if ((node >= CI_MAX_NODES) || (node < 0))
+if (node >= CI_MAX_NODES)
     return SCPE_ARG;
 uptr->ci_node = node;
 return SCPE_OK;

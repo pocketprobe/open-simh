@@ -117,6 +117,7 @@
 #define  CI_PTST_UNI    0x00                            /* port state - uninitialised */
 #define  CI_PTST_DIS    0x02                            /* port state - disabled */
 #define  CI_PTST_ENA    0x04                            /* port state - enabled */
+#define CI_ID_MBZ       0x1D
 
 /* CI Packet Body - Diagnostic and Booting (8.9) */
 
