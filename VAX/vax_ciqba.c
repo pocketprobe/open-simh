@@ -29,7 +29,7 @@
 #include "vax_defs.h"
 #include "dec_ci.h"
 #include "vax_ci.h"
-#include "dec_ppd.h
+#include "dec_ppd.h"
 #include "ciqba_pra0_bin.h"
 
 /* Register offsets */
@@ -162,7 +162,8 @@
 #define IOBA_CI              (IOPAGEBASE + 0xE00)
 #define IOLN_CI              0x80
 
-#define PQ_BASE              0x80E1D880                 /* clustering disbled */
+#define PQ_BASE              0x80E2AA80                 /* VAX/VMS 6.1 - clustering disbled */
+//#define PQ_BASE              0x80E1D880                 /* clustering disbled */
 //#define PQ_BASE              0x80E1F400                 /* clustering enabled */
 
 #define MAX_BMAP        20                              /* max mapped buffers */
@@ -352,6 +353,14 @@ const char *cq_rgd[] = {
     };
 
 typedef struct {
+    uint32 type;                                        /* adpater specific use */
+    size_t size;                                        /* associated structure size */
+    uint32 addr;                                        /* associated memory address */
+    size_t length;                                      /* packet length */
+    uint8 data[CI_MAXFR];                               /* packet data */
+} CQ_PKT;
+
+typedef struct {
     uint32 addr;                                        /* QBus address */
     uint32 length;                                      /* mapped length */
     uint32 bnam;                                        /* buffer name */
@@ -386,8 +395,8 @@ t_stat cq_svc (UNIT *uptr);
 int32 cq_vtb_rd (int32 pa);
 void cq_vtb_wr (int32 pa, int32 data);
 uint32 cq_map_buffer (uint32 bnam, uint32 off, uint32 len);
-t_stat cq_receive_int (CI_PKT *pkt, t_bool internal);
-t_stat cq_svc_queue (CQ_QUEUE *queue, uint32 *processed);
+t_stat cq_receive_int (CQ_PKT *pkt, t_bool internal);
+t_stat cq_svc_queue (UNIT *uptr, CQ_QUEUE *queue, uint32 *processed);
 t_stat cq_sw_reset (DEVICE *dptr);
 t_stat cq_reset (DEVICE *dptr);
 int32 cq_inta (void);
@@ -408,7 +417,7 @@ DIB cq_dib = {
 
 UNIT cq_unit[] = {
     { UDATA (&cq_svc, UNIT_IDLE|UNIT_ATTABLE, 0) },
-    { UDATA (&cq_svc, UNIT_IDLE|UNIT_FIX|UNIT_ATTABLE|UNIT_BUFABLE|UNIT_MUSTBUF, VTB_NVR_SIZE) }
+    { UDATA (NULL, UNIT_IDLE|UNIT_FIX|UNIT_ATTABLE|UNIT_BUFABLE|UNIT_MUSTBUF, VTB_NVR_SIZE) }
     };
 
 REG cq_reg[] = {
@@ -673,7 +682,7 @@ return (ciqba_pra0_bin[rg] |
        (ciqba_pra0_bin[rg+1] << 8));
 }
 
-t_stat cq_read_packet (CI_PKT *pkt, size_t length)
+t_stat cq_read_packet (CQ_PKT *pkt, size_t length)
 {
 uint32 i;
 memset (pkt->data, 0, PPD_TYPE);
@@ -691,7 +700,7 @@ sim_debug (DBG_REG, &cq_dev, "\n");
 return SCPE_OK;
 }
 
-t_stat cq_write_packet (CI_PKT *pkt, size_t length)
+t_stat cq_write_packet (CQ_PKT *pkt, size_t length)
 {
 uint32 i;
 sim_debug (DBG_REG, &cq_dev, "cq_write_packet (%d bytes):\n", length);
@@ -708,7 +717,7 @@ sim_debug (DBG_REG, &cq_dev, "\n");
 return SCPE_OK;
 }
 
-t_stat cq_dequeue (CQ_QUEUE *queue, CI_PKT *pkt, t_bool keep)
+t_stat cq_dequeue (CQ_QUEUE *queue, CQ_PKT *pkt, t_bool keep)
 {
 uint32 entry, i;
 
@@ -739,7 +748,7 @@ if (entry & RENT_CIQBA_OWNED) {
 return CISE_NOPKT;
 }
 
-t_stat cq_enqueue (CQ_QUEUE *queue, CI_PKT *pkt, t_bool internal)
+t_stat cq_enqueue (CQ_QUEUE *queue, CQ_PKT *pkt, t_bool internal)
 {
 uint32 entry, i;
 uint32 size;
@@ -782,100 +791,47 @@ if (entry & RENT_CIQBA_OWNED)
 return FALSE;
 }
 
-void cq_fmt_receive (CI_PKT *pkt)
+/* Translate from CI to CIQBA format */
+
+void cq_fmt_receive (CI_PKT *pkt, CQ_PKT *qkt)
 {
-uint32 swflags = pkt->data[PPD_SWFLAG];
-uint32 flags = pkt->data[PPD_FLAGS];
-uint32 i;
-
-offset = (CIPPD_LEN_HI - CI_LEN_HI);
-pkt->length += offset;
-for (i = pkt->length - 1; i >= CIPPD_LEN_HI; i--)
-    pkt->data[i] = pkt->data[i-offset];
-
-swflags = swflags & 0x86;
-if (flags & PPD_LP)
-    swflags = swflags | CIPPD_LAST;
-swflags |= ((flags << 3) & 0x30); // Add received path
-pkt->data[CIPPD_SEQ_CNTRL] = swflags;
-if (pkt->length < 0x12)
-    pkt->length = 0x12;
+memcpy (&qkt->data[CIPPD_LEN_HI], &pkt->data[CI_LEN_HI], pkt->length - CI_LEN_HI);
+qkt->data[CIPPD_SEQ_CNTRL] |= (pkt->path << CIPPD_V_PS); /* set receive path */
+qkt->length = pkt->length;
+qkt->length += (CIPPD_LEN_HI - CI_LEN_HI);
+qkt->addr = 0;
+qkt->size = 0;
+qkt->type = 0;
 }
 
-void cq_fmt_send (CI_PKT *pkt)
-{
-uint32 i;
+/* Translate from VAX PPD to CI format */
 
-offset = (CIPPD_LEN_HI - CI_LEN_HI);
-for (i = CI_LEN_HI; i < DG_TEXT; i++)
-    pkt->data[i] = pkt->data[i+offset];
-offset = (CIPPD_LEN_HI - CI_LEN_HI) + 2;
-pkt->length -= offset;
-for (i = DG_TEXT; i < pkt->length; i++)
-    pkt->data[i] = pkt->data[i+offset];
+void cq_fmt_send (CQ_PKT *ppd, CI_PKT *pkt)
+{
+pkt->data[CI_OPC] = ppd->data[PPD_OPC];
+pkt->data[CI_FLAGS] = 0;
+memcpy (&pkt->data[CI_TEXT], &ppd->data[PPD_TEXT], ppd->length - PPD_TEXT);
+pkt->length = CI_GETW (ppd->data, PPD_LENGTH);      /* get length */
+pkt->length += PPD_TEXT;                            /* add header */
+pkt->length -= 2;                                   /* length field removed */
+pkt->length -= (PPD_OPC - CI_OPC);                  /* set new length */
+pkt->node = CI_GETB (ppd->data, PPD_PORT);
+pkt->path = GET_PATH (ppd->data[PPD_FLAGS]);
 }
 
-#if 0
-t_stat cq_send_data_dma (UNIT *uptr, CI_PKT *pkt)
+/* Send block data */
+
+t_stat cq_send_data (UNIT *uptr, CQ_PKT *pkt)
 {
-uint32 sboff, rboff, rbnam, addr, xfrsz, len, r;
+uint32 rboff, rbnam, addr, xfrsz, len, r;
 CI_PKT blk;
 
-memcpy (blk.data, pkt->data, PPD_XFRSZ);                /* copy header */
-
-sbnam = CI_GETL (pkt->data, PPD_SBNAM);
-sboff = CI_GETL (pkt->data, PPD_SBOFF);
-
-addr = cq_map_buffer (sbnam, sboff, xfrsz);             /* try to map buffer */
-
-addr = CI_GETL (pkt->data, CIPPD_Q22HAN);
-xfrsz = CI_GETL (pkt->data, CIPPD_BLEFT);
-len = CI_GETL (pkt->data, CIPPD_BCNT);
-
-CI_PUTL (blk.data, PPD_SBNAM, 0);
-CI_PUTL (blk.data, PPD_RBNAM, rbnam);
-
-sboff = 0;
-while (xfrsz) {
-    len = (xfrsz > CI_MAXDAT) ? CI_MAXDAT : xfrsz;
-    blk.length = len + CI_DATHDR;
-    CI_PUTL (blk.data, PPD_XFRSZ, xfrsz);
-    CI_PUTL (blk.data, PPD_SBOFF, sboff);
-    CI_PUTL (blk.data, PPD_RBOFF, rboff);
-xfrsz -= len;
-    if (xfrsz == 0)
-        blk.data[PPD_FLAGS] |= PPD_LP;                  /* last packet */
-    r = Map_ReadB (addr + sboff, len, &blk.data[CI_DATHDR]);
-    if (rblen)
-        sim_printf ("Error transferring data from host memory\n");
-    r = ci_send_ppd (&ci_unit[0], &blk);
-    if (r != SCPE_OK)
-        sim_printf ("CIQBA send data stalled\n");
-    sboff += len;
-    rboff += len;
-    xfrsz -= len;
-    }
-//pkt->data[PPD_FLAGS] |= PPD_LP;
-CI_PUTL (pkt->data, CIPPD_BLEFT, 0);
-return SCPE_OK;
-}
-#endif
-
-t_stat cq_send_data (UNIT *uptr, CI_PKT *pkt)
-{
-uint32 sboff, rboff, rbnam, addr, xfrsz, len, r;
-CI_PKT blk;
-
-blk.length = PPD_XFRSZ;                                 /* header + transaction ID */
-memcpy (blk.data, pkt->data, PPD_XFRSZ);                /* copy header */
-cq_fmt_send (&blk);                                     /* convert to CI format */
+cq_fmt_send (pkt, &blk);                                /* convert to CI format */
 
 rbnam = CI_GETL (pkt->data, CIPPD_NAME);
 rboff = CI_GETL (pkt->data, CIPPD_OFFSET);
 
 if ((pkt->data[PPD_SWFLAG] & CIPPD_BLOCK) == 0) {
-//    2a  3c
-//    218  22c
     xfrsz = CI_GETW (pkt->data, PPD_LENGTH) - 0x18;
     memcpy (&blk.data[CI_DATA], &pkt->data[CIPPD_Q22HAN], xfrsz);
     len = xfrsz;
@@ -886,13 +842,14 @@ else {
     len = CI_GETL (pkt->data, CIPPD_BCNT);
     }
 
-sboff = 0;
 blk.length = len + LEN_DAT;
+blk.path = CI_PATH_AUTO;
+blk.node = CI_GETB (pkt->data, PPD_PORT);
 CI_PUTL (blk.data, CI_RBNAM, rbnam);
 CI_PUTL (blk.data, CI_RBOFF, rboff);
 
 if ((pkt->data[PPD_SWFLAG] & CIPPD_BLOCK) == 0) {
-    r = ci_send (&cq_unit[0], &blk);
+    r = ci_send (uptr, &blk);
     if (r != SCPE_OK)
         sim_printf ("CIQBA send data stalled\n");
     return SCPE_OK;
@@ -901,21 +858,23 @@ if ((pkt->data[PPD_SWFLAG] & CIPPD_BLOCK) == 0) {
 xfrsz -= len;
 if (xfrsz == 0)
     blk.data[CI_FLAGS] |= CI_LP;                        /* last packet */
-r = Map_ReadB (addr + sboff, len, &blk.data[CI_DATA]);
+r = Map_ReadB (addr, len, &blk.data[CI_DATA]);
 if (r)
     sim_printf ("Error transferring data from host memory\n");
-r = ci_send (&cq_unit[0], &blk);
+r = ci_send (uptr, &blk);
 if (r != SCPE_OK)
     sim_printf ("CIQBA send data stalled\n");
 CI_PUTL (pkt->data, CIPPD_BLEFT, 0);
 return SCPE_OK;
 }
 
+/* Receive block data */
+
 t_stat cq_receive_data (UNIT *uptr, CI_PKT *pkt)
 {
-uint32 rbnam, rboff, sboff, rblen, xfrsz;
+uint32 rbnam, rboff, rblen, xfrsz;
 uint32 addr = 0;
-CI_PKT blk;
+CQ_PKT blk;
 t_bool last;
 t_stat r;
 
@@ -934,61 +893,39 @@ if (addr != 0) {
     return SCPE_OK;
     }
 
-pkt->data[PPD_SWFLAG] = CIPPD_BLOCK;                    /* block transfer */
-pkt->data[PPD_FLAGS] &= ~PPD_LP;                        /* clear last packet flag */
+cq_fmt_receive (pkt, &blk);                             /* convert to CIQBA format */
+blk.data[CIPPD_SEQ_CNTRL] |= CIPPD_BLOCK;               /* block transfer */
 
-blk.length = PPD_XFRSZ;                                 /* header + transaction ID */
-memcpy (blk.data, pkt->data, PPD_XFRSZ);                /* copy header */
-cq_fmt_receive (&blk);                                  /* convert to CIQBA format */
-
-CI_PUTL (blk.data, CIPPD_NAME, rbnam);
-sboff = 0;
-while (xfrsz) {
-    rblen = (xfrsz > CI_MAXDAT) ? CI_MAXDAT : xfrsz;
-    memcpy (&blk.data[CIPPD_Q22HAN], &pkt->data[(CI_DATA + sboff)], rblen);
-    blk.length = rblen + 0x17;                          // FIXME: Why 0x17?
-    blk.data[CIPPD_LEN_HI] = (blk.length >> 8) & 0xFF;
-    blk.data[CIPPD_LEN_LO] = blk.length & 0xFF;
-    blk.length = rblen + CIPPD_Q22HAN;                  /* set actual length */
-    if ((xfrsz <= CI_MAXDAT) && last)
-        blk.data[CIPPD_SEQ_CNTRL] |= CIPPD_LAST;        /* last packet */
-    CI_PUTL (blk.data, CIPPD_OFFSET, rboff);
-    r = cq_receive_int (&blk, FALSE);                   /* pass to system */
-    if (r != SCPE_OK)
-        sim_printf ("Failed to receive packet\n");
-    xfrsz -= rblen;
-    rboff += rblen;
-    sboff += rblen;
-    }
+r = cq_receive_int (&blk, FALSE);                       /* pass to system */
+if (r != SCPE_OK)
+    sim_printf ("Failed to receive packet\n");
 return SCPE_OK;
 }
 
-t_stat cq_send (CI_PKT *pkt)
-{
-UNIT *uptr = &cq_unit[0];
-uint32 dg_type;
+/* Send packets are actually in VAX PPD format */
 
-switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by port */
+t_stat cq_send (UNIT *uptr, CQ_PKT *ppd)
+{
+uint32 mtype;
+CI_PKT pkt;
+
+switch (ppd->data[PPD_OPC]) {                           /* opcodes handled by port */
 
     case OPC_SNDDAT:
     case OPC_RETDAT:
-        return cq_send_data (uptr, pkt);
-
-    case OPC_REQID:
-    case OPC_RETID:
-        cq_fmt_send (pkt);                              /* convert to CI format */
-        break;
+        return cq_send_data (uptr, ppd);
 
     case OPC_SNDDG:
-        dg_type = CI_GETW (pkt->data, PPD_MTYPE);
-        if (dg_type == DG_ACK)
-            ci_open_vc (&cq_unit[0], pkt->data[PPD_PORT]);
+        mtype = CI_GETW (ppd->data, PPD_MTYPE);
+        if (mtype == PPD_ACK)
+            ci_open_vc (uptr, ppd->data[PPD_PORT]);
         break;
         }
-return ci_send_ppd (uptr, pkt);
+cq_fmt_send (ppd, &pkt);                                /* convert to CI format */
+return ci_send (uptr, &pkt);
 }
 
-t_stat cq_dispose_int (CI_PKT *pkt, t_bool internal)
+t_stat cq_dispose_int (CQ_PKT *pkt, t_bool internal)
 {
 sim_debug (DBG_REG, &cq_dev, "cq_dispose\n");
 cq_csr |= CSR_DISPOSE_ATTN;
@@ -996,12 +933,12 @@ pkt->size = 0;
 return cq_enqueue (&cq_dsp, pkt, internal);
 }
 
-t_stat cq_dispose (CI_PKT *pkt)
+t_stat cq_dispose (CQ_PKT *pkt)
 {
 return cq_dispose_int (pkt, FALSE);
 }
 
-t_stat cq_respond (CI_PKT *pkt)
+t_stat cq_respond (CQ_PKT *pkt)
 {
 sim_debug (DBG_REG, &cq_dev, "cq_respond\n");
 cq_write_packet (pkt, PPD_HDR);
@@ -1010,7 +947,7 @@ pkt->size = 0;
 return cq_enqueue (&cq_dsp, pkt, FALSE);
 }
 
-t_stat cq_receive_int (CI_PKT *pkt, t_bool internal)
+t_stat cq_receive_int (CQ_PKT *pkt, t_bool internal)
 {
 t_stat r;
 sim_debug (DBG_REG, &cq_dev, "cq_receive\n");
@@ -1022,27 +959,27 @@ cq_csr |= CSR_RECEIVE_ATTN;
 return cq_enqueue (&cq_rcv, pkt, internal);
 }
 
-t_stat cq_receive (CI_PKT *pkt)
+t_stat cq_receive (UNIT *uptr, CI_PKT *pkt)
 {
-UNIT *uptr = &cq_unit[0];
-uint32 dg_type;
+CQ_PKT qkt;
+uint32 mtype;
 
-switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by port */
-    case OPC_SNDDATREC:
-    case OPC_DATREC:
+switch (pkt->data[CI_OPC]) {                            /* opcodes handled by port */
+    case OPC_SNTDAT:
+    case OPC_RETDAT:
         return cq_receive_data (uptr, pkt);
 
-    case OPC_SNDDG:
-        dg_type = CI_GETW (pkt->data, CIPPD_MTYPE);
-        if (dg_type == DG_ACK)
-            ci_open_vc (&cq_unit[0], pkt->data[CI_SRC]);
+    case OPC_DG:
+        mtype = CI_GETW (pkt->data, CI_TEXT);           /* FIXME - can't use PPD_MTYPE or CIPPD_MTYPE */
+        if (mtype == PPD_ACK)
+            ci_open_vc (uptr, pkt->data[CI_SRC]);
         break;
         }
-cq_fmt_receive (pkt);
-return cq_receive_int (pkt, FALSE);
+cq_fmt_receive (pkt, &qkt);
+return cq_receive_int (&qkt, FALSE);
 }
 
-t_stat cq_add_map (CI_PKT *pkt)
+t_stat cq_add_map (CQ_PKT *pkt)
 {
 uint32 addr, len, bnam, i;
 
@@ -1081,7 +1018,7 @@ for (i = 0; i < MAX_BMAP; i++) {
 return 0;                                               /* no, unmapped transfer */
 }
 
-t_stat cq_ciqba_msg (CI_PKT *pkt)
+t_stat cq_ciqba_msg (UNIT *uptr, CQ_PKT *pkt)
 {
 uint8 port;
 t_stat r;
@@ -1112,9 +1049,9 @@ switch (pkt->data[PPD_OPC]) {
     case OPC_RESET:
         sim_debug (DBG_REG, &cq_dev, "CIQBA Reset\n");
         port = pkt->data[PPD_PORT];
-        if (ci_check_vc (&cq_unit[0], port)) {
+        if (ci_check_vc (uptr, port)) {
             sim_debug (DBG_REG, &cq_dev, "CIQBA Closing VC to %d\n", port);
-            r = ci_close_vc (&cq_unit[0], port);
+            r = ci_close_vc (uptr, port);
             }
         cq_dispose_int (pkt, TRUE);
         break;
@@ -1137,9 +1074,9 @@ switch (pkt->data[PPD_OPC]) {
 return SCPE_OK;
 }
 
-t_stat cq_svc_queue (CQ_QUEUE *queue, uint32 *processed)
+t_stat cq_svc_queue (UNIT *uptr, CQ_QUEUE *queue, uint32 *processed)
 {
-CI_PKT pkt;
+CQ_PKT pkt;
 t_stat r = SCPE_OK;
 
 while (cq_can_enq (&cq_dsp)) {
@@ -1155,14 +1092,14 @@ while (cq_can_enq (&cq_dsp)) {
     sim_debug (DBG_REG, &cq_dev, "Processing packet: type = %d\n", pkt.type);
     // FIXME: Handle status from ci_send_ppd
     if (pkt.type == 1) {
-        r = cq_send (&pkt);
+        r = cq_send (uptr, &pkt);
         if (pkt.data[PPD_FLAGS] & PPD_RSP)              /* response requested? */
             r = cq_respond (&pkt);                      /* driver wants it back */
         else
             r = cq_dispose (&pkt);                      /* dispose of packet */
         }
     else
-        r = cq_ciqba_msg (&pkt);
+        r = cq_ciqba_msg (uptr, &pkt);
     if (r != SCPE_OK) {
         sim_debug (DBG_REG, &cq_dev, "Dispose packet failed\n");
         break;
@@ -1178,23 +1115,23 @@ t_stat r;
 uint32 processed = 0;
 
 sim_debug (DBG_REG, &cq_dev, "CIQBA Poll\n");
-r = cq_svc_queue (&cq_sndh, &processed);                /* service high priority queue */
+r = cq_svc_queue (uptr, &cq_sndh, &processed);          /* service high priority queue */
 if (r != SCPE_OK)
     return r;
 if (processed > 0)                                      /* any processed? */
     cq_csr |= CSR_SEND_HI_AVAIL;
 processed = 0;
-r = cq_svc_queue (&cq_sndl, &processed);                /* service low priority queue */
+r = cq_svc_queue (uptr, &cq_sndl, &processed);          /* service low priority queue */
 if (r != SCPE_OK)
     return r;
 if (processed > 0)                                      /* any processed? */
     cq_csr |= CSR_SEND_LO_AVAIL;
 while (cq_can_deq (&cq_rcv)) {                          /* receive ring available? */
-    r = ci_receive_ppd (uptr, &pkt);                    /* get next packet */
+    r = ci_receive (uptr, &pkt);                        /* get next packet */
 // TODO: handle errors from ci_receive
     if (r != SCPE_OK)
         break;
-    r = cq_receive (&pkt);                              /* process packet */
+    r = cq_receive (uptr, &pkt);                              /* process packet */
     if (r != SCPE_OK)
         return r;
     };

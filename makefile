@@ -1535,13 +1535,14 @@ VAX = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c ${VAXD}/vax_io.c \
 	${VAXD}/vax_mmu.c ${VAXD}/vax_stddev.c ${VAXD}/vax_sysdev.c \
 	${VAXD}/vax_sys.c  ${VAXD}/vax_syscm.c ${VAXD}/vax_syslist.c \
 	${VAXD}/vax_vc.c ${VAXD}/vax_lk.c ${VAXD}/vax_vs.c ${VAXD}/vax_2681.c \
-	${VAXD}/vax_ciqba.c ${DECD}/dec_ci.c ${VAXD}/vax_hsc.c \
-	${VAXD}/vax_rf.c \
+	${VAXD}/vax_ciqba.c ${VAXD}/vax_hsc.c ${VAXD}/vax_rf.c \
+	${DECD}/dec_ci.c ${DECD}/dec_ppd.c ${DECD}/dec_scs.c \
+	${DECD}/scs_directory.c ${DECD}/scs_mscp.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
 	${PDP11D}/pdp11_xq.c ${PDP11D}/pdp11_vh.c ${PDP11D}/pdp11_cr.c \
 	${PDP11D}/pdp11_td.c ${PDP11D}/pdp11_io_lib.c ${PDP11D}/pdp11_dup.c
-VAX_OPT = -DVM_VAX -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} -I ${PDP11D} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} ${AIO_CCDEFS}
+VAX_OPT = -DVM_VAX -DUSE_INT64 -DUSE_ADDR64 -DUSE_SIM_VIDEO -I ${VAXD} -I ${PDP11D} -I ${DECD} ${NETWORK_OPT} ${VIDEO_CCDEFS} ${VIDEO_LDFLAGS} ${AIO_CCDEFS}
 
 
 VAX410 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
@@ -1655,10 +1656,9 @@ VAX750 = ${VAXD}/vax_cpu.c ${VAXD}/vax_cpu1.c ${VAXD}/vax_fpa.c \
 	${VAXD}/vax_gvp.c ${VAXD}/vax_ci.c ${VAXD}/vax750_stddev.c \
 	${VAXD}/vax750_cmi.c ${VAXD}/vax750_mem.c ${VAXD}/vax750_uba.c \
 	${VAXD}/vax7x0_mba.c ${VAXD}/vax_uw.c ${VAXD}/vax780_ci.c \
-	${VAXD}/vax750_syslist.c ${DECD}/dec_ci.c ${VAXD}/vax_hsc.c \
-	${VAXD}/vax_rf.c \
-	${DECD}/dec_ppd.c ${DECD}/dec_scs.c ${DECD}/scs_directory.c \
-	${DECD}/scs_mscp.c \
+	${VAXD}/vax750_syslist.c ${VAXD}/vax_hsc.c ${VAXD}/vax_rf.c \
+	${DECD}/dec_ci.c ${DECD}/dec_ppd.c ${DECD}/dec_scs.c \
+	${DECD}/scs_directory.c ${DECD}/scs_mscp.c \
 	${PDP11D}/pdp11_rl.c ${PDP11D}/pdp11_rq.c ${PDP11D}/pdp11_ts.c \
 	${PDP11D}/pdp11_dz.c ${PDP11D}/pdp11_lp.c ${PDP11D}/pdp11_tq.c \
 	${PDP11D}/pdp11_xu.c ${PDP11D}/pdp11_ry.c ${PDP11D}/pdp11_cr.c \
