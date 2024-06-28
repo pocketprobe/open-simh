@@ -112,16 +112,18 @@ t_stat hsc_tmrsvc (UNIT *uptr)
 CI_PKT pkt;
 uint32 i;
 
-// TODO: Send loopback
-for (i = 0; i < CI_MAX_NODES; i++) {
+pkt.node = hsc_unit[0].ci_node;                         /* send loopback */
+pkt.path = hsc_path;
+ppd_sndlb (&hsc_unit[0], &pkt);
+
+for (i = 0; i < CI_MAX_NODES; i++) {                    /* request IDs */
     pkt.node = i;
-    pkt.path = hsc_path;
     ppd_reqid (&hsc_unit[0], &pkt);
     }
 if (hsc_path == CI_PATH_A)                              /* switch path */
     hsc_path = CI_PATH_B;
 else
-    hsc_path = CI_PATH_B;
+    hsc_path = CI_PATH_A;
 sim_activate_after (uptr, 10000000);                    /* reactivate */
 return SCPE_OK;
 }
@@ -144,8 +146,6 @@ return ci_port_svc (uptr);
 
 t_stat hsc_reset (DEVICE *dptr)
 {
-uint32 i;
-
 hsc_path = CI_PATH_A;
 ci_port_reset (dptr);
 if (dptr->flags & DEV_DIS)

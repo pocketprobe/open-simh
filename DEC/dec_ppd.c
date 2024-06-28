@@ -30,6 +30,20 @@ CI_PUTL (pkt->data, CI_XCTID + 4, 0);
 return ci_send (uptr, pkt);
 }
 
+/* Send loopback */
+
+t_stat ppd_sndlb (UNIT *uptr, CI_PKT *pkt)
+{
+uint8 i;
+
+pkt->length = LEN_LB + 0x30;
+pkt->data[CI_OPC] = OPC_LB;
+pkt->data[CI_FLAGS] = 0;
+for (i = 0; i < 0x30; i++)
+    pkt->data[CI_TEXT + i] = i;                         /* datagram text */
+return ci_send (uptr, pkt);
+}
+
 /* Process START datagram */
 
 t_stat ppd_start (UNIT *uptr, CI_PKT *pkt, uint32 dg_type)

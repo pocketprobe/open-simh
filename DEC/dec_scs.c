@@ -328,6 +328,9 @@ switch (msg_type)
     case SCS_DISREQ:                                    /* disconnect request */
         return scs_disreq (uptr, pkt);
 
+    case SCS_DISRSP:                                    /* disconnect response */
+        return SCPE_OK;
+
     case SCS_CRREQ:                                     /* credit request */
         return scs_crdreq (uptr, pkt);
 
@@ -336,7 +339,7 @@ switch (msg_type)
         return scs_appmsg (uptr, pkt);
 
     default:
-        printf ("Unknown SCS message received: 0x%X\r\n", msg_type);
+        printf ("Unhandled SCS message received: 0x%X\r\n", msg_type);
         break;
 }
 

@@ -1,6 +1,6 @@
-/* vax_ciqba.c: QBus Computer Interconnect adapter
+/* vax_ciqba.c: Computer Interconnect QBus Adapter
 
-   Copyright (c) 2019, Matt Burke
+   Copyright (c) 2019-2024, Matt Burke
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -285,7 +285,7 @@ const SYMTBL pq_syms[] = {
     { NULL, 0 }
     };
 
-const char *cq_rgd[] = {
+const char *cq_rgd[] = {                                /* register descriptions */
     "Control Register",
     "Status Register",
     "Interrupt Vector",
@@ -686,34 +686,34 @@ t_stat cq_read_packet (CQ_PKT *pkt, size_t length)
 {
 uint32 i;
 memset (pkt->data, 0, PPD_TYPE);
-sim_debug (DBG_REG, &cq_dev, "cq_read_packet (%d bytes):\n", length);
+sim_debug (DBG_TRC, &cq_dev, "cq_read_packet (%d bytes):\n", length);
 if (Map_ReadB (pkt->addr + PPD_TYPE, length - PPD_TYPE, &pkt->data[PPD_TYPE])) {
-    sim_debug (DBG_REG, &cq_dev, "read failed\n");
+    sim_debug (DBG_TRC, &cq_dev, "read failed\n");
     return CISE_MEMERR;
     }
 for (i = 0; i < length; i++) {
     if ((i % 4) == 0)
-        sim_debug (DBG_REG, &cq_dev, "\n");
-    sim_debug (DBG_REG, &cq_dev, "%02X ", pkt->data[i ^ 3]);
+        sim_debug (DBG_TRC, &cq_dev, "\n");
+    sim_debug (DBG_TRC, &cq_dev, "%02X ", pkt->data[i ^ 3]);
     }
-sim_debug (DBG_REG, &cq_dev, "\n");
+sim_debug (DBG_TRC, &cq_dev, "\n");
 return SCPE_OK;
 }
 
 t_stat cq_write_packet (CQ_PKT *pkt, size_t length)
 {
 uint32 i;
-sim_debug (DBG_REG, &cq_dev, "cq_write_packet (%d bytes):\n", length);
+sim_debug (DBG_TRC, &cq_dev, "cq_write_packet (%d bytes):\n", length);
 if (Map_WriteB (pkt->addr + PPD_TYPE, length - PPD_TYPE, &pkt->data[PPD_TYPE])) {
-    sim_debug (DBG_REG, &cq_dev, "write failed\n");
+    sim_debug (DBG_TRC, &cq_dev, "write failed\n");
     return CISE_MEMERR;
     }
 for (i = 0; i < length; i++) {
     if ((i % 4) == 0)
-        sim_debug (DBG_REG, &cq_dev, "\n");
-    sim_debug (DBG_REG, &cq_dev, "%02X ", pkt->data[i ^ 3]);
+        sim_debug (DBG_TRC, &cq_dev, "\n");
+    sim_debug (DBG_TRC, &cq_dev, "%02X ", pkt->data[i ^ 3]);
     }
-sim_debug (DBG_REG, &cq_dev, "\n");
+sim_debug (DBG_TRC, &cq_dev, "\n");
 return SCPE_OK;
 }
 
@@ -731,7 +731,7 @@ if (entry & RENT_CIQBA_OWNED) {
         pkt->type = 1;
     else
         pkt->type = 0;
-    sim_debug (DBG_REG, &cq_dev, "cq_dequeue: entry = %d, addr = %X, size = %X\n", i, pkt->addr, pkt->size);
+    sim_debug (DBG_TRC, &cq_dev, "cq_dequeue: entry = %d, addr = %X, size = %X\n", i, pkt->addr, pkt->size);
     if (keep)
         entry = RENT_CIQBA_OWNED;
     else
@@ -756,7 +756,7 @@ uint32 size;
 i = queue->ptr;
 entry = queue->ring[i*2] | (queue->ring[i*2+1] << 16);  // May need a macro?
 if (entry == RENT_CIQBA_OWNED) {                    /* owned, empty? */
-    sim_debug (DBG_REG, &cq_dev, "cq_enqueue: entry = %d, addr = %X, size = %X\n", i, pkt->addr, pkt->size);
+    sim_debug (DBG_TRC, &cq_dev, "cq_enqueue: entry = %d, addr = %X, size = %X\n", i, pkt->addr, pkt->size);
     entry = pkt->addr & RENT_ADDR;
     size = pkt->size >> 2;
     entry = entry | (size << RENT_V_LENGTH);
@@ -769,7 +769,7 @@ if (entry == RENT_CIQBA_OWNED) {                    /* owned, empty? */
         queue->ptr = 0;
     return SCPE_OK;
     }
-sim_debug (DBG_REG, &cq_dev, "cq_enqueue failed\n");
+sim_debug (DBG_TRC, &cq_dev, "cq_enqueue failed\n");
 return CISE_QFULL;
 }
 
@@ -811,10 +811,10 @@ void cq_fmt_send (CQ_PKT *ppd, CI_PKT *pkt)
 pkt->data[CI_OPC] = ppd->data[PPD_OPC];
 pkt->data[CI_FLAGS] = 0;
 memcpy (&pkt->data[CI_TEXT], &ppd->data[PPD_TEXT], ppd->length - PPD_TEXT);
-pkt->length = CI_GETW (ppd->data, PPD_LENGTH);      /* get length */
-pkt->length += PPD_TEXT;                            /* add header */
-pkt->length -= 2;                                   /* length field removed */
-pkt->length -= (PPD_OPC - CI_OPC);                  /* set new length */
+pkt->length = CI_GETW (ppd->data, PPD_LENGTH);          /* get length */
+pkt->length += PPD_TEXT;                                /* add header */
+pkt->length -= 2;                                       /* length field removed */
+pkt->length -= (PPD_OPC - CI_OPC);                      /* set new length */
 pkt->node = CI_GETB (ppd->data, PPD_PORT);
 pkt->path = GET_PATH (ppd->data[PPD_FLAGS]);
 }
@@ -860,7 +860,7 @@ if (xfrsz == 0)
     blk.data[CI_FLAGS] |= CI_LP;                        /* last packet */
 r = Map_ReadB (addr, len, &blk.data[CI_DATA]);
 if (r)
-    sim_printf ("Error transferring data from host memory\n");
+    sim_debug (DBG_TRC, &cq_dev, "Error transferring data from host memory\n");
 r = ci_send (uptr, &blk);
 if (r != SCPE_OK)
     sim_printf ("CIQBA send data stalled\n");
@@ -886,10 +886,10 @@ xfrsz = (pkt->length - CI_DATA);                        /* payload length */
 if (!last)
     addr = cq_map_buffer (rbnam, rboff, xfrsz);         /* try to map buffer */
 if (addr != 0) {
-    sim_printf ("Found map addr %X for buffer %08X\n", addr, rbnam);
+    sim_debug (DBG_TRC, &cq_dev, "Found map addr %X for buffer %08X\n", addr, rbnam);
     rblen = Map_WriteB (addr, xfrsz, &pkt->data[CI_DATA]); /* transfer block data directly */
     if (rblen)
-        sim_printf ("Error transferring data to host memory\n");
+        sim_debug (DBG_TRC, &cq_dev, "Error transferring data to host memory\n");
     return SCPE_OK;
     }
 
@@ -927,7 +927,7 @@ return ci_send (uptr, &pkt);
 
 t_stat cq_dispose_int (CQ_PKT *pkt, t_bool internal)
 {
-sim_debug (DBG_REG, &cq_dev, "cq_dispose\n");
+sim_debug (DBG_TRC, &cq_dev, "cq_dispose\n");
 cq_csr |= CSR_DISPOSE_ATTN;
 pkt->size = 0;
 return cq_enqueue (&cq_dsp, pkt, internal);
@@ -940,7 +940,7 @@ return cq_dispose_int (pkt, FALSE);
 
 t_stat cq_respond (CQ_PKT *pkt)
 {
-sim_debug (DBG_REG, &cq_dev, "cq_respond\n");
+sim_debug (DBG_TRC, &cq_dev, "cq_respond\n");
 cq_write_packet (pkt, PPD_HDR);
 cq_csr |= CSR_DISPOSE_ATTN;
 pkt->size = 0;
@@ -950,10 +950,10 @@ return cq_enqueue (&cq_dsp, pkt, FALSE);
 t_stat cq_receive_int (CQ_PKT *pkt, t_bool internal)
 {
 t_stat r;
-sim_debug (DBG_REG, &cq_dev, "cq_receive\n");
+sim_debug (DBG_TRC, &cq_dev, "cq_receive\n");
 r = cq_dequeue (&cq_rcv, pkt, TRUE);
 if (r != SCPE_OK)
-    sim_debug (DBG_REG, &cq_dev, "cq_dequeue failed\n");
+    sim_debug (DBG_TRC, &cq_dev, "cq_dequeue failed\n");
 cq_write_packet (pkt, pkt->length);
 cq_csr |= CSR_RECEIVE_ATTN;
 return cq_enqueue (&cq_rcv, pkt, internal);
@@ -1025,50 +1025,50 @@ t_stat r;
 
 switch (pkt->data[PPD_OPC]) {
     case OPC_QUERY:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Host Query\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Host Query\n");
         cq_dispose_int (pkt, TRUE);
         pkt->data[PPD_OPC] = OPC_QUERY_RSP;
         cq_receive_int (pkt, TRUE);                     /* FIXME: check for space in ring */
         break;
 
     case OPC_INIT:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Host Init\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Host Init\n");
         cq_dispose_int (pkt, TRUE);
         break;
 
     case OPC_PROMISC_EN:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Promisc Enable\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Promisc Enable\n");
         cq_dispose_int (pkt, TRUE);
         break;
 
     case OPC_PROMISC_DIS:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Promisc Disable\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Promisc Disable\n");
         cq_dispose_int (pkt, TRUE);
         break;
 
     case OPC_RESET:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Reset\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Reset\n");
         port = pkt->data[PPD_PORT];
         if (ci_check_vc (uptr, port)) {
-            sim_debug (DBG_REG, &cq_dev, "CIQBA Closing VC to %d\n", port);
+            sim_debug (DBG_LCMD, &cq_dev, "CIQBA Closing VC to %d\n", port);
             r = ci_close_vc (uptr, port);
             }
         cq_dispose_int (pkt, TRUE);
         break;
 
     case OPC_MAP:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Map\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Map\n");
         cq_add_map (pkt);
         cq_dispose_int (pkt, TRUE);
         break;
 
     case OPC_UNMAP:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Unmap\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Unmap\n");
         cq_dispose_int (pkt, TRUE);
         break;
 
     default:
-        sim_debug (DBG_REG, &cq_dev, "CIQBA Unknown Message\n");
+        sim_debug (DBG_LCMD, &cq_dev, "CIQBA Unknown Message\n");
         break;
         }
 return SCPE_OK;
@@ -1085,11 +1085,11 @@ while (cq_can_enq (&cq_dsp)) {
     *processed = *processed + 1;
     r = cq_read_packet (&pkt, pkt.size);
     if (r != SCPE_OK) {
-        sim_debug (DBG_REG, &cq_dev, "Read packet failed\n");
+        sim_debug (DBG_TRC, &cq_dev, "Read packet failed\n");
         break;
         }
     pkt.length = pkt.size;
-    sim_debug (DBG_REG, &cq_dev, "Processing packet: type = %d\n", pkt.type);
+    sim_debug (DBG_TRC, &cq_dev, "Processing packet: type = %d\n", pkt.type);
     // FIXME: Handle status from ci_send_ppd
     if (pkt.type == 1) {
         r = cq_send (uptr, &pkt);
@@ -1101,7 +1101,7 @@ while (cq_can_enq (&cq_dsp)) {
     else
         r = cq_ciqba_msg (uptr, &pkt);
     if (r != SCPE_OK) {
-        sim_debug (DBG_REG, &cq_dev, "Dispose packet failed\n");
+        sim_debug (DBG_TRC, &cq_dev, "Dispose packet failed\n");
         break;
         }
     }
@@ -1114,7 +1114,7 @@ CI_PKT pkt;
 t_stat r;
 uint32 processed = 0;
 
-sim_debug (DBG_REG, &cq_dev, "CIQBA Poll\n");
+sim_debug (DBG_TRC, &cq_dev, "CIQBA Poll\n");
 r = cq_svc_queue (uptr, &cq_sndh, &processed);          /* service high priority queue */
 if (r != SCPE_OK)
     return r;
@@ -1131,7 +1131,7 @@ while (cq_can_deq (&cq_rcv)) {                          /* receive ring availabl
 // TODO: handle errors from ci_receive
     if (r != SCPE_OK)
         break;
-    r = cq_receive (uptr, &pkt);                              /* process packet */
+    r = cq_receive (uptr, &pkt);                        /* process packet */
     if (r != SCPE_OK)
         return r;
     };
