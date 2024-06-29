@@ -530,15 +530,20 @@ if (port < 0) {                                         /* no owner? */
     }
 
 ci_close_vc (uptr, port);                               /* close the VC */
-#if 0
-pkt.data[CI_SRC] = port;                                /* port number */
+
+pkt.length = LEN_START;
+pkt.path = CI_PATH_A;
+pkt.data[CI_LEN_HI] = ((pkt.length >> 8) & 0xF);        /* packet length high */
+pkt.data[CI_LEN_HI] |= (pkt.path << CI_V_PATH);         /* use the reserved bits to store the send path */
+pkt.data[CI_LEN_LO] = pkt.length & 0xFF;                /* packet length low */
+pkt.data[CI_DEST] = uptr->ci_node;                      /* destination node */
+pkt.data[CI_NOT_DEST] = ~uptr->ci_node;
+pkt.data[CI_SRC] = port;                                /* source node */
 pkt.data[CI_OPC] = OPC_DG;                              /* opcode */
 pkt.data[CI_FLAGS] = 0;                                 /* flags */
 pkt.data[PPD_MTYPE] = PPD_START;                        /* message type: START */
-pkt.addr = 0;
-pkt.length = LEN_START;
-ciq_insert (&cp->rx_queue, &pkt);                       /* put to response queue */
-#endif
+ciq_insert (&cp->rx_queue, &pkt);                       /* add to receive queue */
+
 return SCPE_OK;
 }
 

@@ -57,6 +57,7 @@
 #define LEN_ACK         (PPD_MTYPE + 2)
 
 extern t_stat ppd_sndmsg (UNIT *uptr, CI_PKT *pkt);
+extern t_stat ppd_sndlb (UNIT *uptr, CI_PKT *pkt);
 extern int32 ppd_snddat (UNIT *uptr, uint32 sbnam);
 extern int32 ppd_reqdat (UNIT *uptr, uint32 rbnam);
 extern t_stat ppd_receive (UNIT *uptr, CI_PKT *pkt);
