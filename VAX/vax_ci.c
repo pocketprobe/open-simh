@@ -644,8 +644,9 @@ else {
 
 /* Put a packet on the response queue */
 
-t_stat ci_put_rsq (PPD_PKT *pkt)
+t_stat ci_put_rsq (UNIT *uptr, PPD_PKT *pkt)
 {
+sim_debug_unit (DBG_TRC, uptr, "ci_put_rsq: addr: %08X\n", pkt->addr);
 if (gvp_insqti (&ci_mmu, ci_pqbb_va + PQB_RESP_OF, pkt->addr) > 1) {
     ci_psr |= PSR_RQA;
     ci_set_int ();
@@ -655,10 +656,11 @@ return SCPE_OK;
 
 /* Put a packet on the datagram free queue */
 
-t_stat ci_put_dfq (PPD_PKT *pkt)
+t_stat ci_put_dfq (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 hdr;
 
+sim_debug_unit (DBG_TRC, uptr, "ci_put_dfq: addr: %08X\n", pkt->addr);
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_DFQA_OF, L_LONG);
 gvp_insqti (&ci_mmu, hdr, pkt->addr);
 return SCPE_OK;
@@ -666,12 +668,13 @@ return SCPE_OK;
 
 /* Get a packet from the response queue */
 
-t_stat ci_get_dfq (PPD_PKT *pkt)
+t_stat ci_get_dfq (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 hdr;
 
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_DFQA_OF, L_LONG);
 pkt->addr = gvp_remqhi (&ci_mmu, hdr);
+sim_debug_unit (DBG_TRC, uptr, "ci_get_dfq: addr: %08X\n", pkt->addr);
 if (pkt->addr == 0)                                     /* queue error? */
     return CISE_QERR;
 if (pkt->addr == (ci_pqbb_va + PQB_MFQA_OF))            /* queue empty? */
@@ -681,10 +684,11 @@ return SCPE_OK;
 
 /* Put a packet on the message free queue */
 
-t_stat ci_put_mfq (PPD_PKT *pkt)
+t_stat ci_put_mfq (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 hdr;
 
+sim_debug_unit (DBG_TRC, uptr, "ci_put_mfq: addr: %08X\n", pkt->addr);
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_MFQA_OF, L_LONG);
 gvp_insqti (&ci_mmu, hdr, pkt->addr);
 return SCPE_OK;
@@ -692,12 +696,13 @@ return SCPE_OK;
 
 /* Get a packet from the datagram free queue */
 
-t_stat ci_get_mfq (PPD_PKT *pkt)
+t_stat ci_get_mfq (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 hdr;
 
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_MFQA_OF, L_LONG);
 pkt->addr = gvp_remqhi (&ci_mmu, hdr);
+sim_debug_unit (DBG_TRC, uptr, "ci_get_mfq: addr: %08X\n", pkt->addr);
 if (pkt->addr == 0)                                     /* queue error? */
     return CISE_QERR;
 if (pkt->addr == (ci_pqbb_va + PQB_MFQA_OF))            /* queue empty? */
@@ -709,11 +714,20 @@ return SCPE_OK;
 
 t_stat ci_dispose (UNIT *uptr, PPD_PKT *pkt)
 {
+uint8 opc = CI_GETB (pkt->data, PPD_OPC);
+
 if (pkt->addr != 0) {
-    if (pkt->data[PPD_TYPE] == DYN_CIMSG)
-        return ci_put_mfq (pkt);
-    else
-        return ci_put_dfq (pkt);
+    switch (opc) {                                      /* determine packet type */
+        case OPC_SNDMSG:
+        case OPC_REQDAT:
+        case OPC_REQDAT1:
+        case OPC_REQDAT2:
+        case OPC_SNDDAT:
+            return ci_put_mfq (uptr, pkt);              /* message */
+
+        default:
+            return ci_put_dfq (uptr, pkt);              /* datagram */
+        }
     }
 return SCPE_IERR;
 }
@@ -724,7 +738,7 @@ t_stat ci_respond (UNIT *uptr, PPD_PKT *pkt)
 {
 if (pkt->addr != 0) {
     ci_write_packet (uptr, pkt, PPD_HDR);
-    return ci_put_rsq (pkt);
+    return ci_put_rsq (uptr, pkt);
     }
 return SCPE_IERR;
 }
@@ -733,17 +747,25 @@ return SCPE_IERR;
 
 t_stat ci_receive_int (UNIT *uptr, PPD_PKT *pkt)
 {
+uint8 opc = CI_GETB (pkt->data, PPD_OPC);
 t_stat r;
+
 if (pkt->addr == 0) {
-    if (pkt->data[PPD_TYPE] == DYN_CIMSG)
-        r = ci_get_mfq (pkt);
-    else
-        r = ci_get_dfq (pkt);
+    switch (opc) {                                      /* determine packet type */
+        case OPC_MSGREC:
+        case OPC_DATREC:
+            r = ci_get_mfq (uptr, pkt);                 /* message */
+            break;
+
+        default:
+            r = ci_get_dfq (uptr, pkt);                 /* datagram */
+            break;
+        }
     if (r != SCPE_OK)
         return r;
     }
 ci_write_packet (uptr, pkt, pkt->length);
-return ci_put_rsq (pkt);
+return ci_put_rsq (uptr, pkt);
 }
 
 /* New incoming packet received */
@@ -826,21 +848,6 @@ if ((opc == OPC_ID) || (opc == OPC_LB)) {
         path = PPD_PS1;                                 /* received on path B */
     ppd->data[PPD_FLAGS] |= (path << PPD_V_PS);         /* set receive path */
     }
-
-switch (opc) {                                          /* set structure type */
-    case OPC_DG:
-    case OPC_ID:
-    case OPC_LB:
-    case OPC_RST:
-    case OPC_STRT:
-        ppd->data[PPD_TYPE] = DYN_CIDG;                 /* datagram */
-        break;
-    
-    default:
-        ppd->data[PPD_TYPE] = DYN_CIMSG;                /* message */
-        break;
-    }
-
 return SCPE_OK;
 }
 
