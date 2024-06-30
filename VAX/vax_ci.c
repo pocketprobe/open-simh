@@ -145,8 +145,8 @@ extern void ci_clr_int (void);
 
 void ci_read_packet (UNIT *uptr, PPD_PKT *pkt, size_t length);
 void ci_write_packet (UNIT *uptr, PPD_PKT *pkt, size_t length);
-void ci_readb (uint32 pte_ba, int32 bc, int32 offset, uint8 *buf);
-void ci_writeb (uint32 pte_ba, int32 bc, int32 offset, uint8 *buf);
+void ci_readb (UNIT *uptr, uint32 pte_ba, int32 bc, int32 offset, uint8 *buf);
+void ci_writeb (UNIT *uptr, uint32 pte_ba, int32 bc, int32 offset, uint8 *buf);
 void ci_read_pqb (uint32 pa);
 t_stat ci_receive_int (UNIT *uptr, PPD_PKT *pkt);
 t_stat ci_receive_ppd (UNIT *uptr, PPD_PKT *pkt);
@@ -424,7 +424,7 @@ while (xfrsz > 0) {
         len = CI_MAXDAT;
     else
         len = xfrsz;
-    ci_readb (pte, len, sboff, &pkt.data[CI_DATA]);     /* transfer from buffer */
+    ci_readb (uptr, pte, len, sboff, &pkt.data[CI_DATA]); /* transfer from buffer */
     CI_PUTL (pkt.data, CI_RBOFF, rboff);                /* update packet */
     if (xfrsz <= CI_MAXDAT)
         pkt.data[CI_FLAGS] |= CI_LP;                    /* last packet */
@@ -454,6 +454,7 @@ bd = ci_bdt_va + (rbnam * BD_LEN);
 flags = GVP_Read (&ci_mmu, bd + BD_FLAGS_OF, L_WORD);   /* buffer flags */
 key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
+sim_printf ("rboff = %d, bdoff = %d\n", rboff, (flags & BD_M_OFF));
 rboff = rboff + (flags & BD_M_OFF);                     /* add page offset */
 
 if (rec_key != key)                                     /* check buffer key */
@@ -463,7 +464,7 @@ len = pkt->length - CI_DATA;
 if (len > CI_MAXDAT)                                    /* limit to max transfer */
     len = CI_MAXDAT;
 
-ci_writeb (pte, len, rboff, &pkt->data[CI_DATA]);       /* transfer to buffer */
+ci_writeb (uptr, pte, len, rboff, &pkt->data[CI_DATA]); /* transfer to buffer */
 
 if (pkt->data[CI_FLAGS] & CI_LP) {                      /* last packet? */
     if (pkt->data[CI_OPC] == OPC_SNTDAT) {
@@ -587,16 +588,19 @@ for (i = PPD_PORT; i < length; i++)                     /* don't overwrite the h
 
 // TODO: Move these to GVP?
 
-void ci_readb (uint32 pte_ba, int32 bc, int32 offset, uint8 *buf)
+void ci_readb (UNIT *uptr, uint32 pte_ba, int32 bc, int32 offset, uint8 *buf)
 {
 int32 i;
 uint32 dat, pte_va, pte, pa;;
 
+sim_debug_unit (DBG_TRC, uptr, "ci_readb: pte_ba: %08X, bc: %d, offset: %d", pte_ba, bc, offset);
 if ((offset | bc) & 03) {                               /* check alignment */
     for (i = offset; i < (offset + bc); i++, buf++) {   /* by bytes */
         pte_va = pte_ba + ((i >> 7) & ~0x3);
         pte = GVP_Read (&ci_mmu, pte_va, L_LONG);
         pa = ((pte & PTE_PFN) << VA_N_OFF) | VA_GETOFF(i);
+        if (i == offset)
+            sim_debug_unit (DBG_TRC, uptr, ", pa: %08X", pa);
         *buf = ReadB (pa);
         }
     }
@@ -605,6 +609,8 @@ else {
         pte_va = pte_ba + ((i >> 7) & ~0x3);
         pte = GVP_Read (&ci_mmu, pte_va, L_LONG);
         pa = ((pte & PTE_PFN) << VA_N_OFF) | VA_GETOFF(i);
+        if (i == offset)
+            sim_debug_unit (DBG_TRC, uptr, ", pa: %08X", pa);
         dat = ReadL (pa);                               /* get lw */
         *buf++ = dat & BMASK;                           /* low 8b */
         *buf++ = (dat >> 8) & BMASK;                    /* next 8b */
@@ -612,19 +618,23 @@ else {
         *buf = (dat >> 24) & BMASK;
         }
     }
+sim_debug_unit (DBG_TRC, uptr, "-%08X\n", pa);
 }
 
-void ci_writeb (uint32 pte_ba, int32 bc, int32 offset, uint8 *buf)
+void ci_writeb (UNIT *uptr, uint32 pte_ba, int32 bc, int32 offset, uint8 *buf)
 {
 int32 i;
 uint32 dat, pte_va, pte, pa;
 
+sim_debug_unit (DBG_TRC, uptr, "ci_writeb: pte_ba: %08X, bc: %d, offset: %d", pte_ba, bc, offset);
 if ((offset | bc) & 03) {                               /* check alignment */
     // TODO: This should only need to translate PTE when going cross page
     for (i = offset; i < (offset + bc); i++, buf++) {   /* by bytes */
         pte_va = pte_ba + ((i >> 7) & ~0x3);
         pte = GVP_Read (&ci_mmu, pte_va, L_LONG);
         pa = ((pte & PTE_PFN) << VA_N_OFF) | VA_GETOFF(i);
+        if (i == offset)
+            sim_debug_unit (DBG_TRC, uptr, ", pa: %08X", pa);
         WriteB (pa, *buf);
         }
     }
@@ -633,6 +643,8 @@ else {
         pte_va = pte_ba + ((i >> 7) & ~0x3);
         pte = GVP_Read (&ci_mmu, pte_va, L_LONG);
         pa = ((pte & PTE_PFN) << VA_N_OFF) | VA_GETOFF(i);
+        if (i == offset)
+            sim_debug_unit (DBG_TRC, uptr, ", pa: %08X", pa);
         dat = (uint32) *buf++;                          /* get low 8b */
         dat = dat | (((uint32) *buf++) << 8);           /* merge next 8b */
         dat = dat | (((uint32) *buf++) << 16);          /* merge next 8b */
@@ -640,6 +652,7 @@ else {
         WriteL (pa, dat);                               /* store lw */
         }
     }
+sim_debug_unit (DBG_TRC, uptr, "-%08X\n", pa);
 }
 
 /* Put a packet on the response queue */
@@ -725,8 +738,19 @@ if (pkt->addr != 0) {
         case OPC_SNDDAT:
             return ci_put_mfq (uptr, pkt);              /* message */
 
-        default:
+        case OPC_SNDDG:
+        case OPC_REQID:
+        case OPC_SNDRST:
+        case OPC_SNDSTRT:
+        case OPC_SNDLB:
+        case OPC_INVTC:
+        case OPC_SETCKT:
+        case OPC_RDCNT:
             return ci_put_dfq (uptr, pkt);              /* datagram */
+
+        default:
+            sim_printf ("ci_dispose() - Unhandled opcode 0x%02X\n", opc);
+            break;
         }
     }
 return SCPE_IERR;
@@ -757,8 +781,17 @@ if (pkt->addr == 0) {
             r = ci_get_mfq (uptr, pkt);                 /* message */
             break;
 
-        default:
+        case OPC_DGREC:
+        case OPC_RSTREC:
+        case OPC_STRTREC:
+        case OPC_IDREC:
+        case OPC_LBREC:
             r = ci_get_dfq (uptr, pkt);                 /* datagram */
+            break;
+
+        default:
+            sim_printf ("ci_receive_int() - Unhandled opcode 0x%02X\n", opc);
+            r = SCPE_IERR;
             break;
         }
     if (r != SCPE_OK)
@@ -904,7 +937,8 @@ do {
             }
         }
 } while (r == SCPE_OK);
-// TODO: handle errors from ci_receive
+if (r != CISE_NOPKT)
+    return r;
 return ci_port_svc (uptr);
 }
 

@@ -205,7 +205,11 @@ for (i = 0; i < length; i+=4) {
 void scs_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt)
 {
 uint32 mtype = CI_GETW (pkt->data, SCS_MTYPE);
-sim_debug_unit (dctrl, uptr, "%s", scs_types[mtype]);   /* show SCS layer */
+
+if (mtype <= SCS_APPDG)
+    sim_debug_unit (dctrl, uptr, "%s", scs_types[mtype]); /* show SCS layer */
+else
+    sim_debug_unit (dctrl, uptr, "0x%X?", mtype);       /* unrecognised */
 }
 
 void ppd_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt)
@@ -214,8 +218,10 @@ uint32 mtype = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
 
 if (mtype == PPD_SCSMSG)
     scs_debug_pkt (dctrl, uptr, pkt);                   /* show SCS layer */
-else
+else if (mtype <= PPD_FUDG)
     sim_debug_unit (dctrl, uptr, "%s", ppd_types[mtype]); /* show PPD layer */
+else
+    sim_debug_unit (dctrl, uptr, "0x%X?", mtype);       /* unrecognised */
 }
 
 void ci_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt, int rcv)
@@ -536,12 +542,12 @@ pkt.path = CI_PATH_A;
 pkt.data[CI_LEN_HI] = ((pkt.length >> 8) & 0xF);        /* packet length high */
 pkt.data[CI_LEN_HI] |= (pkt.path << CI_V_PATH);         /* use the reserved bits to store the send path */
 pkt.data[CI_LEN_LO] = pkt.length & 0xFF;                /* packet length low */
-pkt.data[CI_DEST] = uptr->ci_node;                      /* destination node */
-pkt.data[CI_NOT_DEST] = ~uptr->ci_node;
-pkt.data[CI_SRC] = port;                                /* source node */
-pkt.data[CI_OPC] = OPC_DG;                              /* opcode */
-pkt.data[CI_FLAGS] = 0;                                 /* flags */
-pkt.data[PPD_MTYPE] = PPD_START;                        /* message type: START */
+CI_PUTB (pkt.data, CI_DEST, uptr->ci_node);             /* destination node */
+CI_PUTB (pkt.data, CI_NOT_DEST, ~uptr->ci_node);
+CI_PUTB (pkt.data, CI_SRC, port);                       /* source node */
+CI_PUTB (pkt.data, CI_OPC, OPC_DG);                     /* opcode */
+CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
+CI_PUTW (pkt.data, PPD_MTYPE, PPD_START);               /* message type: START */
 ciq_insert (&cp->rx_queue, &pkt);                       /* add to receive queue */
 
 return SCPE_OK;
