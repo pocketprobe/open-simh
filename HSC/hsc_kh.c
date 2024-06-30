@@ -964,7 +964,7 @@ if (*cq == 0) {
 
 void kh_send_data (uint32 frb)
 {
-uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma;
+uint32 hm, cb, con, bnm, bct, roff, soff, len, bd, dma, slb;
 uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
@@ -982,7 +982,9 @@ pkt.data[CI_FLAGS] = 0;                                 /* flags */
 
 con = GETL (hm + HM_CON);
 bnm = GETL (hm + HM_BNM);
-bct = GETB (frb + F_SCNT) * 512;
+bct = GETB (hm + HM_BCT);
+slb = GETB (hm + HM_SLB);                               /* same as HM_BCT? */
+bct = (GETB (frb + F_SCNT) * 512) - slb;                /* use this or HM_SCT? */
 soff = GETL (frb + F_OFF);
 roff = GETL (hm + HM_OFF) + soff;
 
