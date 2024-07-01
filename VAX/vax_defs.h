@@ -282,6 +282,7 @@ extern jmp_buf save_env;
 #define PTE_M_SW        0x3
 #define PTE_SW          (PTE_M_SW << PTE_V_SW)
 #define PTE_PFN         0x1FFFFF
+#define PTE_GPTX        0x3FFFFF
 #define PTE_GETACC(x)   (((x) >> PTE_V_ACC) & PTE_M_ACC)
 #define PTE_GETSW(x)    (((x) >> PTE_V_SW) & PTE_M_SW)
 

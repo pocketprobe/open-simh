@@ -63,8 +63,8 @@ if ((pte & PTE_V) == 0) {                               /* more checks needed? *
         mmu->status = SCPE_NXM;
         return zero_pte;
         }
-    if (PTE_GETSW(pte) == 2) {                          /* check for global pt index */
-        ptidx = (pte & PTE_PFN) << 2;
+    if ((PTE_GETSW(pte) & 2) == 2) {                    /* check for global pt index */
+        ptidx = (pte & PTE_GPTX) << 2;
         if (ptidx > mmu->glr) {
             mmu->status = SCPE_NXM;
             return zero_pte;
@@ -83,7 +83,7 @@ if ((pte & PTE_V) == 0) {                               /* more checks needed? *
         if (mmu->status) return zero_pte;
         if ((pte & PTE_V) == 0) {                       /* more checks needed? */
             if (((pte & PTE_M) != 0) ||
-                (PTE_GETSW(pte) == 2))                  /* yes, check valid */
+                ((PTE_GETSW(pte) & 2) == 2))            /* yes, check valid */
                 mmu->status = SCPE_NXM;
                 return zero_pte;
             }
@@ -146,6 +146,7 @@ int32 a, c, t;
 
 if ((h == d) || ((h | d) & 07)) {                       /* h, d quad align? */
     // TODO: error                                      /* These should be datastructure errors */
+    sim_printf ("gvp_insqti() - Datastructure error\n");
     return 0;                                           /* reported by the port */
     }
 a = GVP_Read (mmu, h, L_LONG);                          /* a <- (h), wchk */
@@ -163,10 +164,12 @@ if (a == 0) {
 else {
     if (a & 06) {                                       /* chk quad align */
         // TODO: error
+        sim_printf ("gvp_insqti() - Alignment error\n");
         return 0;
         }
     if (a & 01) {                                       /* busy, cc = 0001 */
         // TODO: interlock error
+        sim_printf ("gvp_insqti() - Interlock error\n");
         return 0;
         }
     GVP_Write (mmu, h, a | 1, L_LONG);                  /* acquire interlock */
@@ -174,6 +177,7 @@ else {
     if (c & 07) {                                       /* c quad aligned? */
         GVP_Write (mmu, h, a, L_LONG);                  /* release interlock */
         // TODO: error                                  /* fault */
+        sim_printf ("gvp_insqti() - Alignment error\n");
         return 0;
         }
     if (GVP_Test (mmu, c) < 0)
@@ -195,15 +199,18 @@ int32 gvp_remqhi (GVPMMU *mmu, int32 h)
 int32 ar, a, b, t;
 if (h & 07) {                                           /* h quad aligned? */
     // TODO: error
+    sim_printf ("gvp_remqhi() - Datastructure error\n");
     return 0;
     }
 ar = GVP_Read (mmu, h, L_LONG);                         /* ar <- (h) */
 if (ar & 06) {                                          /* a quad aligned? */
     // TODO: error
+    sim_printf ("gvp_remqhi() - Alignment error\n");
     return 0;
     }
 if (ar & 01) {                                          /* busy, cc = 0011 */
     // TODO: interlock error
+    sim_printf ("gvp_remqhi() - Interlock error\n");
     return 0;
     }
 a = ar + h;                                             /* abs addr of a */
@@ -215,6 +222,7 @@ if (ar) {                                               /* queue not empty? */
     if (b & 07) {                                       /* b quad aligned? */
         GVP_Write (mmu, h, ar, L_LONG);                 /* release interlock */
         // TODO: interlock error                        /* fault */
+        sim_printf ("gvp_remqhi() - Alignment error\n");
         return 0;
         }
     if (GVP_Test (mmu, b) < 0)                          /* write test b */

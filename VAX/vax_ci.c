@@ -387,7 +387,6 @@ ci_mmu.glr = (ci_mmu.glr << 2);
 t_stat ci_send_data (UNIT *uptr, PPD_PKT *ppd)
 {
 uint32 len, xfrsz, bd, sbnam, sboff, rbnam, rboff, pte, opc;
-uint32 xctid[2];
 uint16 snd_key, flags, key;
 CI_PKT pkt;
 t_stat r;
@@ -426,8 +425,10 @@ while (xfrsz > 0) {
         len = xfrsz;
     ci_readb (uptr, pte, len, sboff, &pkt.data[CI_DATA]); /* transfer from buffer */
     CI_PUTL (pkt.data, CI_RBOFF, rboff);                /* update packet */
-    if (xfrsz <= CI_MAXDAT)
+    if (xfrsz <= CI_MAXDAT) {
+        gvp_zap_tb (&ci_mmu);                           /* FIXME: should only zap entries for this buffer */
         pkt.data[CI_FLAGS] |= CI_LP;                    /* last packet */
+        }
     pkt.length = len + CI_DATA;
     r = ci_send (uptr, &pkt);                           /* send data */
     if (r != SCPE_OK)
@@ -454,7 +455,6 @@ bd = ci_bdt_va + (rbnam * BD_LEN);
 flags = GVP_Read (&ci_mmu, bd + BD_FLAGS_OF, L_WORD);   /* buffer flags */
 key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
-sim_printf ("rboff = %d, bdoff = %d\n", rboff, (flags & BD_M_OFF));
 rboff = rboff + (flags & BD_M_OFF);                     /* add page offset */
 
 if (rec_key != key)                                     /* check buffer key */
@@ -467,6 +467,7 @@ if (len > CI_MAXDAT)                                    /* limit to max transfer
 ci_writeb (uptr, pte, len, rboff, &pkt->data[CI_DATA]); /* transfer to buffer */
 
 if (pkt->data[CI_FLAGS] & CI_LP) {                      /* last packet? */
+    gvp_zap_tb (&ci_mmu);                               /* FIXME: should only zap entries for this buffer */
     if (pkt->data[CI_OPC] == OPC_SNTDAT) {
         pkt->data[CI_OPC] = OPC_CNF;
         pkt->length = LEN_CNF;
@@ -534,6 +535,15 @@ if (r != SCPE_OK)
 CI_PUTL (pkt->data, PPD_VCPVAL, ci_vcd[port]);          /* previous VCD value */
 ci_vcd[port] = vcd_val;                                 /* set new VCD value */
 return r;
+}
+
+/* Invalidate translation cache */
+
+t_stat ci_invtc (UNIT *uptr, PPD_PKT *pkt)
+{
+sim_debug_unit (DBG_LCMD, uptr, "==> INVTC\n");
+gvp_zap_tb (&ci_mmu);
+return SCPE_OK;
 }
 
 /* Read counters */
@@ -832,8 +842,7 @@ t_stat r;
 ppd->data[PPD_STATUS] = STS_OK;                         /* assume ok */
 switch (ppd->data[PPD_OPC]) {                           /* opcodes handled by port */
     case OPC_INVTC:
-        gvp_zap_tb (&ci_mmu);
-        return SCPE_OK;
+        return ci_invtc (uptr, ppd);
 
     case OPC_SETCKT:
         return ci_setckt (uptr, ppd);
