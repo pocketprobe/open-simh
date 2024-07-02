@@ -403,8 +403,10 @@ key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
 sboff = sboff + (flags & BD_M_OFF);                     /* add page offset */
 
-if (snd_key != key)                                     /* check buffer key */
+if (snd_key != key) {                                   /* check buffer key */
     sim_printf ("CI: wrong buffer key\n");
+    return SCPE_IERR;
+    }
 
 r = ci_fmt_send (uptr, ppd, &pkt);                      /* convert to CI format */
 if (r != SCPE_OK)
@@ -457,8 +459,10 @@ key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
 rboff = rboff + (flags & BD_M_OFF);                     /* add page offset */
 
-if (rec_key != key)                                     /* check buffer key */
+if (rec_key != key) {                                   /* check buffer key */
     sim_printf ("CI: wrong buffer key\n");
+    return SCPE_IERR;
+    }
 
 len = pkt->length - CI_DATA;
 if (len > CI_MAXDAT)                                    /* limit to max transfer */
@@ -669,7 +673,7 @@ sim_debug_unit (DBG_TRC, uptr, "-%08X\n", pa);
 
 t_stat ci_put_rsq (UNIT *uptr, PPD_PKT *pkt)
 {
-sim_debug_unit (DBG_TRC, uptr, "ci_put_rsq: addr: %08X\n", pkt->addr);
+sim_debug_unit (DBG_TRC, uptr, "ci_put_rsq: queue: %08X, pkt: %08X\n", ci_pqbb_va + PQB_RESP_OF, pkt->addr);
 if (gvp_insqti (&ci_mmu, ci_pqbb_va + PQB_RESP_OF, pkt->addr) > 1) {
     ci_psr |= PSR_RQA;
     ci_set_int ();
@@ -683,8 +687,8 @@ t_stat ci_put_dfq (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 hdr;
 
-sim_debug_unit (DBG_TRC, uptr, "ci_put_dfq: addr: %08X\n", pkt->addr);
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_DFQA_OF, L_LONG);
+sim_debug_unit (DBG_TRC, uptr, "ci_put_dfq: queue: %08X, pkt: %08X\n", hdr, pkt->addr);
 gvp_insqti (&ci_mmu, hdr, pkt->addr);
 return SCPE_OK;
 }
@@ -697,10 +701,10 @@ uint32 hdr;
 
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_DFQA_OF, L_LONG);
 pkt->addr = gvp_remqhi (&ci_mmu, hdr);
-sim_debug_unit (DBG_TRC, uptr, "ci_get_dfq: addr: %08X\n", pkt->addr);
+sim_debug_unit (DBG_TRC, uptr, "ci_get_dfq: queue: %08X, pkt: %08X\n", hdr, pkt->addr);
 if (pkt->addr == 0)                                     /* queue error? */
     return CISE_QERR;
-if (pkt->addr == (ci_pqbb_va + PQB_MFQA_OF))            /* queue empty? */
+if (pkt->addr == hdr)                                   /* queue empty? */
     return CISE_NOPKT;
 return SCPE_OK;
 }
@@ -711,8 +715,8 @@ t_stat ci_put_mfq (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 hdr;
 
-sim_debug_unit (DBG_TRC, uptr, "ci_put_mfq: addr: %08X\n", pkt->addr);
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_MFQA_OF, L_LONG);
+sim_debug_unit (DBG_TRC, uptr, "ci_put_mfq: queue: %08X, pkt: %08X\n", hdr, pkt->addr);
 gvp_insqti (&ci_mmu, hdr, pkt->addr);
 return SCPE_OK;
 }
@@ -725,11 +729,14 @@ uint32 hdr;
 
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_MFQA_OF, L_LONG);
 pkt->addr = gvp_remqhi (&ci_mmu, hdr);
-sim_debug_unit (DBG_TRC, uptr, "ci_get_mfq: addr: %08X\n", pkt->addr);
+sim_debug_unit (DBG_TRC, uptr, "ci_get_mfq: queue: %08X, pkt: %08X\n", hdr, pkt->addr);
 if (pkt->addr == 0)                                     /* queue error? */
     return CISE_QERR;
-if (pkt->addr == (ci_pqbb_va + PQB_MFQA_OF))            /* queue empty? */
+if (pkt->addr == hdr) {                                 /* queue empty? */
+    ci_psr |= PSR_MFQE;
+    ci_set_int ();
     return CISE_NOPKT;
+    }
 return SCPE_OK;
 }
 
@@ -788,6 +795,7 @@ if (pkt->addr == 0) {
     switch (opc) {                                      /* determine packet type */
         case OPC_MSGREC:
         case OPC_DATREC:
+        case OPC_CNFREC:
             r = ci_get_mfq (uptr, pkt);                 /* message */
             break;
 
@@ -870,7 +878,7 @@ ppd->length = pkt->length;
 ppd->addr = 0;
 if (opc <= OPC_MSG) {                                   /* datagram or message */
     ppd->data[PPD_OPC] = pkt->data[CI_OPC];
-    ppd->data[PPD_FLAGS] = pkt->data[CI_FLAGS];
+    ppd->data[PPD_FLAGS] = pkt->data[CI_FLAGS] & 0xF0;  /* only top bits are common */
     memcpy (&ppd->data[PPD_TEXT], &pkt->data[CI_TEXT], pkt->length - CI_TEXT);
     CI_PUTW (ppd->data, PPD_LENGTH, pkt->length - CI_TEXT);
     ppd->length += 2;                                    /* length field added */
@@ -902,7 +910,7 @@ uint32 opc = CI_GETB (ppd->data, PPD_OPC);
 pkt->length = ppd->length;
 if (opc <= OPC_SNDMSG) {                                /* datagram or message */
     pkt->data[CI_OPC] = ppd->data[PPD_OPC];
-    pkt->data[CI_FLAGS] = ppd->data[PPD_FLAGS];
+    pkt->data[CI_FLAGS] = ppd->data[PPD_FLAGS] & 0xF0;  /* only top bits are common */
     memcpy (&pkt->data[CI_TEXT], &ppd->data[PPD_TEXT], ppd->length - PPD_TEXT);
     pkt->length = CI_GETW (ppd->data, PPD_LENGTH);      /* get length */
     pkt->length += PPD_TEXT;                            /* add header */
