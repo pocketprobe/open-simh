@@ -109,6 +109,11 @@
 #define OPC_SETCKT      0x19                            /* set circuit */
 #define OPC_RDCNT       0x1A                            /* read counters */
 
+/* Packet Lengths */
+
+#define LEN_SETCKT      0x28
+#define LEN_RDCNT       0x2C
+
 /* Receive Opcodes */
 
 #define OPC_M_RECV      0x20                            /* opcode receive flag */

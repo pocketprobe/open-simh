@@ -403,8 +403,8 @@ key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
 sboff = sboff + (flags & BD_M_OFF);                     /* add page offset */
 
-if (snd_key != key) {                                   /* check buffer key */
-    sim_printf ("CI: wrong buffer key\n");
+if (((flags & BD_M_VALID) == 0) || (snd_key != key)) {  /* check buffer key */
+    sim_printf ("CI: send buffer invalid\n");
     return SCPE_IERR;
     }
 
@@ -459,8 +459,18 @@ key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
 rboff = rboff + (flags & BD_M_OFF);                     /* add page offset */
 
-if (rec_key != key) {                                   /* check buffer key */
-    sim_printf ("CI: wrong buffer key\n");
+if (((flags & BD_M_VALID) == 0) || (rec_key != key)) {  /* check buffer key */
+    sim_printf ("CI: receive buffer invalid\n");
+#if 0
+    pkt->length = LEN_DAT;
+    r = ci_fmt_receive (uptr, pkt, &ppd);               /* convert to PPD format */
+    if (pkt->data[CI_OPC] == OPC_SNTDAT) {
+        CI_PUTB (ppd.data, PPD_OPC, OPC_RETCNF);
+        }
+    CI_PUTB (ppd.data, PPD_STATUS, STS_INVBN);
+    r = ci_receive_int (uptr, &ppd);                    /* pass to system */
+    return r;
+#endif
     return SCPE_IERR;
     }
 
@@ -538,6 +548,8 @@ if (r != SCPE_OK)
     return r;
 CI_PUTL (pkt->data, PPD_VCPVAL, ci_vcd[port]);          /* previous VCD value */
 ci_vcd[port] = vcd_val;                                 /* set new VCD value */
+pkt->length = LEN_SETCKT;
+ci_write_packet (uptr, pkt, pkt->length);
 return r;
 }
 
@@ -554,7 +566,7 @@ return SCPE_OK;
 
 t_stat ci_rdcnt (UNIT *uptr, PPD_PKT *pkt)
 {
-sim_debug_unit (DBG_LCMD, uptr, "==> RDCNT\n");
+sim_debug_unit (DBG_LCMD, uptr, "==> RDCNT, port = %d\n", pkt->data[PPD_PORT]);
 CI_PUTL (pkt->data, 0x10, 0);                          /* ACKs on path 0 */
 CI_PUTL (pkt->data, 0x14, 0);                          /* NAKs on path 0 */
 CI_PUTL (pkt->data, 0x18, 0);                          /* NORSPs on path 0 */
@@ -562,6 +574,8 @@ CI_PUTL (pkt->data, 0x1c, 0);                          /* ACKs on path 1 */
 CI_PUTL (pkt->data, 0x20, 0);                          /* NAKs on path 1 */
 CI_PUTL (pkt->data, 0x24, 0);                          /* NORSPs on path 1 */
 CI_PUTL (pkt->data, 0x28, 0);                          /* DGS discarded */
+pkt->length = LEN_RDCNT;
+ci_write_packet (uptr, pkt, pkt->length);
 return SCPE_OK;
 }
 
@@ -796,6 +810,7 @@ if (pkt->addr == 0) {
         case OPC_MSGREC:
         case OPC_DATREC:
         case OPC_CNFREC:
+        case OPC_RETCNF:
             r = ci_get_mfq (uptr, pkt);                 /* message */
             break;
 
@@ -876,7 +891,7 @@ uint8 path;
 
 ppd->length = pkt->length;
 ppd->addr = 0;
-if (opc <= OPC_MSG) {                                   /* datagram or message */
+if ((opc <= OPC_MSG) || (opc == OPC_LB)) {              /* datagram or message */
     ppd->data[PPD_OPC] = pkt->data[CI_OPC];
     ppd->data[PPD_FLAGS] = pkt->data[CI_FLAGS] & 0xF0;  /* only top bits are common */
     memcpy (&ppd->data[PPD_TEXT], &pkt->data[CI_TEXT], pkt->length - CI_TEXT);
@@ -908,7 +923,7 @@ t_stat ci_fmt_send (UNIT *uptr, PPD_PKT *ppd, CI_PKT *pkt)
 uint32 opc = CI_GETB (ppd->data, PPD_OPC);
 
 pkt->length = ppd->length;
-if (opc <= OPC_SNDMSG) {                                /* datagram or message */
+if ((opc <= OPC_SNDMSG) || (opc == OPC_SNDLB)) {        /* datagram or message */
     pkt->data[CI_OPC] = ppd->data[PPD_OPC];
     pkt->data[CI_FLAGS] = ppd->data[PPD_FLAGS] & 0xF0;  /* only top bits are common */
     memcpy (&pkt->data[CI_TEXT], &ppd->data[PPD_TEXT], ppd->length - PPD_TEXT);
@@ -918,7 +933,21 @@ if (opc <= OPC_SNDMSG) {                                /* datagram or message *
     }
 else memcpy (&pkt->data[CI_OPC], &ppd->data[PPD_OPC], ppd->length - PPD_OPC);
 
-pkt->length -= (PPD_OPC - CI_OPC);                      /* set new length */
+switch (opc) {                                          /* set new length */
+    case OPC_IDREQ:
+        pkt->length = LEN_IDREQ;
+        break;
+
+    case OPC_DATREQ0:
+    case OPC_DATREQ1:
+    case OPC_DATREQ2:
+        pkt->length = LEN_DATREQ;
+        break;
+
+    default:
+        pkt->length -= (PPD_OPC - CI_OPC);
+        break;
+    }
 pkt->node = CI_GETB (ppd->data, PPD_PORT);
 pkt->path = GET_PATH (ppd->data[PPD_FLAGS]);
 

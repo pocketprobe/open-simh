@@ -214,12 +214,14 @@ else
 
 void ppd_debug_pkt (uint32 dctrl, UNIT *uptr, CI_PKT *pkt)
 {
-uint32 mtype = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
+uint32 mtype = CI_GETW (pkt->data, PPD_MTYPE);
 
 if (mtype == PPD_SCSMSG)
     scs_debug_pkt (dctrl, uptr, pkt);                   /* show SCS layer */
 else if (mtype <= PPD_FUDG)
     sim_debug_unit (dctrl, uptr, "%s", ppd_types[mtype]); /* show PPD layer */
+else if (mtype & PPD_M_CCLR)
+    sim_debug_unit (dctrl, uptr, "CACHECLR");
 else
     sim_debug_unit (dctrl, uptr, "0x%X?", mtype);       /* unrecognised */
 }
