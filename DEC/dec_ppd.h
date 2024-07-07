@@ -62,6 +62,7 @@ extern int32 ppd_snddat (UNIT *uptr, uint32 sbnam);
 extern int32 ppd_reqdat (UNIT *uptr, uint32 rbnam);
 extern t_stat ppd_receive (UNIT *uptr, CI_PKT *pkt);
 extern t_stat ppd_reqid (UNIT *uptr, CI_PKT *pkt);
+extern t_stat ppd_timer (UNIT *uptr);
 extern t_stat ppd_reset (DEVICE *dptr);
 extern t_stat ppd_show_sysid (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 extern t_stat ppd_set_sysid (UNIT *uptr, int32 val, CONST char *cptr, void *desc);

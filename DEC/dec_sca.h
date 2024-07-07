@@ -39,10 +39,19 @@ typedef struct {
 #define START_REC       2                               /* START received */
 #define VC_OPEN         3                               /* VC open */
 
+/* Path states */
+
+#define PTH_BAD         0
+#define PTH_CROSSED     1
+#define PTH_GOOD        2
+#define PTH_MASK        0x7F
+#define PTH_TEST        0x80
+
 /* SCA path block */
 
 typedef struct {
     uint32 vc_state;                                    /* virtual circuit state */
+    uint32 path_state[2];
 } SCA_PB;
 
 /* SCA system block */
@@ -86,6 +95,8 @@ typedef struct {
     SCA_BDT bdt[MAX_BUFF];
     SYSAP  *sysap;                                      /* SYSAP list */
     uint32 rspid;
+    uint32 poll_path;
+    uint32 lb_state[2];
 } SCA_CTX;
 
 #endif

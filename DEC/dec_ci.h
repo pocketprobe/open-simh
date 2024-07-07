@@ -57,6 +57,7 @@
 #define CISE_NOPKT      4                               /* queue empty */
 #define CISE_QERR       5                               /* queue error */
 #define CISE_MEMERR     6                               /* memory read/write error */
+#define CISE_NOPATH     7                               /* no path to remote node */
 
 /* Port States */
 

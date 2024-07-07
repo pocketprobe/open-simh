@@ -34,11 +34,7 @@
 #include "dec_sca.h"
 #include "vax_rf.h"
 
-/* Limits */
-
 #define HSC_TIMER       1
-
-uint32 hsc_path;
 
 extern int32 tmxr_poll;
 
@@ -109,23 +105,12 @@ CI_NODE ci_node = {
 
 t_stat hsc_tmrsvc (UNIT *uptr)
 {
-CI_PKT pkt;
-uint32 i;
+t_stat r;
 
-pkt.node = hsc_unit[0].ci_node;                         /* send loopback */
-pkt.path = hsc_path;
-ppd_sndlb (&hsc_unit[0], &pkt);
-
-for (i = 0; i < CI_MAX_NODES; i++) {                    /* request IDs */
-    pkt.node = i;
-    ppd_reqid (&hsc_unit[0], &pkt);
-    }
-if (hsc_path == CI_PATH_A)                              /* switch path */
-    hsc_path = CI_PATH_B;
-else
-    hsc_path = CI_PATH_A;
-sim_activate_after (uptr, 10000000);                    /* reactivate */
-return SCPE_OK;
+r = ppd_timer (&hsc_unit[0]);
+if (r == SCPE_OK)
+    sim_activate_after (uptr, 10000000);                /* reactivate */
+return r;
 }
 
 t_stat hsc_svc (UNIT *uptr)
@@ -138,7 +123,8 @@ do {
     if (r == SCPE_OK)
         r = ppd_receive (uptr, &pkt);
 } while (r == SCPE_OK);
-// TODO: handle errors from ppd_receive
+if (r != CISE_NOPKT)
+    return r;
 return ci_port_svc (uptr);
 }
 
@@ -146,7 +132,6 @@ return ci_port_svc (uptr);
 
 t_stat hsc_reset (DEVICE *dptr)
 {
-hsc_path = CI_PATH_A;
 ci_port_reset (dptr);
 if (dptr->flags & DEV_DIS)
     return SCPE_OK;

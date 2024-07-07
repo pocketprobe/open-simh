@@ -7,15 +7,55 @@
 
 extern int32 tmxr_poll;
 
+/* Set path in outgoing packet */
+
+t_stat ppd_set_path (UNIT *uptr, CI_PKT *pkt)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+SCA_PB *pb = &ctx->sb[pkt->node].pb;
+uint32 path[2] = { 0, 0 };
+t_stat r = SCPE_OK;
+uint32 i;
+
+for (i = 0; i < 2; i++) {
+    if ((pb->path_state[i] & PTH_MASK) == PTH_GOOD)     /* good path status */
+        path[i]++;                                      /* increment priority */
+    if ((pb->path_state[i] & PTH_MASK) >= PTH_CROSSED)  /* good or crossed path status */
+        path[i]++;                                      /* increment priority */
+    else
+        path[i] = 0;                                    /* unusable */
+    if ((ctx->lb_state[i] & PTH_MASK) == PTH_GOOD)      /* good loopback status */
+        path[i]++;                                      /* increment priority */
+    else
+        path[i] = 0;                                    /* unusable */
+    }
+if ((path[0] >= 2) || (path[1] >= 2)) {                 /* at least one path usable? */
+    if (path[0] > path[1])                              /* path A higher priority? */
+        pkt->path = CI_PATH_A;                          /* use path A */
+    else if (path[1] > path[0])                         /* path B higher priority? */
+        pkt->path = CI_PATH_B;                          /* use path B */
+    else                                                /* equal priority */
+        pkt->path = CI_PATH_AUTO;                       /* use random path */
+    }
+else
+    r = CISE_NOPATH;
+
+return r;
+}
+
 /* Send SCS message */
 
 t_stat ppd_sndmsg (UNIT *uptr, CI_PKT *pkt)
 {
-    CI_PUTB (pkt->data, CI_OPC, OPC_MSG);
-    CI_PUTB (pkt->data, CI_FLAGS, 0);
-    CI_PUTW (pkt->data, PPD_MTYPE, PPD_SCSMSG);
-    pkt->path = CI_PATH_AUTO;
-    return ci_send (uptr, pkt);
+t_stat r;
+
+CI_PUTB (pkt->data, CI_OPC, OPC_MSG);
+CI_PUTB (pkt->data, CI_FLAGS, 0);
+CI_PUTW (pkt->data, PPD_MTYPE, PPD_SCSMSG);
+r = ppd_set_path (uptr, pkt);
+if (r != SCPE_OK)
+    return r;
+return ci_send (uptr, pkt);
 }
 
 /* Request remote port ID */
@@ -48,47 +88,54 @@ return ci_send (uptr, pkt);
 
 t_stat ppd_start (UNIT *uptr, CI_PKT *pkt, uint32 dg_type)
 {
-    SCA_CTX *ctx = uptr->sca_ctx;
-    SCA_SB *sb = &ctx->sb[uptr->ci_node];
+SCA_CTX *ctx = uptr->sca_ctx;
+SCA_SB *sb = &ctx->sb[uptr->ci_node];
+t_stat r;
 
-    CI_PUTB (pkt->data, CI_OPC, OPC_DG);
-    CI_PUTB (pkt->data, CI_FLAGS, 0);
-    CI_PUTW (pkt->data, PPD_MTYPE, dg_type);            /* send START */
-    CI_PUTL (pkt->data, PPD_SYSID, sb->sysid);          /* sending system ID */
-    CI_PUTW (pkt->data, PPD_SYSID + 4, 0x0800);
-    CI_PUTB (pkt->data, PPD_PROTO, PPD_BASE);
-    CI_PUTW (pkt->data, PPD_MAXDG, 0x3E);               /* max datagram size */
-    CI_PUTW (pkt->data, PPD_MAXMSG, 0x42);              /* max message size */
-    sprintf (&pkt->data[PPD_SWTYPE], "HSC ");           /* software type */
-    sprintf (&pkt->data[PPD_SWVER], "V600");            /* software version */
-    CI_PUTL (pkt->data, PPD_SWIN + 0, 0);               /* software incarnation */
-    CI_PUTL (pkt->data, PPD_SWIN + 4, 0);
-    sprintf (&pkt->data[PPD_HWTYPE], "HS70");           /* hardware type */
-    CI_PUTW (pkt->data, PPD_HWVER + 0, 0x0222);         /* hardware version */
-    CI_PUTW (pkt->data, PPD_HWVER + 2, 0x0222);
-    CI_PUTW (pkt->data, PPD_HWVER + 4, 0x0222);
-    CI_PUTW (pkt->data, PPD_HWVER + 6, 0x0227);
-    CI_PUTW (pkt->data, PPD_HWVER + 8, 0x0222);
-    CI_PUTW (pkt->data, PPD_HWVER + 10, 0x0222);
-    sprintf (&pkt->data[PPD_NODE], "CIPGA   ");         /* node name */
-    memset (&pkt->data[PPD_TIME], 0, 8);                /* current time */
-    pkt->length = (dg_type == PPD_START) ? LEN_START : LEN_STACK;
-    pkt->path = CI_PATH_AUTO;
+CI_PUTB (pkt->data, CI_OPC, OPC_DG);
+CI_PUTB (pkt->data, CI_FLAGS, 0);
+CI_PUTW (pkt->data, PPD_MTYPE, dg_type);                /* send START */
+CI_PUTL (pkt->data, PPD_SYSID, sb->sysid);              /* sending system ID */
+CI_PUTW (pkt->data, PPD_SYSID + 4, 0x0800);
+CI_PUTB (pkt->data, PPD_PROTO, PPD_BASE);
+CI_PUTW (pkt->data, PPD_MAXDG, 0x3E);                   /* max datagram size */
+CI_PUTW (pkt->data, PPD_MAXMSG, 0x42);                  /* max message size */
+sprintf (&pkt->data[PPD_SWTYPE], "HSC ");               /* software type */
+sprintf (&pkt->data[PPD_SWVER], "V600");                /* software version */
+CI_PUTL (pkt->data, PPD_SWIN + 0, 0);                   /* software incarnation */
+CI_PUTL (pkt->data, PPD_SWIN + 4, 0);
+sprintf (&pkt->data[PPD_HWTYPE], "HS70");               /* hardware type */
+CI_PUTW (pkt->data, PPD_HWVER + 0, 0x0222);             /* hardware version */
+CI_PUTW (pkt->data, PPD_HWVER + 2, 0x0222);
+CI_PUTW (pkt->data, PPD_HWVER + 4, 0x0222);
+CI_PUTW (pkt->data, PPD_HWVER + 6, 0x0227);
+CI_PUTW (pkt->data, PPD_HWVER + 8, 0x0222);
+CI_PUTW (pkt->data, PPD_HWVER + 10, 0x0222);
+sprintf (&pkt->data[PPD_NODE], "CIPGA   ");             /* node name */
+memset (&pkt->data[PPD_TIME], 0, 8);                    /* current time */
+pkt->length = (dg_type == PPD_START) ? LEN_START : LEN_STACK;
+r = ppd_set_path (uptr, pkt);
+if (r != SCPE_OK)
+    return r;
 
-    return ci_send (uptr, pkt);
+return ci_send (uptr, pkt);
 }
 
 /* Process STACK datagram */
 
 t_stat ppd_stack (UNIT *uptr, CI_PKT *pkt)
 {
-    CI_PUTB (pkt->data, CI_OPC, OPC_DG);
-    CI_PUTB (pkt->data, CI_FLAGS, 0);
-    CI_PUTW (pkt->data, PPD_MTYPE, PPD_ACK);
-    pkt->length = LEN_ACK;
-    pkt->path = CI_PATH_AUTO;
+t_stat r;
 
-    return ci_send (uptr, pkt);
+CI_PUTB (pkt->data, CI_OPC, OPC_DG);
+CI_PUTB (pkt->data, CI_FLAGS, 0);
+CI_PUTW (pkt->data, PPD_MTYPE, PPD_ACK);
+pkt->length = LEN_ACK;
+r = ppd_set_path (uptr, pkt);
+if (r != SCPE_OK)
+    return r;
+
+return ci_send (uptr, pkt);
 }
 
 /* PPD datagram or SCS message received */
@@ -152,10 +199,41 @@ switch (mtype) {
 return SCPE_OK;
 }
 
+t_stat ppd_lb (UNIT *uptr, CI_PKT *pkt)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+uint32 i;
+
+ctx->lb_state[ctx->poll_path - 1] &= ~PTH_TEST;
+for (i = 0; i < 0x30; i++)
+    if (pkt->data[CI_TEXT + i] != i)                         /* datagram text */
+        break;
+if (i == 0x30)
+    ctx->lb_state[ctx->poll_path - 1] = PTH_GOOD;
+else
+    ctx->lb_state[ctx->poll_path - 1] = PTH_BAD;
+
+return SCPE_OK;
+}
+
 t_stat ppd_id (UNIT *uptr, CI_PKT *pkt)
 {
 SCA_CTX *ctx = uptr->sca_ctx;
 SCA_PB *pb = &ctx->sb[pkt->node].pb;
+
+pb->path_state[pkt->path - 1] &= ~PTH_TEST;
+if (pkt->data[CI_FLAGS] & CI_PATH_0) {                  /* sent on path A */
+    if (pkt->path == CI_PATH_A)                         /* received on path A */
+        pb->path_state[pkt->path - 1] = PTH_GOOD;
+    else
+        pb->path_state[pkt->path - 1] = PTH_CROSSED;
+    }
+else {                                                  /* sent on path B */
+    if (pkt->path == CI_PATH_B)                         /* received on path B */
+        pb->path_state[pkt->path - 1] = PTH_GOOD;
+    else
+        pb->path_state[pkt->path - 1] = PTH_CROSSED;
+    }
 
 if (pb->vc_state == VC_CLOSED) {
     pb->vc_state = START_SENT;
@@ -194,7 +272,9 @@ uint32 len, rboff, xfrsz;
 t_stat r = SCPE_OK;
 
 pkt.node = bdt->node;                                   /* dest port */
-pkt.path = CI_PATH_AUTO;
+r = ppd_set_path (uptr, &pkt);
+if (r != SCPE_OK)
+    return -1;                                          /* FIXME: handle errors other than buffer full */
 pkt.data[CI_OPC] = OPC_SNTDAT;                          /* opcode */
 CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
 CI_PUTL (pkt.data, PPD_LCONID, bdt->bd[BD_CON]);        /* local connection ID */
@@ -234,7 +314,9 @@ t_stat r;
 
 pkt.length = LEN_DATREQ;
 pkt.node = bdt->node;                                   /* dest port */
-pkt.path = CI_PATH_AUTO;
+r = ppd_set_path (uptr, &pkt);
+if (r != SCPE_OK)
+    return -1;                                          /* FIXME: handle errors other than buffer full */
 CI_PUTB (pkt.data, CI_OPC, OPC_DATREQ0);                /* opcode */
 CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
 CI_PUTL (pkt.data, PPD_LCONID, bdt->bd[BD_CON]);        /* local connection ID */
@@ -302,8 +384,8 @@ uint32 opcode = pkt->data[CI_OPC];
 
 switch (opcode) {
 
-//    case OPC_LB:
-//        return ppd_lb (uptr, pkt);
+    case OPC_LB:
+        return ppd_lb (uptr, pkt);
 
     case OPC_IDREQ:
         return ppd_idreq (uptr, pkt);
@@ -327,6 +409,60 @@ switch (opcode) {
 return SCPE_IERR;
 }
 
+t_stat ppd_timer (UNIT *uptr)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+SCA_PB *pb;
+CI_PKT pkt;
+uint32 i;
+
+if (ctx->lb_state[ctx->poll_path - 1] & PTH_TEST) {
+    ctx->lb_state[ctx->poll_path - 1] = PTH_BAD;
+    if ((ctx->lb_state[(ctx->poll_path - 1) ^ 1] & PTH_MASK) == PTH_BAD) {
+        for (i = 0; i < CI_MAX_NODES; i++) {
+            pb = &ctx->sb[i].pb;
+            if (pb->vc_state == VC_OPEN) {
+                scs_fail_vc (uptr, i);                  /* notify SCS */
+                ci_close_vc (uptr, i);                  /* close VC */
+                pb->vc_state = VC_CLOSED;
+                }
+            }
+        }
+    }
+
+for (i = 0; i < CI_MAX_NODES; i++) {
+    pb = &ctx->sb[i].pb;
+    if (pb->path_state[ctx->poll_path - 1] & PTH_TEST) {
+        pb->path_state[ctx->poll_path - 1] = PTH_BAD;
+        if ((pb->path_state[(ctx->poll_path - 1) ^ 1] & PTH_MASK) == PTH_BAD) {
+            if (pb->vc_state == VC_OPEN) {
+                scs_fail_vc (uptr, i);                  /* notify SCS */
+                ci_close_vc (uptr, i);                  /* close VC */
+                pb->vc_state = VC_CLOSED;
+                }
+            }
+        }
+    }
+
+if (ctx->poll_path == CI_PATH_A)                        /* switch path */
+    ctx->poll_path = CI_PATH_B;
+else
+    ctx->poll_path = CI_PATH_A;
+
+pkt.node = uptr->ci_node;                               /* send loopback */
+pkt.path = ctx->poll_path;
+ctx->lb_state[ctx->poll_path - 1] |= PTH_TEST;
+ppd_sndlb (uptr, &pkt);
+
+for (i = 0; i < CI_MAX_NODES; i++) {                    /* request IDs */
+    pb = &ctx->sb[i].pb;
+    pb->path_state[ctx->poll_path - 1] |= PTH_TEST;
+    pkt.node = i;
+    ppd_reqid (uptr, &pkt);
+    }
+return SCPE_OK;
+}
+
 t_stat ppd_reset (DEVICE *dptr)
 {
 UNIT *uptr = dptr->units;
@@ -337,8 +473,14 @@ uptr->dptr = dptr;
 uptr->sca_ctx = (void *) realloc (uptr->sca_ctx, sizeof (SCA_CTX));
 ctx = (SCA_CTX *)uptr->sca_ctx;
 
-for (i = 0; i < CI_MAX_NODES; i++)
+ctx->poll_path = CI_PATH_B;
+ctx->lb_state[0] = PTH_BAD;
+ctx->lb_state[1] = PTH_BAD;
+for (i = 0; i < CI_MAX_NODES; i++) {
     ctx->sb[i].pb.vc_state = VC_CLOSED;
+    ctx->sb[i].pb.path_state[0] = PTH_BAD;
+    ctx->sb[i].pb.path_state[1] = PTH_BAD;
+    }
 
 return SCPE_OK;
 }
