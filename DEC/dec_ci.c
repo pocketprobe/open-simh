@@ -282,7 +282,7 @@ t_stat r;
 if (pkt->node >= CI_MAX_NODES)                          /* port valid? */
     return SCPE_OK;
 if (pkt->length > CI_MAXFR) {                           /* check length */
-    sim_printf ("CI packet length error in ci_send_ppd: %d\n", pkt->length);
+    sim_printf ("CI packet length error in ci_send: %d\n", pkt->length);
     return SCPE_IERR;
     }
 

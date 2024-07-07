@@ -7,10 +7,12 @@
 
 extern t_stat app_scsdir (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 extern t_stat app_mscp (UNIT *uptr, uint32 cid, CI_PKT *pkt);
+extern t_stat app_ctp (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 
 SYSAP scs_sysap[] = {
     { "SCS$DIRECTORY", 1, 0, app_scsdir },
-    { "MSCP$DISK", 10, 1, app_mscp },
+    { "MSCP$DISK",    10, 1, app_mscp },
+    { "CTP$RESPONDER", 1, 1, app_ctp },
     { 0 }
     };
 
