@@ -130,9 +130,9 @@
 
 /* Packet lengths - end message */
 
-#define LEN_GET_STAT    (DUP_ABORT_TMO + 0x1)
-#define LEN_EXE_LOCAL   (DUP_LCL_FLAGS + 0x1)
-#define LEN_SDI         (DUP_STATUS + 0x2)
+#define LEN_GET_STAT    (DUP_ABORT_TMO + 0x1)           /* get status */
+#define LEN_EXE_LOCAL   (DUP_LCL_FLAGS + 0x1)           /* execute local */
+#define LEN_STATUS      (DUP_STATUS + 0x2)              /* status only */
 
 /* Constants */
 
