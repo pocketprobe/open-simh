@@ -7,12 +7,14 @@
 
 extern t_stat app_scsdir (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 extern t_stat app_mscp (UNIT *uptr, uint32 cid, CI_PKT *pkt);
+extern t_stat app_dup (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 extern t_stat app_ctp (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 
 SYSAP scs_sysap[] = {
     { "SCS$DIRECTORY", 1, 0, app_scsdir },
     { "MSCP$DISK",    10, 1, app_mscp },
-    { "CTP$RESPONDER", 1, 1, app_ctp },
+    { "MSCP$DUP",     20, 3, app_dup },
+    { "CTP$RESPONDER", 4, 1, app_ctp },
     { 0 }
     };
 
@@ -56,7 +58,74 @@ else
     return NULL;                                        /* not found */
 }
 
+/* Map named buffer */
+
+t_stat scs_map (UNIT *uptr, uint8 *buf, size_t xfrsz, uint32 acc, uint32 *name)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+uint32 i;
+
+for (i = 0; i < MAX_BUFF; i++) {                        /* find existing buffer descriptor */
+    if (ctx->bdt[i].buf == buf) {
+        *name = i;
+        return SCPE_OK;
+        }
+    }
+for (i = 0; i < MAX_BUFF; i++) {                        /* find free buffer descriptor */
+    if (ctx->bdt[i].buf == NULL) {
+        ctx->bdt[i].buf = buf;
+        ctx->bdt[i].xfrsz = xfrsz;
+        ctx->bdt[i].acc = acc;
+        *name = i;
+        return SCPE_OK;
+        }
+    }
+return SCPE_EOF;
+}
+
+/* Unmap named buffer */
+
+t_stat scs_unmap (UNIT *uptr, uint32 name)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+
+if (name < MAX_BUFF) {
+    ctx->bdt[name].buf = NULL;
+    ctx->bdt[name].xfrsz = 0;
+    ctx->bdt[name].acc = 0;
+    return SCPE_OK;
+    }
+return SCPE_EOF;
+}
+
 /* Write to named buffer */
+
+#if 0
+t_stat scs_write (UNIT *uptr, uint32 *from, uint32 *to, size_t xfrsz)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+SCA_CB *cb = &ctx->cb[from[BD_CON]];
+
+td->cid = from[BD_CON];
+td->xid = ctx->rspid++;
+td->xfrsz = xfrsz;
+td->snam = from[BD_NAM];
+td->soff = from[BD_OFF];
+td->rnam = to[BD_NAM];
+td->roff = to[BD_OFF];
+return SCPE_OK;
+}
+
+t_stat scs_write (UNIT *uptr, uint32 cid, SCA_TD *td)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+SCA_CB *cb = &ctx->cb[cid];
+
+td->node = cb->node;
+td->xid = ctx->rspid++;
+return SCPE_OK;
+}
+#endif
 
 int32 scs_write (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr)
 {
@@ -75,19 +144,22 @@ if (bdt == NULL) {
     for (sbnam = 0; sbnam < MAX_BUFF; sbnam++) {        /* find free buffer descriptor */
         if (ctx->bdt[sbnam].xfrsz == 0) {
             bdt = &ctx->bdt[sbnam];
-            bdt->xfrsz = xfrsz;
-            bdt->buf = buf;                             /* setup buffer */
-            bdt->boff = 0;
-            bdt->bd = bd;
-            bdt->node = cb->node;
-            bdt->uptr = aptr;
-            bdt->rspid = ctx->rspid++;
             break;
             }
         }
     }
 if (bdt == NULL)                                        /* none available? */
     return xfrsz;                                       /* error */
+
+if (bdt->rspid == 0) {                                  /* buffer setup? */
+    bdt->xfrsz = xfrsz;                                 /* no, setup buffer */
+    bdt->buf = buf;
+    bdt->boff = 0;
+    bdt->bd = bd;
+    bdt->node = cb->node;
+    bdt->uptr = aptr;
+    bdt->rspid = ctx->rspid++;
+    }
 
 if (bdt->boff == bdt->xfrsz) {                          /* transfer done? */
     bd[BD_OFF] += bdt->boff;                            /* update descriptor */
@@ -123,19 +195,22 @@ if (bdt == NULL) {
     for (rbnam = 0; rbnam < MAX_BUFF; rbnam++) {        /* find free buffer descriptor */
         if (ctx->bdt[rbnam].xfrsz == 0) {
             bdt = &ctx->bdt[rbnam];
-            bdt->xfrsz = xfrsz;
-            bdt->buf = buf;                             /* setup buffer */
-            bdt->boff = 0;
-            bdt->bd = bd;
-            bdt->node = cb->node;
-            bdt->uptr = aptr;
-            bdt->rspid = ctx->rspid++;
             break;
             }
         }
     }
 if (bdt == NULL)                                        /* none available? */
     return xfrsz;
+
+if (bdt->rspid == 0) {                                  /* buffer setup? */
+    bdt->xfrsz = xfrsz;                                 /* no, setup buffer */
+    bdt->buf = buf;
+    bdt->boff = 0;
+    bdt->bd = bd;
+    bdt->node = cb->node;
+    bdt->uptr = aptr;
+    bdt->rspid = ctx->rspid++;
+    }
 
 if (bdt->boff == bdt->xfrsz) {                          /* transfer done? */
     bd[BD_OFF] += bdt->boff;                            /* update descriptor */

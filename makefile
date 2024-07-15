@@ -1441,7 +1441,7 @@ CI = ${DECD}/dec_ci.c
 
 SCS = ${VAXD}/vax_hsc.c ${VAXD}/vax_rf.c \
 	${DECD}/dec_ppd.c ${DECD}/dec_scs.c ${DECD}/scs_directory.c \
-	${DECD}/scs_mscp.c ${DECD}/dec_ctp.c
+	${DECD}/scs_mscp.c ${DECD}/dec_dup.c ${DECD}/dec_ctp.c
 
 #
 # Emulator source files and compile time options

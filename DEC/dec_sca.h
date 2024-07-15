@@ -22,6 +22,28 @@ typedef struct {
 #define BD_NAM          1                               /* buffer name */
 #define BD_CON          2                               /* connection ID */
 
+#if 0
+/* Transfer descriptor? */
+
+typedef struct {
+    uint16 cid;                                         /* connection ID */
+    uint16 xid;                                         /* response ID */
+    size_t xfrsz;                                       /* transfer length */
+    uint32 snam;                                        /* send buffer name */
+    uint32 soff;                                        /* send buffer offset */
+    uint32 rnam;                                        /* receive buffer name */
+    uint32 roff;                                        /* receive buffer offset */
+} SCA_TD;
+
+/* Named buffer descriptor? */
+
+typedef struct {
+    size_t xfrsz;                                       /* buffer length */
+    uint8  *buf;                                        /* buffer pointer */
+    uint32 acc;                                         /* buffer access */
+} SCA_NBD;
+#endif
+
 typedef struct {
     size_t xfrsz;                                       /* buffer length */
     uint8  *buf;                                        /* buffer pointer */
@@ -30,6 +52,7 @@ typedef struct {
     uint32 node;
     UNIT   *uptr;                                       /* buffer owner */
     uint32 rspid;                                       /* response ID */
+    uint32 acc;                                         /* buffer access */
 } SCA_BDT;
 
 /* Virtual circuit states */

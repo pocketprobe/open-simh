@@ -41,7 +41,7 @@ if (opcode <= CTP_MSTATEREQ) {
         sim_debug_unit (DBG_SCS, uptr, "<== %sREQ\n", ctp_types[opcode]);
     }
 else
-    sim_debug_unit (DBG_SCS, uptr, "??? CTP\n", ctp_types[opcode]);
+    sim_debug_unit (DBG_SCS, uptr, "??? CTP\n");
 }
 
 t_stat ctp_send_rsp (UNIT *uptr, int32 cid, CI_PKT *pkt)
@@ -115,7 +115,6 @@ return SCPE_OK;
 
 t_stat ctp_genmsg (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
-uint8 opcode = CI_GETB (pkt->data, CTP_OPCODE);
 CI_PKT ci_pkt;
 uint32 rep, i;
 t_stat r;
@@ -145,8 +144,7 @@ return SCPE_OK;
 t_stat ctp_genrst (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
 CI_PKT ci_pkt;
-uint32 addr, ext, flags;
-t_stat r;
+uint32 ext, flags;
 
 ext = CI_GETB (pkt->data, CTP_EXTEND);                  /* get reset type */
 if (ext == CTP_UNCONDRST)
@@ -175,7 +173,6 @@ t_stat ctp_genstr (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
 CI_PKT ci_pkt;
 uint32 addr, ext, flags, rsv;
-t_stat r;
 
 ext = CI_GETB (pkt->data, CTP_EXTEND);                  /* get start type */
 if (ext == CTP_DEFALTADR)
