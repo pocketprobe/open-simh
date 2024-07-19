@@ -111,6 +111,15 @@
 
 /* Packet Lengths */
 
+#define LEN_SNDDG       0x12
+#define LEN_SNDMSG      0x12
+#define LEN_REQID       0x18
+#define LEN_SNDRST      0x18
+#define LEN_SNDSTRT     0x1C
+#define LEN_REQDAT      0x2C
+#define LEN_SNDLB       0x12
+#define LEN_SNDDAT      0x2C
+#define LEN_INVTC       0x10
 #define LEN_SETCKT      0x28
 #define LEN_RDCNT       0x2C
 
@@ -194,5 +203,7 @@ t_stat ci_vax_rd (UNIT *uptr, int32 *val, int32 rg, int32 lnt);
 t_stat ci_vax_wr (UNIT *uptr, int32 val, int32 rg, int32 lnt);
 t_stat ci_vax_svc (UNIT *uptr);
 t_stat ci_vax_reset (DEVICE *dptr);
+
+extern uint16 ci_vcd[CI_MAX_NODES];
 
 #endif

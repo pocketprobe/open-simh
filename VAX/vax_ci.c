@@ -135,7 +135,9 @@ uint32 ci_spt_base;                                     /* buffer descriptor tab
 uint32 ci_pfar;                                         /* port failing addr */
 uint32 ci_pesr;                                         /* port error status */
 uint32 ci_ppr;                                          /* port parameter reg */
-uint32 ci_vcd[CI_MAX_NODES];
+uint16 ci_vcd[CI_MAX_NODES];                            /* virtual circuit descriptors */
+uint32 ci_cnt;                                          /* counter port */
+uint32 ci_dgd;                                          /* datagrams discarded */
 GVPMMU ci_mmu;                                          /* memory management unit */
 
 extern int32 tmxr_poll;
@@ -156,12 +158,100 @@ t_stat ci_fmt_send (UNIT *uptr, PPD_PKT *ppd, CI_PKT *pkt);
 t_stat ci_respond (UNIT *uptr, PPD_PKT *pkt);
 t_stat ci_dispose (UNIT *uptr, PPD_PKT *pkt);
 
+uint8 ci_get_length (UNIT *uptr, uint32 ma, PPD_PKT *pkt)
+{
+uint8 opc = GVP_Read (&ci_mmu, ma + PPD_OPC, L_BYTE);
+uint16 len = GVP_Read (&ci_mmu, ma + PPD_LENGTH, L_WORD);
+uint8 type, sts = STS_OK;
+
+switch (opc) {
+    case OPC_SNDDG:
+        pkt->length = LEN_SNDDG + len;
+        type = PPD_DG;
+        break;
+
+    case OPC_SNDMSG:
+        pkt->length = LEN_SNDMSG + len;
+        type = PPD_MSG;
+        break;
+
+    case OPC_REQID:
+        pkt->length = LEN_REQID;
+        type = PPD_DG;
+        break;
+
+    case OPC_SNDRST:
+        pkt->length = LEN_SNDRST;
+        type = PPD_DG;
+        break;
+
+    case OPC_SNDSTRT:
+        pkt->length = LEN_SNDSTRT;
+        type = PPD_DG;
+        break;
+
+    case OPC_REQDAT:
+    case OPC_REQDAT1:
+    case OPC_REQDAT2:
+        pkt->length = LEN_REQDAT;
+        type = PPD_MSG;
+        break;
+
+    case OPC_SNDLB:
+        pkt->length = LEN_SNDLB + len;
+        type = PPD_DG;
+        break;
+
+    //case OPC_REQMDAT:
+    case OPC_SNDDAT:
+        pkt->length = LEN_SNDDAT;
+        type = PPD_MSG;
+        break;
+
+    //case OPC_SNDMDAT:
+
+    case OPC_INVTC:
+        pkt->length = LEN_INVTC;
+        type = PPD_DG;
+        break;
+
+    case OPC_SETCKT:
+        pkt->length = LEN_SETCKT;
+        type = PPD_DG;
+        break;
+
+    case OPC_RDCNT:
+        pkt->length = LEN_RDCNT;
+        type = PPD_DG;
+        break;
+
+    default:
+        pkt->length = PPD_HDR;
+        sts = STS_URC;
+        break;
+    }
+if ((type == PPD_DG) && (pkt->length > ci_max_dg)) {    /* datagram too big? */
+    pkt->length = PPD_HDR;                              /* read header only */
+    sts = STS_PSV;                                      /* packet size violation */
+    }
+else if ((type == PPD_MSG) && (pkt->length > ci_max_msg)) { /* message too big? */
+    pkt->length = PPD_HDR;                              /* read header only */
+    sts = STS_PSV;                                      /* packet size violation */
+    }
+if (pkt->length > CI_MAXFR) {                           /* apply safe limit */
+    sim_printf ("packet length %d limited to %d\n", pkt->length, CI_MAXFR);
+    pkt->length = CI_MAXFR;
+    }
+return sts;
+}
+
 t_stat ci_port_command (UNIT *uptr, int32 queue)
 {
 uint32 ma;
 int16 length;
 PPD_PKT pkt;
 t_stat r;
+uint8 sts;
 
 for ( ;; ) {
     ma = gvp_remqhi (&ci_mmu, ci_pqbb_va + queue);      /* dequeue next entry */
@@ -175,24 +265,16 @@ for ( ;; ) {
         sim_printf ("CI: packet not LW aligned\n");
 
     pkt.addr = ma;
-    length = GVP_Read (&ci_mmu, ma + PPD_SIZE, L_WORD);
-    if (length == PPD_DG)                               /* type is dg? */
-        length = ci_max_dg;                             /* use max size */
-    else if (length == PPD_MSG)                         /* type is msg? */
-        length = ci_max_msg;                            /* use max size */
-    else if (length < 0) {
-        ma = ma + length;                               /* offset to network header */
-        length = GVP_Read (&ci_mmu, ma + PPD_SIZE, L_WORD) + length;
-        }
-    if (length > CI_MAXFR)                              /* apply safe limit */
-        length = CI_MAXFR;
-    pkt.length = length;
+    sts = ci_get_length (uptr, ma, &pkt);               /* get packet length */
     ci_read_packet (uptr, &pkt, pkt.length);            /* read packet */
-    r = ci_send_ppd (uptr, &pkt);                       /* process it */
-    if (r != SCPE_OK) {
+    if (sts != STS_OK)                                  /* packet length error? */
+        pkt.data[PPD_STATUS] = sts;
+    else if (pkt.data[PPD_PORT] >= CI_MAX_NODES)        /* invalid port number? */
+        pkt.data[PPD_STATUS] = STS_INVDP;
+    else {
+        r = ci_send_ppd (uptr, &pkt);                   /* process it */
         if (r == CISE_VCERR)
             pkt.data[PPD_STATUS] = STS_VCC;             /* VC closed */
-        break;
         }
     if ((pkt.data[PPD_FLAGS] & PPD_RSP) ||
         (pkt.data[PPD_STATUS] != STS_OK))               /* response required? */
@@ -370,17 +452,17 @@ return SCPE_OK;
 
 void ci_read_pqb (uint32 pa)
 {
-ci_max_dg = CI_ReadL (pa + PQB_DFQL_OF);                /* max packet sizes */
-ci_max_msg = CI_ReadL (pa + PQB_DFML_OF);
+ci_max_dg = CI_ReadL (pa + PQB_DFQL_OF) & 0xFFF;        /* max packet sizes */
+ci_max_msg = CI_ReadL (pa + PQB_DFML_OF) & 0xFFF;
 ci_pqbb_va = CI_ReadL (pa + PQB_PQBBVA_OF);
 ci_bdt_va = CI_ReadL (pa + PQB_BDTVA_OF);               /* buffer descriptors */
-ci_bdt_len = CI_ReadL (pa + PQB_BDTLEN_OF);
+ci_bdt_len = CI_ReadL (pa + PQB_BDTLEN_OF) & 0xFFFF;
 ci_mmu.sbr = CI_ReadL (pa + PQB_SBR_OF);                /* system page table */
 ci_mmu.sbr = (ci_mmu.sbr - 0x1000000) & ~03;            /* VA<31> >> 7 */
-ci_mmu.slr = CI_ReadL (pa + PQB_SLR_OF);
+ci_mmu.slr = CI_ReadL (pa + PQB_SLR_OF) & 0x1FFFFF;
 ci_mmu.slr = (ci_mmu.slr << 2) + 0x1000000;             /* VA<31> >> 7 */
 ci_mmu.gbr = CI_ReadL (pa + PQB_GPT_OF);                /* global page table */
-ci_mmu.glr = CI_ReadL (pa + PQB_GLR_OF);
+ci_mmu.glr = CI_ReadL (pa + PQB_GLR_OF) & 0x1FFFFF;
 ci_mmu.glr = (ci_mmu.glr << 2);
 }
 
@@ -517,7 +599,7 @@ CI_PUTL (pkt->data, CI_MAINT_ID, (ID_DUAL | ID_CI780)); /* remote port type */
 CI_PUTL (pkt->data, CI_CODE_REV, 0x00700040);           /* code revision */
 CI_PUTL (pkt->data, CI_PORT_FCN, 0xFFFF0F00);           /* function mask */
 #endif
-CI_PUTB (pkt->data, CI_RST_PORT, 0);                    /* resetting port */
+CI_PUTB (pkt->data, CI_RST_PORT, uptr->ci_node);        /* resetting port */
 CI_PUTB (pkt->data, CI_SYS_STATE, CI_PTST_ENA);         /* port state */
 pkt->length = LEN_ID;
 
@@ -529,15 +611,15 @@ return ci_send (uptr, pkt);
 t_stat ci_setckt (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 port = pkt->data[PPD_PORT];
-uint32 vcd_mmsk = CI_GETL (pkt->data, PPD_VCMMSK);      /* VCD modify mask */
-uint32 vcd_mval = CI_GETL (pkt->data, PPD_VCMVAL);      /* VCD modify value */
-uint32 vcd_val = ci_vcd[port];                          /* VCD value */
+uint16 vcd_mmsk = CI_GETW (pkt->data, PPD_VCMMSK);      /* VCD modify mask */
+uint16 vcd_mval = CI_GETW (pkt->data, PPD_VCMVAL);      /* VCD modify value */
+uint16 vcd_val = ci_vcd[port];                          /* VCD value */
 t_stat r = SCPE_OK;
 
-sim_debug_unit (DBG_LCMD, uptr, "==> SETCKT, port: %d, mask: %X value: %X\n", port, vcd_mmsk, vcd_mval);
+sim_debug_unit (DBG_LCMD, uptr, "==> SETCKT, port: %d, vcd: %04X, mask: %04X, mval: %04X\n", port, vcd_val, vcd_mmsk, vcd_mval);
 
-vcd_val &= ~vcd_mmsk;                                   /* new VCD value */
-vcd_val |= vcd_mval;
+vcd_val = vcd_val & ~vcd_mmsk;                          /* new VCD value */
+vcd_val = vcd_val | (vcd_mval & vcd_mmsk);
 
 if (VCD_OPEN (vcd_val) && !VCD_OPEN (ci_vcd[port]))     /* opening VC */
     r = ci_open_vc (uptr, port);
@@ -546,7 +628,7 @@ else if (!VCD_OPEN (vcd_val) && VCD_OPEN (ci_vcd[port])) /* closing VC */
 
 if (r != SCPE_OK)
     return r;
-CI_PUTL (pkt->data, PPD_VCPVAL, ci_vcd[port]);          /* previous VCD value */
+CI_PUTW (pkt->data, PPD_VCPVAL, ci_vcd[port]);          /* previous VCD value */
 ci_vcd[port] = vcd_val;                                 /* set new VCD value */
 pkt->length = LEN_SETCKT;
 ci_write_packet (uptr, pkt, pkt->length);
@@ -566,14 +648,15 @@ return SCPE_OK;
 
 t_stat ci_rdcnt (UNIT *uptr, PPD_PKT *pkt)
 {
-sim_debug_unit (DBG_LCMD, uptr, "==> RDCNT, port = %d\n", pkt->data[PPD_PORT]);
+ci_cnt = pkt->data[PPD_PORT];
+sim_debug_unit (DBG_LCMD, uptr, "==> RDCNT, port = %d\n", ci_cnt);
 CI_PUTL (pkt->data, 0x10, 0);                          /* ACKs on path 0 */
 CI_PUTL (pkt->data, 0x14, 0);                          /* NAKs on path 0 */
 CI_PUTL (pkt->data, 0x18, 0);                          /* NORSPs on path 0 */
 CI_PUTL (pkt->data, 0x1c, 0);                          /* ACKs on path 1 */
 CI_PUTL (pkt->data, 0x20, 0);                          /* NAKs on path 1 */
 CI_PUTL (pkt->data, 0x24, 0);                          /* NORSPs on path 1 */
-CI_PUTL (pkt->data, 0x28, 0);                          /* DGS discarded */
+CI_PUTL (pkt->data, 0x28, ci_dgd);                     /* DGS discarded */
 pkt->length = LEN_RDCNT;
 ci_write_packet (uptr, pkt, pkt->length);
 return SCPE_OK;
@@ -820,6 +903,12 @@ if (pkt->addr == 0) {
         case OPC_IDREC:
         case OPC_LBREC:
             r = ci_get_dfq (uptr, pkt);                 /* datagram */
+            if (r == CISE_NOPKT) {
+                if (ci_cnt == 255)
+                    ci_dgd++;
+                else if (ci_cnt == pkt->data[PPD_PORT])
+                    ci_dgd++;
+                }
             break;
 
         default:
@@ -843,8 +932,13 @@ uint32 port = pkt->data[PPD_PORT];
 switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by port */
     case OPC_DGREC:
         port = pkt->data[PPD_PORT];                     /* get remote port */
-        if (DG_INHIBIT (ci_vcd[port]))                  /* inhibited? */
+        if (DG_INHIBIT (ci_vcd[port])) {                /* inhibited? */
+            if (ci_cnt == 255)
+                ci_dgd++;
+            else if (ci_cnt == pkt->data[PPD_PORT])
+                ci_dgd++;
             return SCPE_OK;                             /* discard */
+            }
         break;
 
     case OPC_LBREC:
@@ -906,7 +1000,10 @@ CI_PUTB (ppd->data, PPD_STATUS, STS_OK);
 CI_PUTB (ppd->data, PPD_PORT, pkt->node);
 ppd->data[PPD_OPC] |= OPC_M_RECV;                       /* convert to rcv opcode */
 
-if ((opc == OPC_ID) || (opc == OPC_LB)) {
+if (opc == OPC_ID)
+    ppd->data[PPD_FLAGS] = 0;
+//if ((opc == OPC_ID) || (opc == OPC_LB)) {
+if (opc == OPC_LB) {
     if (pkt->path == CI_PATH_A)
         path = PPD_PS0;                                 /* received on path A */
     else if (pkt->path == CI_PATH_B)
@@ -995,7 +1092,7 @@ t_stat ci_vax_reset (DEVICE *dptr)
 uint32 i;
 
 for (i = 0; i < CI_MAX_NODES; i++)
-    ci_vcd[i] = 0;                                      /* clear virtual circuit descriptors */
+    ci_vcd[i] = (VCD_PAG | VCD_PBG);                    /* clear virtual circuit descriptors */
 ci_psr = 0;                                             /* reset port registers */
 ci_pesr = 0;
 ci_pfar = 0;
@@ -1003,6 +1100,8 @@ ci_pqbb_pa = 0;
 ci_pqbb_va = 0;
 ci_bdt_va = 0;
 ci_bdt_len = 0;
+ci_cnt = 255;
+ci_dgd = 0;
 ci_ppr |= ((0x3f9 & PPR_M_IBLEN) << PPR_V_IBLEN);       /* TODO: set internal buffer length */
 gvp_tlb_reset (&ci_mmu);                                /* reset MMU */
 ci_port_reset (dptr);

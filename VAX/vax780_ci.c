@@ -209,7 +209,7 @@ REGMAP ci_regmap[] = {
 
 t_stat ci_rdreg (int32 *val, int32 pa, int32 lnt)
 {
-int32 rg = (pa & 0xFFF);
+int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 
@@ -220,6 +220,14 @@ if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
 for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
         return ci_vax_rd (uptr, val, p->rg, lnt);
+    }
+if ((rg >= 0xC00) && (rg < 0xFFF)) {                    /* virtual circuit descriptor */
+    rg = (rg >> 2) & 0x3F;                              /* get node number */
+    *val = 0;                                           /* default value */
+    if (rg < CI_MAX_NODES)                              /* valid node number? */
+        *val = ci_vcd[rg];                              /* yes, get VCD */
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08x\n", rg, *val);
+    return SCPE_OK;
     }
 switch (rg) {                                           /* CI780 specific registers */
 
@@ -247,6 +255,7 @@ switch (rg) {                                           /* CI780 specific regist
         break;
 
     default:
+        *val = 0;
         sim_debug (DBG_WRN, &ci_dev, "defaulting on read: %X\n", rg);
         }
 
@@ -257,7 +266,7 @@ return SCPE_OK;
 
 t_stat ci_wrreg (int32 val, int32 pa, int32 lnt)
 {
-int32 rg = (pa & 0xFFF);
+int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 

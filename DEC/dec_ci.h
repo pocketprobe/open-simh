@@ -107,7 +107,7 @@ t_stat ci_send (UNIT *uptr, CI_PKT *pkt);
 t_stat ci_receive (UNIT *uptr, CI_PKT *pkt);
 t_stat ci_open_vc (UNIT *uptr, uint8 port);
 t_stat ci_close_vc (UNIT *uptr, uint8 port);
-t_bool ci_check_vc (UNIT *uptr, uint8 port);
+t_stat ci_check_vc (UNIT *uptr, uint8 port);
 uint8 ci_get_node (UNIT *uptr);
 t_stat ci_show_links (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat ci_show_node (FILE *st, UNIT *uptr, int32 val, CONST void *desc);

@@ -1049,7 +1049,7 @@ switch (pkt->data[PPD_OPC]) {
     case OPC_RESET:
         sim_debug (DBG_LCMD, &cq_dev, "CIQBA Reset\n");
         port = pkt->data[PPD_PORT];
-        if (ci_check_vc (uptr, port)) {
+        if (ci_check_vc (uptr, port) == SCPE_OK) {
             sim_debug (DBG_LCMD, &cq_dev, "CIQBA Closing VC to %d\n", port);
             r = ci_close_vc (uptr, port);
             }

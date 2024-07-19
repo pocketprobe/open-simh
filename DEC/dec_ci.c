@@ -88,17 +88,18 @@ const char* ppd_types[] = {                             /* PPD debug definitions
     };
 
 const char* scs_types[] = {                             /* SCS message debug definitions */
-    "Connect Request",
-    "Connect Response",
-    "Accept Request",
-    "Accept Response",
-    "Reject Request",
-    "Reject Response",
-    "Disconnect Request",
-    "Disconnect Response",
-    "Credit Request",
-    "Credit Response",
-    "Application Sequenced Message"
+    "CONNECT_REQ",
+    "CONNECT_RSP",
+    "ACCEPT_REQ",
+    "ACCEPT_RSP",
+    "REJECT_REQ",
+    "REJECT_RSP",
+    "DISCON_REQ",
+    "DISCON_RSP",
+    "CREDIT_REQ",
+    "CREDIT_RSP",
+    "APPL_MSG",
+    "APPL_DG"
     };
 
 const char* ci_path_names[] = {
@@ -277,7 +278,7 @@ t_stat ci_send (UNIT *uptr, CI_PKT *pkt)
 {
 uint32 opcode = pkt->data[CI_OPC];
 uint8 path_flags;
-t_stat r;
+t_stat r = SCPE_OK;
 
 if (pkt->node >= CI_MAX_NODES)                          /* port valid? */
     return SCPE_OK;
@@ -303,10 +304,12 @@ switch (opcode) {
         break;
 
     case OPC_MSG:
+        r = ci_check_vc (uptr, pkt->node);
         ci_debug_pkt (DBG_SCS, uptr, pkt, 0);
         break;
 
     case OPC_CNF:
+        r = ci_check_vc (uptr, pkt->node);
         ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
         break;
 
@@ -325,6 +328,7 @@ switch (opcode) {
     case OPC_DATREQ0:
     case OPC_DATREQ1:
     case OPC_DATREQ2:
+        r = ci_check_vc (uptr, pkt->node);
         ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
         break;
 
@@ -337,17 +341,22 @@ switch (opcode) {
         break;
 
     case OPC_SNTDAT:
+        r = ci_check_vc (uptr, pkt->node);
         ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
         break;
 
     case OPC_RETDAT:
+        r = ci_check_vc (uptr, pkt->node);
         ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
         break;
 
     default:
-        return CISE_INVOPC;
+        sim_printf ("Invalid opcode %d in ci_send()\n", opcode);
+        r = CISE_INVOPC;
         }
-return ci_send_packet (uptr, pkt);
+if (r == SCPE_OK)
+    r = ci_send_packet (uptr, pkt);
+return r;
 }
 
 t_stat ci_receive (UNIT *uptr, CI_PKT *pkt)
@@ -510,7 +519,7 @@ CI_NODE *node;
 if (port > CI_MAX_NODES)
     return SCPE_ARG;
 node = &cp->nodes[port];
-return (node->conn > LINK_CLOSED) ? TRUE : FALSE;
+return (node->conn > LINK_CLOSED) ? SCPE_OK : CISE_VCERR;
 }
 
 /* Notifies the operating system that the connection with the *

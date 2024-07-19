@@ -778,7 +778,7 @@ if (pkt->node == ci_get_node (uptr))                    /* from local node? */
     return SCPE_OK;                                     /* ignore */
 switch (pkt->data[CI_OPC]) {                            /* opcodes handled by port */
     case OPC_ID:
-        if (ci_check_vc (uptr, pkt->node))              /* VC open? */
+        if (ci_check_vc (uptr, pkt->node) == SCPE_OK)   /* VC open? */
             return SCPE_OK;                             /* discard */
         break;
 
