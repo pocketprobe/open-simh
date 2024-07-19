@@ -148,4 +148,9 @@
 #define CTP_MOVMBUFRSP  (CTP_RESPONSE | CTP_MOVMBUFREQ)
 #define CTP_MSTATERSP   (CTP_RESPONSE | CTP_MSTATEREQ)
 
+/* Limits */
+
+#define MAX_BUF_LEN     1024                            /* max read/write buffer length */
+#define MAX_BUF_MAP     2                               /* max mapped buffers per connection */
+
 #endif

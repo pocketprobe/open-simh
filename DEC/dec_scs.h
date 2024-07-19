@@ -89,9 +89,13 @@
 #define SCS_UAP         0x2A                            /* use alternate port */
 
 extern void scs_fail_vc (UNIT *uptr, uint32 port);
+extern t_stat scs_send_dg (UNIT *uptr, uint32 cid, CI_PKT *pkt);
 extern t_stat scs_send_msg (UNIT *uptr, uint32 cid, CI_PKT *pkt);
+extern t_stat scs_map (UNIT *uptr, uint8 *buf, size_t xfrsz, uint32 acc, uint32 *name);
+extern t_stat scs_unmap (UNIT *uptr, uint32 name);
 extern int32 scs_write (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr);
 extern int32 scs_read (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr);
+extern t_stat scs_config_path (UNIT *uptr, uint32 node, uint32 *state);
 extern t_stat scs_receive (UNIT *uptr, CI_PKT *pkt);
 extern t_stat scs_reset (DEVICE *dptr);
 

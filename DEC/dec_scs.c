@@ -83,6 +83,19 @@ else
     return NULL;                                        /* not found */
 }
 
+t_stat scs_config_path (UNIT *uptr, uint32 node, uint32 *state)
+{
+SCA_CTX *ctx = uptr->sca_ctx;
+SCA_PB *pb = &ctx->sb[node].pb;
+
+if (state) {
+    state[0] = pb->path_state[0];
+    state[1] = pb->path_state[1];
+    return SCPE_OK;
+    }
+return SCPE_IERR;
+}
+
 /* Map named buffer */
 
 t_stat scs_map (UNIT *uptr, uint8 *buf, size_t xfrsz, uint32 acc, uint32 *name)
@@ -378,6 +391,20 @@ ppd_sndmsg (uptr, pkt);                                 /* send CRRSP */
 return SCPE_OK;
 }
 
+/* Send SCS application datagram */
+
+t_stat scs_send_dg (UNIT *uptr, uint32 cid, CI_PKT *pkt)
+{
+SCA_CB *cb = scs_getconn (uptr, cid);
+
+CI_PUTL (pkt->data, SCS_DSTCON, cb->cid);
+CI_PUTL (pkt->data, SCS_SRCCON, cid);
+CI_PUTW (pkt->data, SCS_MTYPE, SCS_APPDG);
+pkt->node = cb->node;
+
+return ppd_snddg (uptr, pkt);                           /* send APPDG */
+}
+
 /* Send SCS application message */
 
 t_stat scs_send_msg (UNIT *uptr, uint32 cid, CI_PKT *pkt)
@@ -394,6 +421,18 @@ pkt->node = cb->node;
 return ppd_sndmsg (uptr, pkt);                          /* send APPMSG */
 }
 
+/* SCS application datagram */
+
+t_stat scs_appdg (UNIT *uptr, CI_PKT *pkt)
+{
+uint32 cid = CI_GETL (pkt->data, SCS_DSTCON);
+SCA_CB *cb = scs_getconn (uptr, cid);
+
+if (cb)
+    return cb->sysap->msgrec (uptr, cid, pkt);
+return SCPE_IERR;
+}
+
 /* SCS application message */
 
 t_stat scs_appmsg (UNIT *uptr, CI_PKT *pkt)
@@ -402,11 +441,10 @@ uint32 cid = CI_GETL (pkt->data, SCS_DSTCON);
 uint16 credits = CI_GETW (pkt->data, SCS_CREDIT);
 SCA_CB *cb = scs_getconn (uptr, cid);
 
-if (cb)
-{
+if (cb) {
     cb->credits += credits;
     return cb->sysap->msgrec (uptr, cid, pkt);
-}
+    }
 return SCPE_IERR;
 }
 
@@ -437,6 +475,8 @@ switch (msg_type)
         return scs_crdreq (uptr, pkt);
 
     case SCS_APPMSG:                                    /* application message */
+        return scs_appdg (uptr, pkt);
+
     case SCS_APPDG:                                     /* application datagram */
         return scs_appmsg (uptr, pkt);
 

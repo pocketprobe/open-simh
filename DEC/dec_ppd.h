@@ -81,6 +81,7 @@
 #define LEN_STACK       (PPD_TIME + 8)
 #define LEN_ACK         (PPD_MTYPE + 2)
 
+extern t_stat ppd_snddg (UNIT *uptr, CI_PKT *pkt);
 extern t_stat ppd_sndmsg (UNIT *uptr, CI_PKT *pkt);
 extern t_stat ppd_sndlb (UNIT *uptr, CI_PKT *pkt);
 extern int32 ppd_snddat (UNIT *uptr, uint32 sbnam);

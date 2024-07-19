@@ -68,6 +68,21 @@ else
 return r;
 }
 
+/* Send SCS datagram */
+
+t_stat ppd_snddg (UNIT *uptr, CI_PKT *pkt)
+{
+t_stat r;
+
+CI_PUTB (pkt->data, CI_OPC, OPC_DG);
+CI_PUTB (pkt->data, CI_FLAGS, 0);
+CI_PUTW (pkt->data, PPD_MTYPE, PPD_SCSDG);
+r = ppd_set_path (uptr, pkt);
+if (r != SCPE_OK)
+    return r;
+return ci_send (uptr, pkt);
+}
+
 /* Send SCS message */
 
 t_stat ppd_sndmsg (UNIT *uptr, CI_PKT *pkt)
@@ -215,6 +230,7 @@ switch (mtype) {
             }
         break;
 
+    case PPD_SCSDG:
     case PPD_SCSMSG:
         return scs_receive (uptr, pkt);
 
@@ -499,8 +515,8 @@ uptr->sca_ctx = (void *) realloc (uptr->sca_ctx, sizeof (SCA_CTX));
 ctx = (SCA_CTX *)uptr->sca_ctx;
 
 ctx->poll_path = CI_PATH_B;
-ctx->lb_state[0] = PTH_BAD;
-ctx->lb_state[1] = PTH_BAD;
+ctx->lb_state[0] = PTH_GOOD;
+ctx->lb_state[1] = PTH_GOOD;
 for (i = 0; i < CI_MAX_NODES; i++) {
     ctx->sb[i].pb.vc_state = VC_CLOSED;
     ctx->sb[i].pb.path_state[0] = PTH_BAD;

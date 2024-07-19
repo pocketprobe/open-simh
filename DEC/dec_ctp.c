@@ -53,6 +53,9 @@ const char* ctp_types[] = {                             /* CTP debug definitions
     "MSTATE"
     };
 
+char ctp_buf[MAX_BUF_MAP][MAX_BUF_LEN];
+uint32 ctp_map;
+
 void ctp_debug_pkt (UNIT *uptr, CI_PKT *pkt)
 {
 uint8 opcode = CI_GETB (pkt->data, CTP_OPCODE);
@@ -75,6 +78,14 @@ uint8 opcode = CI_GETB (pkt->data, CTP_OPCODE);
 CI_PUTB (pkt->data, CTP_OPCODE, (opcode | CTP_RESPONSE));
 ctp_debug_pkt (uptr, pkt);
 return scs_send_msg (uptr, cid, pkt);                   /* send CTP response */
+}
+
+t_stat ctp_send_dg (UNIT *uptr, int32 cid, CI_PKT *pkt)
+{
+uint8 opcode = CI_GETB (pkt->data, CTP_OPCODE);
+CI_PUTB (pkt->data, CTP_OPCODE, (opcode | CTP_RESPONSE));
+ctp_debug_pkt (uptr, pkt);
+return scs_send_dg (uptr, cid, pkt);                    /* send CTP response */
 }
 
 t_stat ctp_fill (UNIT *uptr, CI_PKT *ctp, CI_PKT *pkt)
@@ -112,6 +123,9 @@ return SCPE_OK;
 
 t_stat ctp_funct (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
+CI_PUTB (pkt->data, CTP_STATUS, CTP_SUCCESS);
+CI_PUTL (pkt->data, CTP_FMASK, 0x0001FFFF);
+pkt->length = CTP_FMASK + 4;
 return SCPE_OK;
 }
 
@@ -119,6 +133,28 @@ return SCPE_OK;
 
 t_stat ctp_bufmap (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
+uint32 len = CI_GETL (pkt->data, CTP_BUFLENGTH);        /* length to map */
+uint32 name;
+t_stat r;
+
+if (len > MAX_BUF_LEN) {
+    CI_PUTB (pkt->data, CTP_STATUS, CTP_NORESOURCE);
+    return SCPE_OK;
+    }
+if (ctp_map == MAX_BUF_MAP) {
+    CI_PUTB (pkt->data, CTP_STATUS, CTP_BUFLIMIT);
+    return SCPE_OK;
+    }
+r = scs_map (uptr, ctp_buf[ctp_map], len, 0, &name);
+if (r == SCPE_OK) {
+    CI_PUTB (pkt->data, CTP_STATUS, CTP_SUCCESS);
+    //CI_PUTL (pkt->data, CTP_BUFLENGTH, len);            /* actual length */
+    CI_PUTL (pkt->data, CTP_BUFLNAME, name);            /* buffer name */
+    ctp_map++;
+    }
+else {
+    CI_PUTB (pkt->data, CTP_STATUS, CTP_NORESOURCE);
+    }
 return SCPE_OK;
 }
 
@@ -126,6 +162,17 @@ return SCPE_OK;
 
 t_stat ctp_bufunmap (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
+uint32 name = CI_GETL (pkt->data, CTP_BUFLNAME);
+t_stat r;
+
+r = scs_unmap (uptr, name);
+if (r == SCPE_OK) {
+    CI_PUTB (pkt->data, CTP_STATUS, CTP_SUCCESS);
+    ctp_map--;
+    }
+else {
+    CI_PUTB (pkt->data, CTP_STATUS, CTP_NOBUFMAPPED);
+    }
 return SCPE_OK;
 }
 
@@ -133,6 +180,19 @@ return SCPE_OK;
 
 t_stat ctp_move (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
+// CTP_BUFLNAME
+// CTP_OTHERNODE
+// CTP_BUFLENGTH
+// CTP_BUFLOFSET
+// CTP_BUFROFSET
+// CTP_BUFRNAME
+// CTP_MOVETYPE
+
+// int32 scs_write (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr)
+// int32 scs_read (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr)
+
+// CTP_STATUS
+// CTP_ACTCOUNT
 return SCPE_OK;
 }
 
@@ -145,15 +205,17 @@ uint32 rep, i;
 t_stat r;
 
 rep = CI_GETW (pkt->data, CTP_REPCOUNT);
+CI_PUTB (pkt->data, CTP_STATUS, CTP_SUCCESS);           /* assume success */
 memcpy (ci_pkt.data, pkt->data, CTP_IMAGEDATA);         /* copy packet and CTP header */
 ci_pkt.length = pkt->length;
 ctp_fill (uptr, pkt, &ci_pkt);                          /* fill packet with generated data */
-for (i = 0; i <= rep; i++) {                            /* send at least once */
+for (i = 0; i <= rep; i++) {
     CI_PUTW (ci_pkt.data, CTP_ACTCOUNT, i);             /* set actual count */
     r = ctp_send_rsp (uptr, cid, &ci_pkt);              /* send response */
     if (r != SCPE_OK)
         break;
     }
+//CI_PUTW (pkt->data, CTP_ACTCOUNT, i);                   /* set actual count */
 return r;
 }
 
@@ -161,7 +223,23 @@ return r;
 
 t_stat ctp_gendg (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
-return SCPE_OK;
+CI_PKT ci_pkt;
+uint32 rep, i;
+t_stat r;
+
+rep = CI_GETW (pkt->data, CTP_REPCOUNT);
+CI_PUTB (pkt->data, CTP_STATUS, CTP_SUCCESS);           /* assume success */
+memcpy (ci_pkt.data, pkt->data, CTP_IMAGEDATA);         /* copy packet and CTP header */
+ci_pkt.length = pkt->length;
+ctp_fill (uptr, pkt, &ci_pkt);                          /* fill packet with generated data */
+for (i = 0; i < rep; i++) {
+    CI_PUTW (ci_pkt.data, CTP_ACTCOUNT, i);             /* set actual count */
+    r = ctp_send_dg (uptr, cid, &ci_pkt);               /* send response */
+    if (r != SCPE_OK)
+        break;
+    }
+CI_PUTW (pkt->data, CTP_ACTCOUNT, i);                   /* set actual count */
+return r;
 }
 
 /* generate reset */
@@ -234,7 +312,21 @@ return SCPE_OK;
 
 t_stat ctp_config (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
-return SCPE_OK;
+uint32 state[2];
+uint32 node;
+t_stat r;
+
+node = CI_GETB (pkt->data, CTP_OTHERNODE);
+r = scs_config_path (uptr, node, state);
+if (r == SCPE_OK) {
+    state[0] = (state[0] != 0) ? 1 : 0;                 /* convert to boolean */
+    state[1] = (state[1] != 0) ? 1 : 0;
+    CI_PUTB (pkt->data, CTP_STATUS, CTP_SUCCESS);
+    CI_PUTW (pkt->data, CTP_CFGP0STS, state[0]);
+    CI_PUTW (pkt->data, CTP_CFGP1STS, state[1]);
+    pkt->length = CTP_CFGP1STS + 2;
+    }
+return r;
 }
 
 /* read counters */
@@ -289,6 +381,7 @@ return SCPE_OK;
 t_stat app_ctp (UNIT *uptr, uint32 cid, CI_PKT *pkt)
 {
 uint8 opcode = CI_GETB (pkt->data, CTP_OPCODE);
+uint32 mtype = CI_GETW (pkt->data, SCS_MTYPE);
 t_stat r = SCPE_OK;
 uint32 rep, delay;
 
@@ -313,13 +406,16 @@ switch (opcode) {
 
 switch (opcode) {
     case CTP_FUNCTREQ:                                  /* function set */
-        return ctp_funct (uptr, cid, pkt);
+        r = ctp_funct (uptr, cid, pkt);
+        break;
 
     case CTP_BUFMAPREQ:                                 /* buffer map */
-        return ctp_bufmap (uptr, cid, pkt);
+        r = ctp_bufmap (uptr, cid, pkt);
+        break;
 
     case CTP_BUFUNMREQ:                                 /* buffer unmap */
-        return ctp_bufunmap (uptr, cid, pkt);
+        r = ctp_bufunmap (uptr, cid, pkt);
+        break;
 
     case CTP_MOVBUFREQ:                                 /* buffer move */
         return ctp_move (uptr, cid, pkt);
@@ -328,7 +424,8 @@ switch (opcode) {
         return ctp_genmsg (uptr, cid, pkt);
 
     case CTP_GENDGRREQ:                                 /* generate datagram */
-        return ctp_gendg (uptr, cid, pkt);
+        r = ctp_gendg (uptr, cid, pkt);
+        break;
 
     case CTP_GENRSTREQ:                                 /* generate reset */
         return ctp_genrst (uptr, cid, pkt);
@@ -341,7 +438,8 @@ switch (opcode) {
         return ctp_noact (uptr, cid, pkt);
 
     case CTP_CONFIGREQ:                                 /* configuration */
-        return ctp_config (uptr, cid, pkt);
+        r = ctp_config (uptr, cid, pkt);
+        break;
 
     case CTP_COUNTSREQ:                                 /* read counters */
         return ctp_counts (uptr, cid, pkt);
@@ -372,5 +470,7 @@ switch (opcode) {
 if (r != SCPE_OK) {
     CI_PUTB (pkt->data, CTP_STATUS, CTP_FAILURE);
     }
-return ctp_send_rsp (uptr, cid, pkt);                   /* send CTP response */
+if (mtype == SCS_APPMSG)
+    return ctp_send_rsp (uptr, cid, pkt);               /* send message response */
+return ctp_send_dg (uptr, cid, pkt);                    /* send datagram response */
 }
