@@ -722,7 +722,10 @@ if (opc == OPC_MSG) {
     }
 else {
     hm = kg_receive (kh + KH_DRR);                      /* datagram */
-    lof = 0044000 | 077;
+    if (pkt->path == CI_PATH_A)
+        lof = 0044000 | 077;
+    else
+        lof = 0064000 | 077;
     }
 
 if (hm == 0) {
@@ -777,11 +780,6 @@ uint32 dg_type;
 if (pkt->node == ci_get_node (uptr))                    /* from local node? */
     return SCPE_OK;                                     /* ignore */
 switch (pkt->data[CI_OPC]) {                            /* opcodes handled by port */
-    case OPC_ID:
-        if (ci_check_vc (uptr, pkt->node) == SCPE_OK)   /* VC open? */
-            return SCPE_OK;                             /* discard */
-        break;
-
     case OPC_CNF:
         return kh_cnfrec (pkt);
 
