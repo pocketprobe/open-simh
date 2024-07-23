@@ -205,6 +205,13 @@ REGMAP ci_regmap[] = {
     { 0, 0 }
     };
 
+CI_PORT ci_port = {
+    (ID_DUAL | ID_CI780),                               /* port type */
+    0x00700040,                                         /* code revision */
+    0xFFFF0F00,                                         /* function mask */
+    0x3F9                                               /* internal buffer length */
+    };
+
 /* Read CI780 adapter register */
 
 t_stat ci_rdreg (int32 *val, int32 pa, int32 lnt)
@@ -215,25 +222,28 @@ REGMAP *p;
 
 if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
     *val = ci_local_store[(rg - 0x800)];
+    sim_debug (DBG_REG, &ci_dev, "LSTOR[%03X] rd: %08X\n", rg, *val);
+    return SCPE_OK;
+    }
+if (rg == 0x814) {
+    *val = uptr->ci_node;                               /* expected by EVCGD */
     return SCPE_OK;
     }
 for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
         return ci_vax_rd (uptr, val, p->rg, lnt);
     }
-if ((rg >= 0xC00) && (rg < 0xFFF)) {                    /* virtual circuit descriptor */
-    rg = (rg >> 2) & 0x3F;                              /* get node number */
-    *val = 0;                                           /* default value */
-    if (rg < CI_MAX_NODES)                              /* valid node number? */
-        *val = ci_vcd[rg];                              /* yes, get VCD */
-    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08x\n", rg, *val);
+if (rg >= 0xC00) {                                      /* virtual circuit descriptors */
+    rg = (rg >> 2) & 0xFF;                              /* get node number */
+    *val = ci_vcd[rg] & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08X\n", rg, *val);
     return SCPE_OK;
     }
 switch (rg) {                                           /* CI780 specific registers */
 
     case CNFGR_OF:
         *val = ci_cnfgr | CNFGR_CODE;
-        sim_debug (DBG_REG, &ci_dev, "CNFGR rd: %08x\n", *val);
+        sim_debug (DBG_REG, &ci_dev, "CNFGR rd: %08X\n", *val);
         break;
 
     case PMCSR_OF:
@@ -243,15 +253,17 @@ switch (rg) {                                           /* CI780 specific regist
             *val |= PMCSR_UI;
         if ((ci_pmcsr & 0x7F00) > 0)                /* any error bits set? */
             *val |= PMCSR_PE;                       /* yes, set parity error */
-        sim_debug (DBG_REG, &ci_dev, "PMCSR rd: %08x\n", *val);
+        sim_debug (DBG_REG, &ci_dev, "PMCSR rd: %08X\n", *val);
         break;
 
     case MADR_OF:
         *val = (ci_madr & MADR_ADDR);
+        sim_debug (DBG_REG, &ci_dev, "MADR rd: %08X\n", *val);
         break;
 
     case MDATR_OF:
         *val = ci_mdatr[ci_madr];
+        sim_debug (DBG_REG, &ci_dev, "MDATR rd: %08X\n", *val);
         break;
 
     default:
@@ -270,13 +282,29 @@ int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 
+#if !defined (VAX_750)
+if ((pa & 3) || (lnt != L_LONG)) {                      /* unaligned or not lw? */
+    sim_printf (">>CI: invalid adapter write mask, pa = 0x%X, lnt = %d\r\n", pa, lnt);
+    sbi_set_errcnf ();                                  /* err confirmation */
+    return SCPE_OK;
+    }
+#endif
 if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
+    sim_debug (DBG_REG, &ci_dev, "LSTOR[%03X] wr: %08X\n", rg, val);
+    if (rg == 0x900)
+        val = val & 0xFFFF;                             /* expected by EVCGA */
     ci_local_store[(rg - 0x800)] = val;
     return SCPE_OK;
     }
 for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
         return ci_vax_wr (uptr, val, p->rg, lnt);
+    }
+if (rg >= 0xC00) {                                      /* virtual circuit descriptors */
+    rg = (rg >> 2) & 0xFF;                              /* get node number */
+    ci_vcd[rg] = val & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] wr: %08X\n", rg, val);
+    return SCPE_OK;
     }
 switch (rg) {                                           /* case on type */
 
@@ -305,7 +333,7 @@ switch (rg) {                                           /* case on type */
 
     case MADR_OF:
         sim_debug (DBG_REG, &ci_dev, "MADR wr: %08X\n", val);
-        ci_madr = (val & 0x1FFF);
+        ci_madr = (val & MADR_ADDR);
         break;
 
     case MDATR_OF:
@@ -345,6 +373,6 @@ ci_pmcsr = 0;
 ci_madr = 0;
 for (i = 0; i < 8192; i++)
     ci_mdatr[i] = 0;
-ci_vax_reset (dptr);
+ci_vax_reset (dptr, &ci_port);
 return SCPE_OK;
 }

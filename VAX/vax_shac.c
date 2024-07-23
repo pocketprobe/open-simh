@@ -146,6 +146,13 @@ REGMAP shac_regmap[] = {
     { 0, 0 }
     };
 
+CI_PORT shac_port = {
+    ID_SHAC,                                            /* port type */
+    0x00700040,                                         /* code revision */
+    0xFFFF0F00,                                         /* function mask */
+    0x3F9                                               /* internal buffer length */
+    };
+
 int32 shac_rd (int32 pa)
 {
 int32 rg = (pa >> 2) &  0x3F;

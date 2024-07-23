@@ -188,10 +188,20 @@
 #define PPD_DSTART      0x80                            /* default start addr */
 #define PPD_EXTCNT      0x80                            /* extended counters */
 
+#define CI_ALL          255                             /* all ports */
+#define CI_MAX_VCD      256                             /* max virtual circuit descriptors */
+
 typedef struct {                                        /* register mappings */
-    uint32      offset;                                 /* memory offset */
-    uint32      rg;                                     /* register index */
+    uint32 offset;                                      /* memory offset */
+    uint32 rg;                                          /* register index */
 } REGMAP;
+
+typedef struct {
+    uint32 type;                                        /* port type */
+    uint32 coderev;                                     /* code revision */
+    uint32 fmask;                                       /* function mask */
+    uint32 iblen;                                       /* internal buffer length */
+} CI_PORT;
 
 typedef struct {
     uint32 addr;                                        /* associated memory address */
@@ -202,8 +212,8 @@ typedef struct {
 t_stat ci_vax_rd (UNIT *uptr, int32 *val, int32 rg, int32 lnt);
 t_stat ci_vax_wr (UNIT *uptr, int32 val, int32 rg, int32 lnt);
 t_stat ci_vax_svc (UNIT *uptr);
-t_stat ci_vax_reset (DEVICE *dptr);
+t_stat ci_vax_reset (DEVICE *dptr, CI_PORT *cp);
 
-extern uint16 ci_vcd[CI_MAX_NODES];
+extern uint16 ci_vcd[CI_MAX_VCD];
 
 #endif

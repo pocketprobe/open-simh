@@ -219,6 +219,13 @@ REGMAP ci_regmap[] = {
     { 0, 0 }
     };
 
+CI_PORT ci_port = {
+    (ID_DUAL | ID_CI780),                               /* port type */
+    0x00700040,                                         /* code revision */
+    0xFFFF0F00,                                         /* function mask */
+    0x3F9                                               /* internal buffer length */
+    };
+
 /* Read CIBCI adapter register */
 
 t_stat ci_rdreg (int32 *val, int32 pa, int32 lnt)
@@ -474,6 +481,6 @@ for (i = 0; i < 4; i++)
     ci_dmaf[i] = 0;
 for (i = 0; i < 8192; i++)
     ci_mdatr[i] = 0;
-ci_vax_reset (dptr);
+ci_vax_reset (dptr, &ci_port);
 return SCPE_OK;
 }

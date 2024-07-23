@@ -124,6 +124,8 @@
 
 #define CI_ReadL(x)     GVP_ReadL (&ci_mmu, x)
 
+#define port_ctx        up8
+
 uint32 ci_psr;                                          /* port status reg */
 uint32 ci_max_dg;                                       /* max datagram size */
 uint32 ci_max_msg;                                      /* max message size */
@@ -135,7 +137,7 @@ uint32 ci_spt_base;                                     /* buffer descriptor tab
 uint32 ci_pfar;                                         /* port failing addr */
 uint32 ci_pesr;                                         /* port error status */
 uint32 ci_ppr;                                          /* port parameter reg */
-uint16 ci_vcd[CI_MAX_NODES];                            /* virtual circuit descriptors */
+uint16 ci_vcd[CI_MAX_VCD];                              /* virtual circuit descriptors */
 uint32 ci_cnt;                                          /* counter port */
 uint32 ci_dgd;                                          /* datagrams discarded */
 GVPMMU ci_mmu;                                          /* memory management unit */
@@ -269,7 +271,8 @@ for ( ;; ) {
     ci_read_packet (uptr, &pkt, pkt.length);            /* read packet */
     if (sts != STS_OK)                                  /* packet length error? */
         pkt.data[PPD_STATUS] = sts;
-    else if (pkt.data[PPD_PORT] >= CI_MAX_NODES)        /* invalid port number? */
+    else if ((pkt.data[PPD_PORT] >= CI_MAX_NODES) &&
+            (pkt.data[PPD_PORT] != CI_ALL))             /* invalid port number? */
         pkt.data[PPD_STATUS] = STS_INVDP;
     else {
         r = ci_send_ppd (uptr, &pkt);                   /* process it */
@@ -352,7 +355,7 @@ switch (rg) {
         break;
 
     case CI_PQBBR:
-        sim_debug_unit (DBG_REG, uptr, "PQBBR wr: %08X at %08X\n", fault_PC);
+        sim_debug_unit (DBG_REG, uptr, "PQBBR wr: %08X at %08X\n", val, fault_PC);
         ci_pqbb_pa = val;
         break;
 
@@ -423,11 +426,11 @@ switch (rg) {
         break;
 
     case CI_PMTCR:
-        sim_debug_unit (DBG_REG, uptr, "PMTCR wr: %08X at %08X\n", fault_PC);
+        sim_debug_unit (DBG_REG, uptr, "PMTCR wr: %08X at %08X\n", val, fault_PC);
         break;
 
     case CI_PMTECR:
-        sim_debug_unit (DBG_REG, uptr, "PMTECR wr: %08X at %08X\n", fault_PC);
+        sim_debug_unit (DBG_REG, uptr, "PMTECR wr: %08X at %08X\n", val, fault_PC);
         break;
 
     case CI_PFAR:
@@ -485,18 +488,19 @@ key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
 sboff = sboff + (flags & BD_M_OFF);                     /* add page offset */
 
+opc = CI_GETB (ppd->data, PPD_OPC);
+if (opc != OPC_SNDDAT)                                  /* REQDAT0, 1, 2 */
+    CI_PUTB (ppd->data, PPD_OPC, OPC_RETDAT);
+
 if (((flags & BD_M_VALID) == 0) || (snd_key != key)) {  /* check buffer key */
     sim_printf ("CI: send buffer invalid\n");
+    ppd->data[PPD_STATUS] = STS_INVBN;
     return SCPE_IERR;
     }
 
 r = ci_fmt_send (uptr, ppd, &pkt);                      /* convert to CI format */
 if (r != SCPE_OK)
     return r;
-
-opc = CI_GETB (pkt.data, CI_OPC);
-if (opc != OPC_SNTDAT)                                  /* DATREQ0, 1, 2 */
-    CI_PUTB (pkt.data, CI_OPC, OPC_RETDAT);
 
 rbnam = CI_GETL (ppd->data, PPD_RBNAM);                 /* BDT table offset */
 CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
@@ -585,20 +589,16 @@ return r;
 
 t_stat ci_idreq (UNIT *uptr, CI_PKT *pkt)
 {
+CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+
 CI_PUTB (pkt->data, CI_OPC, OPC_ID);                    /* set opcode */
 if (pkt->path == CI_PATH_A)
     CI_PUTB (pkt->data, CI_FLAGS, CI_PATH_0);           /* set received path */
 else
     CI_PUTB (pkt->data, CI_FLAGS, CI_PATH_1);
-#if 0                                                   /* SHAC */
-CI_PUTL (pkt->data, CI_MAINT_ID, ID_SHAC);              /* remote port type */
-CI_PUTL (pkt->data, CI_CODE_REV, 0x00700040);           /* code revision */
-CI_PUTL (pkt->data, CI_PORT_FCN, 0xFFFF0F00);           /* function mask */
-#else
-CI_PUTL (pkt->data, CI_MAINT_ID, (ID_DUAL | ID_CI780)); /* remote port type */
-CI_PUTL (pkt->data, CI_CODE_REV, 0x00700040);           /* code revision */
-CI_PUTL (pkt->data, CI_PORT_FCN, 0xFFFF0F00);           /* function mask */
-#endif
+CI_PUTL (pkt->data, CI_MAINT_ID, cp->type);             /* remote port type */
+CI_PUTL (pkt->data, CI_CODE_REV, cp->coderev);          /* code revision */
+CI_PUTL (pkt->data, CI_PORT_FCN, cp->fmask);            /* function mask */
 CI_PUTB (pkt->data, CI_RST_PORT, uptr->ci_node);        /* resetting port */
 CI_PUTB (pkt->data, CI_SYS_STATE, CI_PTST_ENA);         /* port state */
 pkt->length = LEN_ID;
@@ -621,13 +621,16 @@ sim_debug_unit (DBG_LCMD, uptr, "==> SETCKT, port: %d, vcd: %04X, mask: %04X, mv
 vcd_val = vcd_val & ~vcd_mmsk;                          /* new VCD value */
 vcd_val = vcd_val | (vcd_mval & vcd_mmsk);
 
-if (VCD_OPEN (vcd_val) && !VCD_OPEN (ci_vcd[port]))     /* opening VC */
-    r = ci_open_vc (uptr, port);
-else if (!VCD_OPEN (vcd_val) && VCD_OPEN (ci_vcd[port])) /* closing VC */
-    r = ci_close_vc (uptr, port);
+if (port < CI_MAX_NODES) {
+    if (VCD_OPEN (vcd_val) && !VCD_OPEN (ci_vcd[port])) /* opening VC */
+        r = ci_open_vc (uptr, port);
+    else if (!VCD_OPEN (vcd_val) && VCD_OPEN (ci_vcd[port])) /* closing VC */
+        r = ci_close_vc (uptr, port);
 
-if (r != SCPE_OK)
-    return r;
+    if (r != SCPE_OK)
+        return r;
+    }
+
 CI_PUTW (pkt->data, PPD_VCPVAL, ci_vcd[port]);          /* previous VCD value */
 ci_vcd[port] = vcd_val;                                 /* set new VCD value */
 pkt->length = LEN_SETCKT;
@@ -650,13 +653,14 @@ t_stat ci_rdcnt (UNIT *uptr, PPD_PKT *pkt)
 {
 ci_cnt = pkt->data[PPD_PORT];
 sim_debug_unit (DBG_LCMD, uptr, "==> RDCNT, port = %d\n", ci_cnt);
-CI_PUTL (pkt->data, 0x10, 0);                          /* ACKs on path 0 */
-CI_PUTL (pkt->data, 0x14, 0);                          /* NAKs on path 0 */
-CI_PUTL (pkt->data, 0x18, 0);                          /* NORSPs on path 0 */
-CI_PUTL (pkt->data, 0x1c, 0);                          /* ACKs on path 1 */
-CI_PUTL (pkt->data, 0x20, 0);                          /* NAKs on path 1 */
-CI_PUTL (pkt->data, 0x24, 0);                          /* NORSPs on path 1 */
-CI_PUTL (pkt->data, 0x28, ci_dgd);                     /* DGS discarded */
+CI_PUTL (pkt->data, 0x10, 0);                           /* ACKs on path 0 */
+CI_PUTL (pkt->data, 0x14, 0);                           /* NAKs on path 0 */
+CI_PUTL (pkt->data, 0x18, 0);                           /* NORSPs on path 0 */
+CI_PUTL (pkt->data, 0x1c, 0);                           /* ACKs on path 1 */
+CI_PUTL (pkt->data, 0x20, 0);                           /* NAKs on path 1 */
+CI_PUTL (pkt->data, 0x24, 0);                           /* NORSPs on path 1 */
+CI_PUTL (pkt->data, 0x28, ci_dgd);                      /* DGS discarded */
+ci_dgd = 0;                                             /* reset counters */
 pkt->length = LEN_RDCNT;
 ci_write_packet (uptr, pkt, pkt->length);
 return SCPE_OK;
@@ -894,6 +898,7 @@ if (pkt->addr == 0) {
         case OPC_DATREC:
         case OPC_CNFREC:
         case OPC_RETCNF:
+        case OPC_RETDAT:
             r = ci_get_mfq (uptr, pkt);                 /* message */
             break;
 
@@ -904,7 +909,7 @@ if (pkt->addr == 0) {
         case OPC_LBREC:
             r = ci_get_dfq (uptr, pkt);                 /* datagram */
             if (r == CISE_NOPKT) {
-                if (ci_cnt == 255)
+                if (ci_cnt == CI_ALL)
                     ci_dgd++;
                 else if (ci_cnt == pkt->data[PPD_PORT])
                     ci_dgd++;
@@ -919,6 +924,10 @@ if (pkt->addr == 0) {
     if (r != SCPE_OK)
         return r;
     }
+if (opc == OPC_RSTREC) {                                /* reset? */
+    pkt->data[PPD_OPC] &= ~OPC_M_RECV;
+    pkt->data[PPD_STATUS] = STS_URP;                    /* not recognised in enabled state */
+    }
 ci_write_packet (uptr, pkt, pkt->length);
 return ci_put_rsq (uptr, pkt);
 }
@@ -928,12 +937,13 @@ return ci_put_rsq (uptr, pkt);
 t_stat ci_receive_ppd (UNIT *uptr, PPD_PKT *pkt)
 {
 uint32 port = pkt->data[PPD_PORT];
+t_stat r;
 
 switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by port */
     case OPC_DGREC:
         port = pkt->data[PPD_PORT];                     /* get remote port */
         if (DG_INHIBIT (ci_vcd[port])) {                /* inhibited? */
-            if (ci_cnt == 255)
+            if (ci_cnt == CI_ALL)
                 ci_dgd++;
             else if (ci_cnt == pkt->data[PPD_PORT])
                 ci_dgd++;
@@ -946,7 +956,10 @@ switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by po
         break;
 
     case OPC_REQDATREC:
-        return ci_send_data (uptr, pkt);
+        r = ci_send_data (uptr, pkt);
+        if (r == SCPE_OK)
+            return r;
+        break;
         }
 return ci_receive_int (uptr, pkt);
 }
@@ -1087,9 +1100,12 @@ return ci_port_svc (uptr);
 
 /* Reset CI adapter */
 
-t_stat ci_vax_reset (DEVICE *dptr)
+t_stat ci_vax_reset (DEVICE *dptr, CI_PORT *cp)
 {
+UNIT *uptr = dptr->units;
 uint32 i;
+
+uptr->port_ctx = cp;                                    /* save port parameters */
 
 for (i = 0; i < CI_MAX_NODES; i++)
     ci_vcd[i] = (VCD_PAG | VCD_PBG);                    /* clear virtual circuit descriptors */
@@ -1100,9 +1116,9 @@ ci_pqbb_pa = 0;
 ci_pqbb_va = 0;
 ci_bdt_va = 0;
 ci_bdt_len = 0;
-ci_cnt = 255;
+ci_cnt = CI_ALL;
 ci_dgd = 0;
-ci_ppr |= ((0x3f9 & PPR_M_IBLEN) << PPR_V_IBLEN);       /* TODO: set internal buffer length */
+ci_ppr |= ((cp->iblen & PPR_M_IBLEN) << PPR_V_IBLEN);   /* internal buffer length */
 gvp_tlb_reset (&ci_mmu);                                /* reset MMU */
 ci_port_reset (dptr);
 return SCPE_OK;

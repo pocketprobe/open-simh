@@ -201,6 +201,13 @@ REGMAP ca_regmap[] = {
     { 0, 0 }
     };
 
+CI_PORT ca_port = {
+    (ID_DUAL | ID_BCA),                                 /* port type */
+    0x00700040,                                         /* code revision */
+    0xFFFF0F00,                                         /* function mask */
+    0x3F9                                               /* internal buffer length */
+    };
+
 /* Read CIBCA adapter register */
 
 t_stat ca_rdreg (int32 *val, int32 pa, int32 lnt)
@@ -426,6 +433,6 @@ ca_biic.uiic = BIICR_EXV;
 ca_pmcsr = 0;
 ca_psr_bi = 0;
 ca_madr = 0;
-ci_vax_reset (dptr);
+ci_vax_reset (dptr, &ca_port);
 return SCPE_OK;
 }
