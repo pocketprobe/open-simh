@@ -222,15 +222,15 @@ REGMAP ci_regmap[] = {
 CI_PORT ci_port = {
     (ID_DUAL | ID_CI780),                               /* port type */
     0x00700040,                                         /* code revision */
-    0xFFFF0F00,                                         /* function mask */
-    0x3F9                                               /* internal buffer length */
+    0xFFFFFF00,                                         /* function mask */
+    0x3F8                                               /* internal buffer length */
     };
 
 /* Read CIBCI adapter register */
 
 t_stat ci_rdreg (int32 *val, int32 pa, int32 lnt)
 {
-int32 rg = (pa & 0xFFF);
+int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 
@@ -241,6 +241,12 @@ if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
 for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
         return ci_vax_rd (uptr, val, p->rg, lnt);
+    }
+if (rg >= 0xC00) {                                      /* virtual circuit descriptors */
+    rg = (rg >> 2) & 0xFF;                              /* get node number */
+    *val = ci_vcd[rg] & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08X\n", rg, *val);
+    return SCPE_OK;
     }
 switch (rg) {                                           /* CIBCI specific registers */
 
@@ -336,7 +342,7 @@ return SCPE_OK;
 
 t_stat ci_wrreg (int32 val, int32 pa, int32 lnt)
 {
-int32 rg = (pa & 0xFFF);
+int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 
@@ -347,6 +353,12 @@ if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
 for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
         return ci_vax_wr (uptr, val, p->rg, lnt);
+    }
+if (rg >= 0xC00) {                                      /* virtual circuit descriptors */
+    rg = (rg >> 2) & 0xFF;                              /* get node number */
+    ci_vcd[rg] = val & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] wr: %08X\n", rg, val);
+    return SCPE_OK;
     }
 switch (rg) {                                           /* case on type */
 

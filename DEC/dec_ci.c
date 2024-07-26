@@ -58,7 +58,7 @@ const char* ci_types[] = {                              /* OPC debug definitions
     "DG",
     "MSG",
     "CNF",
-    "(invalid)",
+    "MCNF",
     "IDREQ",                                            /* 05 */
     "RST",
     "STRT",
@@ -309,45 +309,31 @@ switch (opcode) {
         break;
 
     case OPC_CNF:
+    case OPC_DATREQ0:
+    case OPC_DATREQ1:
+    case OPC_DATREQ2:
+    case OPC_SNTDAT:
+    case OPC_RETDAT:
         r = ci_check_vc (uptr, pkt->node);
+        ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
+        break;
+
+    case OPC_MCNF:
+    case OPC_MDATREQ:
+    case OPC_SNTMDAT:
+    case OPC_RETMDAT:
         ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
         break;
 
     case OPC_IDREQ:
-        ci_debug_pkt (DBG_CONF, uptr, pkt, 0);
-        break;
-
-    case OPC_RST:
-        ci_debug_pkt (DBG_DIAG, uptr, pkt, 0);
-        break;
-
-    case OPC_STRT:
-        ci_debug_pkt (DBG_DIAG, uptr, pkt, 0);
-        break;
-
-    case OPC_DATREQ0:
-    case OPC_DATREQ1:
-    case OPC_DATREQ2:
-        r = ci_check_vc (uptr, pkt->node);
-        ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
-        break;
-
     case OPC_ID:
-        ci_debug_pkt (DBG_CONF, uptr, pkt, 0);
-        break;
-
     case OPC_LB:
         ci_debug_pkt (DBG_CONF, uptr, pkt, 0);
         break;
 
-    case OPC_SNTDAT:
-        r = ci_check_vc (uptr, pkt->node);
-        ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
-        break;
-
-    case OPC_RETDAT:
-        r = ci_check_vc (uptr, pkt->node);
-        ci_debug_pkt (DBG_BLK, uptr, pkt, 0);
+    case OPC_RST:
+    case OPC_STRT:
+        ci_debug_pkt (DBG_DIAG, uptr, pkt, 0);
         break;
 
     default:
@@ -384,42 +370,31 @@ switch (opcode) {
         ci_debug_pkt (DBG_SCS, uptr, pkt, 1);
         break;
 
-    case OPC_IDREQ:                                     /* ID request */
-        ci_debug_pkt (DBG_CONF, uptr, pkt, 1);
-        break;
-
-    case OPC_RST:                                       /* port reset */
-        ci_debug_pkt (DBG_DIAG, uptr, pkt, 1);
-        break;
-
-    case OPC_STRT:                                      /* port start */
-        ci_debug_pkt (DBG_DIAG, uptr, pkt, 1);
-        break;
-
-    case OPC_DATREQ0:                                   /* data requested */
+    case OPC_CNF:                                       /* block data */
+    case OPC_DATREQ0:
     case OPC_DATREQ1:
     case OPC_DATREQ2:
+    case OPC_SNTDAT:
+    case OPC_RETDAT:
         ci_debug_pkt (DBG_BLK, uptr, pkt, 1);
         break;
 
-    case OPC_ID:                                        /* ID response */
+    case OPC_MCNF:                                      /* maintenance block data */
+    case OPC_MDATREQ:
+    case OPC_SNTMDAT:
+    case OPC_RETMDAT:
+        ci_debug_pkt (DBG_BLK, uptr, pkt, 1);
+        break;
+
+    case OPC_IDREQ:                                     /* configuration */
+    case OPC_ID:
+    case OPC_LB:
         ci_debug_pkt (DBG_CONF, uptr, pkt, 1);
         break;
 
-    case OPC_RETDAT:                                    /* data received */
-        ci_debug_pkt (DBG_BLK, uptr, pkt, 1);
-        break;
-
-    case OPC_SNTDAT:                                    /* data received */
-        ci_debug_pkt (DBG_BLK, uptr, pkt, 1);
-        break;
-
-    case OPC_CNF:                                       /* confirmation */
-        ci_debug_pkt (DBG_BLK, uptr, pkt, 1);
-        break;
-
-    case OPC_LB:                                        /* loopback */
-        ci_debug_pkt (DBG_CONF, uptr, pkt, 1);
+    case OPC_RST:                                       /* diagnostic */
+    case OPC_STRT:
+        ci_debug_pkt (DBG_DIAG, uptr, pkt, 1);
         break;
 
     default:

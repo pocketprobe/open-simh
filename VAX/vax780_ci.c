@@ -106,8 +106,8 @@
 
 #define RPORT_TYPE      0x80000002
 #define CODE_REV        0x00700040
-#define FUNC_MASK       0xFFFF0F00
-#define INT_BUF_LEN     0x3F9
+#define FUNC_MASK       0xFFFFFF00
+#define INT_BUF_LEN     0x3F8
 
 /* CI780 Port States */
 
@@ -206,10 +206,10 @@ REGMAP ci_regmap[] = {
     };
 
 CI_PORT ci_port = {
-    (ID_DUAL | ID_CI780),                               /* port type */
-    0x00700040,                                         /* code revision */
-    0xFFFF0F00,                                         /* function mask */
-    0x3F9                                               /* internal buffer length */
+    (ID_DUAL | ID_CI780),
+    CODE_REV,
+    FUNC_MASK,
+    INT_BUF_LEN
     };
 
 /* Read CI780 adapter register */
@@ -251,8 +251,8 @@ switch (rg) {                                           /* CI780 specific regist
         *val = (ci_pmcsr & PMCSR_RD);
         if (uptr->ci_state == PORT_UNINIT)
             *val |= PMCSR_UI;
-        if ((ci_pmcsr & 0x7F00) > 0)                /* any error bits set? */
-            *val |= PMCSR_PE;                       /* yes, set parity error */
+        if ((ci_pmcsr & 0x7F00) > 0)                    /* any error bits set? */
+            *val |= PMCSR_PE;                           /* yes, set parity error */
         sim_debug (DBG_REG, &ci_dev, "PMCSR rd: %08X\n", *val);
         break;
 
@@ -263,6 +263,30 @@ switch (rg) {                                           /* CI780 specific regist
 
     case MDATR_OF:
         *val = ci_mdatr[ci_madr];
+        if (ci_madr == 0xBFF)                           /* WCS revision */
+            *val = 0x04000000;
+        else if (ci_madr == 0x3FA)                           /* ROM revision */
+            *val = 0x03000000;
+        else if (ci_madr == 0x3FB)                           /* control store ROM */
+            *val = 0x44332211;
+        else if (ci_madr == 0x13FB)
+            *val = 0x00006655;
+        else if (ci_madr == 0x3FC)
+            *val = 0x00000000;
+        else if (ci_madr == 0x13FC)
+            *val = 0x00000000;
+        else if (ci_madr == 0x3FD)
+            *val = 0x0004080C;
+        else if (ci_madr == 0x13FD)
+            *val = 0x0000080C;
+        else if (ci_madr == 0x3FE)
+            *val = 0x0305090C;
+        else if (ci_madr == 0x13FE)
+            *val = 0x00000A0F;
+        else if (ci_madr == 0x3FF)
+            *val = 0x03010100;
+        else if (ci_madr == 0x13FF)
+            *val = 0x00000203;
         sim_debug (DBG_REG, &ci_dev, "MDATR rd: %08X\n", *val);
         break;
 

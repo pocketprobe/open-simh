@@ -90,6 +90,7 @@
 #define OPC_SNDDG       0x01                            /* send datagram */
 #define OPC_SNDMSG      0x02                            /* send message */
 #define OPC_RETCNF      0x03                            /* confirm return */
+#define OPC_RETMCNF     0x04                            /* maintenance confirm return */
 #define OPC_REQID       0x05                            /* request ID */
 #define OPC_SNDRST      0x06                            /* send reset */
 #define OPC_SNDSTRT     0x07                            /* send start */
@@ -102,6 +103,7 @@
 #define OPC_SNDDAT      0x10                            /* send data */
 #define OPC_RETDAT      0x11                            /* return data */
 #define OPC_SNDMDAT     0x12                            /* send maintenance data */
+#define OPC_RETMDAT     0x13                            /* return maintenance data */
 
 /* Local Opcodes */
 
@@ -129,16 +131,19 @@
 #define OPC_DGREC       (OPC_M_RECV | OPC_SNDDG)        /* datagram received */
 #define OPC_MSGREC      (OPC_M_RECV | OPC_SNDMSG)       /* message received */
 #define OPC_CNFREC      (OPC_M_RECV | OPC_RETCNF)       /* confirm received */
+#define OPC_MCNFREC     (OPC_M_RECV | OPC_RETMCNF)      /* maintenance confirm received */
 #define OPC_REQREC      (OPC_M_RECV | OPC_REQID)        /* request ID recevied */
 #define OPC_RSTREC      (OPC_M_RECV | OPC_SNDRST)       /* reset received */
 #define OPC_STRTREC     (OPC_M_RECV | OPC_SNDSTRT)      /* start received */
 #define OPC_REQDATREC   (OPC_M_RECV | OPC_REQDAT)       /* request data received */
-#define OPC_MCNFREC     0x29                            /* maintenance confirm received */
+#define OPC_REQDATREC1  (OPC_M_RECV | OPC_REQDAT1)      /* request data received */
+#define OPC_REQDATREC2  (OPC_M_RECV | OPC_REQDAT2)      /* request data received */
 #define OPC_IDREC       (OPC_M_RECV | OPC_RETID)        /* ID received */
 #define OPC_LBREC       (OPC_M_RECV | OPC_SNDLB)        /* loopback received */
+#define OPC_REQMDATREC  (OPC_M_RECV | OPC_REQMDAT)      /* request maintenance data received */
 #define OPC_SNDDATREC   (OPC_M_RECV | OPC_SNDDAT)       /* send data received */
 #define OPC_DATREC      (OPC_M_RECV | OPC_RETDAT)       /* data recieved */
-#define OPC_MDATREC     0x33                            /* maintenance data recieved */
+#define OPC_MDATREC     (OPC_M_RECV | OPC_RETMDAT)      /* maintenance data recieved */
 
 /* PPD Status */
 

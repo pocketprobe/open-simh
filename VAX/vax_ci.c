@@ -151,6 +151,7 @@ void ci_read_packet (UNIT *uptr, PPD_PKT *pkt, size_t length);
 void ci_write_packet (UNIT *uptr, PPD_PKT *pkt, size_t length);
 void ci_readb (UNIT *uptr, uint32 pte_ba, int32 bc, int32 offset, uint8 *buf);
 void ci_writeb (UNIT *uptr, uint32 pte_ba, int32 bc, int32 offset, uint8 *buf);
+void ci_writebp (UNIT *uptr, uint32 pte_ba, int32 bc, int32 offset, uint8 *buf);
 void ci_read_pqb (uint32 pa);
 t_stat ci_receive_int (UNIT *uptr, PPD_PKT *pkt);
 t_stat ci_receive_ppd (UNIT *uptr, PPD_PKT *pkt);
@@ -195,6 +196,7 @@ switch (opc) {
     case OPC_REQDAT:
     case OPC_REQDAT1:
     case OPC_REQDAT2:
+    case OPC_REQMDAT:
         pkt->length = LEN_REQDAT;
         type = PPD_MSG;
         break;
@@ -204,13 +206,11 @@ switch (opc) {
         type = PPD_DG;
         break;
 
-    //case OPC_REQMDAT:
     case OPC_SNDDAT:
+    case OPC_SNDMDAT:
         pkt->length = LEN_SNDDAT;
         type = PPD_MSG;
         break;
-
-    //case OPC_SNDMDAT:
 
     case OPC_INVTC:
         pkt->length = LEN_INVTC;
@@ -401,7 +401,7 @@ switch (rg) {
         sim_debug_unit (DBG_TRC, uptr, "port disable at %08X\n", fault_PC);
         if (val & 1) {
             if (uptr->ci_state >= PORT_INIT)
-                ci_set_state (uptr, PORT_INIT);
+                ci_set_state (uptr, PORT_UNINIT);
             ci_psr |= PSR_PDC;
             ci_set_int ();
             }
@@ -431,6 +431,12 @@ switch (rg) {
 
     case CI_PMTECR:
         sim_debug_unit (DBG_REG, uptr, "PMTECR wr: %08X at %08X\n", val, fault_PC);
+        if (val & 1) {
+//            if (uptr->ci_state >= PORT_INIT)
+//                ci_set_state (uptr, PORT_UNINIT);
+            ci_psr |= PSR_SE;
+            ci_set_int ();
+            }
         break;
 
     case CI_PFAR:
@@ -476,6 +482,7 @@ uint16 snd_key, flags, key;
 CI_PKT pkt;
 t_stat r;
 
+ci_dump_pkt (DBG_BLK, uptr, ppd->data, ppd->length);
 xfrsz = CI_GETL (ppd->data, PPD_XFRSZ);
 sbnam = CI_GETW (ppd->data, PPD_SBNAM);                 /* BDT table offset */
 snd_key = CI_GETW (ppd->data, PPD_SBNAM + 2);
@@ -489,8 +496,10 @@ pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr
 sboff = sboff + (flags & BD_M_OFF);                     /* add page offset */
 
 opc = CI_GETB (ppd->data, PPD_OPC);
-if (opc != OPC_SNDDAT)                                  /* REQDAT0, 1, 2 */
+if ((opc >= OPC_REQDATREC) && (opc <= OPC_REQDATREC2))  /* REQDAT0, 1, 2 */
     CI_PUTB (ppd->data, PPD_OPC, OPC_RETDAT);
+else if (opc == OPC_REQMDATREC)                         /* REQMDAT */
+    CI_PUTB (ppd->data, PPD_OPC, OPC_RETMDAT);
 
 if (((flags & BD_M_VALID) == 0) || (snd_key != key)) {  /* check buffer key */
     sim_printf ("CI: send buffer invalid\n");
@@ -530,16 +539,18 @@ return SCPE_OK;
 
 t_stat ci_receive_data (UNIT *uptr, CI_PKT *pkt)
 {
-uint32 len, bd, rboff, pte;
+uint32 len, bd, rboff, pte, opc;
 uint16 rbnam, rec_key, flags, key;
 PPD_PKT ppd;
 t_stat r = SCPE_OK;
 
+opc = CI_GETB (pkt->data, CI_OPC);
 rbnam = CI_GETW (pkt->data, CI_RBNAM);                  /* BDT table offset */
 rec_key = CI_GETW (pkt->data, CI_RBNAM + 2);
 rboff = CI_GETL (pkt->data, CI_RBOFF);                  /* receive buffer offset */
 bd = ci_bdt_va + (rbnam * BD_LEN);
 
+if ((opc == OPC_SNTDAT) || (opc == OPC_RETDAT)) {       /* FIXME: +++ indent +++ */
 flags = GVP_Read (&ci_mmu, bd + BD_FLAGS_OF, L_WORD);   /* buffer flags */
 key = GVP_Read (&ci_mmu, bd + BD_KEY_OF, L_WORD);       /* buffer key */
 pte = GVP_Read (&ci_mmu, bd + BD_PTE_OF, L_LONG);       /* page table entry addr */
@@ -547,33 +558,43 @@ rboff = rboff + (flags & BD_M_OFF);                     /* add page offset */
 
 if (((flags & BD_M_VALID) == 0) || (rec_key != key)) {  /* check buffer key */
     sim_printf ("CI: receive buffer invalid\n");
-#if 0
+//#if 0
     pkt->length = LEN_DAT;
     r = ci_fmt_receive (uptr, pkt, &ppd);               /* convert to PPD format */
-    if (pkt->data[CI_OPC] == OPC_SNTDAT) {
+    if (opc == OPC_SNTDAT) {
         CI_PUTB (ppd.data, PPD_OPC, OPC_RETCNF);
         }
     CI_PUTB (ppd.data, PPD_STATUS, STS_INVBN);
     r = ci_receive_int (uptr, &ppd);                    /* pass to system */
     return r;
-#endif
-    return SCPE_IERR;
+//#endif
+//    return SCPE_IERR;
     }
-
+}                                                       /* FIXME: +++ indent +++ */
 len = pkt->length - CI_DATA;
 if (len > CI_MAXDAT)                                    /* limit to max transfer */
     len = CI_MAXDAT;
 
-ci_writeb (uptr, pte, len, rboff, &pkt->data[CI_DATA]); /* transfer to buffer */
+if ((opc == OPC_SNTDAT) || (opc == OPC_RETDAT))
+    ci_writeb (uptr, pte, len, rboff, &pkt->data[CI_DATA]); /* transfer to buffer */
+else if ((opc == OPC_SNTMDAT) || (opc == OPC_RETMDAT))
+    ci_writebp (uptr, rboff, len, 0, &pkt->data[CI_DATA]); /* transfer to buffer */
+else
+    return SCPE_IERR;
 
 if (pkt->data[CI_FLAGS] & CI_LP) {                      /* last packet? */
     gvp_zap_tb (&ci_mmu);                               /* FIXME: should only zap entries for this buffer */
-    if (pkt->data[CI_OPC] == OPC_SNTDAT) {
-        pkt->data[CI_OPC] = OPC_CNF;
+    if (opc == OPC_SNTDAT) {
+        CI_PUTB (pkt->data, CI_OPC, OPC_CNF);
         pkt->length = LEN_CNF;
         r = ci_send (uptr, pkt);                        /* send confirmation */
         }
-    else if (pkt->data[CI_OPC] == OPC_RETDAT) {
+    else if (opc == OPC_SNTMDAT) {
+        CI_PUTB (pkt->data, CI_OPC, OPC_MCNF);
+        pkt->length = LEN_MCNF;
+        r = ci_send (uptr, pkt);                        /* send confirmation */
+        }
+    else if (opc == OPC_RETDAT) {
         pkt->length = LEN_DAT;
         r = ci_fmt_receive (uptr, pkt, &ppd);           /* convert to PPD format */
         if (r == SCPE_OK)
@@ -770,6 +791,36 @@ else {
 sim_debug_unit (DBG_TRC, uptr, "-%08X\n", pa);
 }
 
+void ci_writebp (UNIT *uptr, uint32 mpa, int32 bc, int32 offset, uint8 *buf)
+{
+int32 i;
+uint32 dat, pa;
+
+sim_debug_unit (DBG_TRC, uptr, "ci_writebp: pa: %08X, bc: %d, offset: %d", pa, bc, offset);
+if ((offset | bc) & 03) {                               /* check alignment */
+    // TODO: This should only need to translate PTE when going cross page
+    for (i = offset; i < (offset + bc); i++, buf++) {   /* by bytes */
+        pa = mpa + i;
+        if (i == offset)
+            sim_debug_unit (DBG_TRC, uptr, ", pa: %08X", pa);
+        WriteB (pa, *buf);
+        }
+    }
+else {
+    for (i = offset; i < (offset + bc); i = i + 4, buf++) { /* by longwords */
+        pa = mpa + i;
+        if (i == offset)
+            sim_debug_unit (DBG_TRC, uptr, ", pa: %08X", pa);
+        dat = (uint32) *buf++;                          /* get low 8b */
+        dat = dat | (((uint32) *buf++) << 8);           /* merge next 8b */
+        dat = dat | (((uint32) *buf++) << 16);          /* merge next 8b */
+        dat = dat | (((uint32) *buf) << 24);            /* merge hi 8b */
+        WriteL (pa, dat);                               /* store lw */
+        }
+    }
+sim_debug_unit (DBG_TRC, uptr, "-%08X\n", pa);
+}
+
 /* Put a packet on the response queue */
 
 t_stat ci_put_rsq (UNIT *uptr, PPD_PKT *pkt)
@@ -861,6 +912,8 @@ if (pkt->addr != 0) {
         case OPC_SNDRST:
         case OPC_SNDSTRT:
         case OPC_SNDLB:
+        case OPC_REQMDAT:
+        case OPC_SNDMDAT:
         case OPC_INVTC:
         case OPC_SETCKT:
         case OPC_RDCNT:
@@ -903,10 +956,12 @@ if (pkt->addr == 0) {
             break;
 
         case OPC_DGREC:
+        case OPC_MCNFREC:
         case OPC_RSTREC:
         case OPC_STRTREC:
         case OPC_IDREC:
         case OPC_LBREC:
+        case OPC_MDATREC:
             r = ci_get_dfq (uptr, pkt);                 /* datagram */
             if (r == CISE_NOPKT) {
                 if (ci_cnt == CI_ALL)
@@ -956,6 +1011,7 @@ switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by po
         break;
 
     case OPC_REQDATREC:
+    case OPC_REQMDATREC:
         r = ci_send_data (uptr, pkt);
         if (r == SCPE_OK)
             return r;
@@ -981,6 +1037,7 @@ switch (ppd->data[PPD_OPC]) {                           /* opcodes handled by po
         return ci_rdcnt (uptr, ppd);
 
     case OPC_SNDDAT:
+    case OPC_SNDMDAT:
         return ci_send_data (uptr, ppd);
         }
 r = ci_fmt_send (uptr, ppd, &pkt);                      /* convert to CI format */
@@ -1044,13 +1101,14 @@ if ((opc <= OPC_SNDMSG) || (opc == OPC_SNDLB)) {        /* datagram or message *
 else memcpy (&pkt->data[CI_OPC], &ppd->data[PPD_OPC], ppd->length - PPD_OPC);
 
 switch (opc) {                                          /* set new length */
-    case OPC_IDREQ:
+    case OPC_REQID:
         pkt->length = LEN_IDREQ;
         break;
 
-    case OPC_DATREQ0:
-    case OPC_DATREQ1:
-    case OPC_DATREQ2:
+    case OPC_REQDAT:
+    case OPC_REQDAT1:
+    case OPC_REQDAT2:
+    case OPC_REQMDAT:
         pkt->length = LEN_DATREQ;
         break;
 
@@ -1081,7 +1139,9 @@ do {
                 break;
 
             case OPC_SNTDAT:
+            case OPC_SNTMDAT:
             case OPC_RETDAT:
+            case OPC_RETMDAT:
                 r = ci_receive_data (uptr, &pkt);
                 break;
 

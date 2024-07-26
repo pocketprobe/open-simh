@@ -205,7 +205,7 @@ CI_PORT ca_port = {
     (ID_DUAL | ID_BCA),                                 /* port type */
     0x00700040,                                         /* code revision */
     0xFFFF0F00,                                         /* function mask */
-    0x3F9                                               /* internal buffer length */
+    0xFF0                                               /* internal buffer length */
     };
 
 /* Read CIBCA adapter register */
@@ -219,11 +219,6 @@ t_stat r;
 
 rg = NEXUS_GETOFS (pa);                                 /* get offset */
 
-if (rg >= 0x700) {
-    sim_printf ("VCD read: %X at %08X\n", pa, fault_PC);
-    *val = 0;
-    return SCPE_OK;
-    }
 if ((rg >= 0x414) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
     *val = ca_local_store[(rg - 0x400)];
     sim_debug (DBG_REG, &ca_dev, "LOCAL STORE rd: %X = %08X\n", pa, *val);
@@ -241,6 +236,12 @@ for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port regist
             }
         return SCPE_OK;
         }
+    }
+if (rg >= 0x700) {                                      /* virtual circuit descriptors */
+    rg = (rg >> 2) & 0xFF;                              /* get node number */
+    *val = ci_vcd[rg] & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08X\n", rg, *val);
+    return SCPE_OK;
     }
 switch (rg) {                                           /* CIBCA specific registers */
 
@@ -317,10 +318,6 @@ REGMAP *p;
 
 rg = NEXUS_GETOFS (pa);                                 /* get offset */
 
-if (rg >= 0x700) {
-    sim_printf ("VCD write: %X = %X at %08X\n", pa, val, fault_PC);
-    return SCPE_OK;
-    }
 if ((rg >= 0x414) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
         sim_debug (DBG_REG, &ca_dev, "LOCAL STORE wr: %X = %08X\n", pa, val);
     ca_local_store[(rg - 0x400)] = val;
@@ -329,6 +326,12 @@ if ((rg >= 0x414) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not runnin
 for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port register */
     if (p->offset == rg)                                /* mapped? */
         return ci_vax_wr (uptr, val, p->rg, lnt);
+    }
+if (rg >= 0x700) {                                      /* virtual circuit descriptors */
+    rg = (rg >> 2) & 0xFF;                              /* get node number */
+    ci_vcd[rg] = val & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] wr: %08X\n", rg, val);
+    return SCPE_OK;
     }
 switch (rg) {                                           /* case on type */
 
