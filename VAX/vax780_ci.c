@@ -118,6 +118,7 @@ uint32 ci_pmcsr;                                        /* port maintenance csr 
 uint32 ci_madr;                                         /* mainteneance addr reg */
 uint32 ci_mdatr[8192];                                  /* maintenanace data reg */
 uint32 ci_local_store[1024];
+t_bool ci_halt;                                         /* microcode halted */
 
 extern uint32 nexus_req[NEXUS_HLVL];
 
@@ -220,7 +221,7 @@ int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 
-if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
+if ((rg >= 0x800) && (ci_halt)) {                       /* microcode not running? */
     *val = ci_local_store[(rg - 0x800)];
     sim_debug (DBG_REG, &ci_dev, "LSTOR[%03X] rd: %08X\n", rg, *val);
     return SCPE_OK;
@@ -249,7 +250,7 @@ switch (rg) {                                           /* CI780 specific regist
     case PMCSR_OF:
     case PMCSR_OF1:
         *val = (ci_pmcsr & PMCSR_RD);
-        if (uptr->ci_state == PORT_UNINIT)
+        if (uptr->ci_state <= PORT_UIM)                 /* uninitialised? */
             *val |= PMCSR_UI;
         if ((ci_pmcsr & 0x7F00) > 0)                    /* any error bits set? */
             *val |= PMCSR_PE;                           /* yes, set parity error */
@@ -313,7 +314,7 @@ if ((pa & 3) || (lnt != L_LONG)) {                      /* unaligned or not lw? 
     return SCPE_OK;
     }
 #endif
-if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
+if ((rg >= 0x800) && (ci_halt)) {                       /* microcode not running? */
     sim_debug (DBG_REG, &ci_dev, "LSTOR[%03X] wr: %08X\n", rg, val);
     if (rg == 0x900)
         val = val & 0xFFFF;                             /* expected by EVCGA */
@@ -350,9 +351,8 @@ switch (rg) {                                           /* case on type */
         if (val & PMCSR_MIF)                            /* interrupt W1C */
             ci_clr_int();
 
-        if ((val & PMCSR_PSA) && (uptr->ci_state < PORT_UCODERUN)) {
-            ci_set_state (uptr, PORT_UCODERUN);         /* Start microcode */
-            }
+        if ((val & PMCSR_PSA) && (ci_halt))
+            ci_halt = FALSE;                            /* start microcode */
         break;
 
     case MADR_OF:
@@ -390,11 +390,12 @@ return;
 
 t_stat ci_reset (DEVICE *dptr)
 {
-int32 i;
+uint32 i;
 
 ci_cnfgr = 0;
 ci_pmcsr = 0;
 ci_madr = 0;
+ci_halt = TRUE;
 for (i = 0; i < 8192; i++)
     ci_mdatr[i] = 0;
 ci_vax_reset (dptr, &ci_port);

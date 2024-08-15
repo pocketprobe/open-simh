@@ -46,7 +46,6 @@
 /* Unit Specific Data */
 
 #define ci_node         u3                              /* port addr */
-#define ci_state        u4                              /* port state */
 
 /* Return status codes */
 
@@ -58,12 +57,6 @@
 #define CISE_QERR       5                               /* queue error */
 #define CISE_MEMERR     6                               /* memory read/write error */
 #define CISE_NOPATH     7                               /* no path to remote node */
-
-/* Port States */
-
-#define PORT_UNINIT     0                               /* Uninitialised */
-#define PORT_INIT       10                              /* Initialised */
-#define PORT_ENABLED    20                              /* Enabled */
 
 /* Path Selection */
 
@@ -102,7 +95,7 @@ typedef struct {
 } CI_PKT;
 
 extern void ci_dump_pkt (uint32 dctrl, UNIT *uptr, char* buffer, uint32 length);
-void ci_set_state (UNIT *uptr, uint32 state);
+void ci_rx_enable (UNIT *uptr, uint32 state);
 t_stat ci_send (UNIT *uptr, CI_PKT *pkt);
 t_stat ci_receive (UNIT *uptr, CI_PKT *pkt);
 t_stat ci_open_vc (UNIT *uptr, uint8 port);

@@ -557,11 +557,10 @@ switch (rg) {
         else if (data & CCR_INITIALIZE) {
             cq_sw_reset (&cq_dev);
             cq_csr |= CSR_INITIALIZED;
-            ci_set_state (&cq_unit[0], PORT_INIT);
             }
         else if (data & CCR_START) {
             cq_csr |= CSR_RUNNING;
-            ci_set_state (&cq_unit[0], PORT_ENABLED);
+            ci_rx_enable (&cq_unit[0], (CI_PATH_A | CI_PATH_B));
             }
         else if (data & CCR_SEND_HI_ATTN) {
             sim_debug (DBG_REG, &cq_dev, "cq_wr: CCR_SEND_HI_ATTN\n");
@@ -1193,6 +1192,7 @@ for (i = 0; i < MAX_BMAP; i++) {                        /* clear buffer map */
     cq_map[i].length = 0;
     cq_map[i].bnam = 0;
     }
+ci_rx_enable (&cq_unit[0], 0);                          /* disable receiver */
 CLR_INT (CI);
 return ci_port_reset (dptr);
 }

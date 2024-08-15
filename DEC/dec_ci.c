@@ -153,6 +153,7 @@ typedef struct {
     CI_LINK   links[CI_MAX_NODES];                      /* remote links */
     CI_QUE    rx_queue;                                 /* packet receive queue */
     CI_QUE    tx_queue;                                 /* packet transmit queue */
+    uint32    rx_state;                                 /* receiver state */
 } CI_PORT;
 
 CI_PKT rcv_pkt;                                         /* receive packet buffer */
@@ -246,22 +247,22 @@ sim_debug_unit (dctrl, uptr, ", %s: %d, path: %s\n",    /* show routing */
 ci_dump_pkt (dctrl, uptr, pkt->data, pkt->length);
 }
 
-/* CI port state change */
+/* CI receiver state */
 
-void ci_set_state (UNIT *uptr, uint32 state)
+void ci_rx_enable (UNIT *uptr, uint32 state)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
 int32 r;
 
-if (state < PORT_INIT) {                                /* change to uninit */
-    if (uptr->ci_state >= PORT_INIT) {                  /* currently initialised? */
+if (!state) {                                           /* disable both paths? */
+    if (cp->rx_state) {                                 /* currently enabled? */
         sim_cancel (uptr);                              /* stop poll */
         sim_debug_unit (DBG_CONN, uptr, "deactivating unit\n");
         ciq_clear (&cp->rx_queue);                      /* clear queue */
         }
     }
-else if (state >= PORT_INIT) {                          /* change to init */
-    if (uptr->ci_state < PORT_INIT) {                   /* currently uninit? */
+else {                                                  /* enabling one of more paths */
+    if (!cp->rx_state) {                                /* currently disabled? */
         sim_clock_coschedule (uptr, tmxr_poll);         /* start poll */
         sim_debug_unit (DBG_CONN, uptr, "activating unit\n");
         ciq_clear (&cp->rx_queue);                      /* clear queue */
@@ -271,7 +272,7 @@ else if (state >= PORT_INIT) {                          /* change to init */
             }
         }
    }
-uptr->ci_state = state;                                 /* update state */
+cp->rx_state = state;                                   /* update state */
 }
 
 t_stat ci_send (UNIT *uptr, CI_PKT *pkt)
@@ -687,6 +688,7 @@ return SCPE_OK;
 t_stat ci_send_packet (UNIT *uptr, CI_PKT *pkt)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+CI_PORT *dp;
 uint32 opcode = pkt->data[CI_OPC];
 CI_NODE *node;
 CI_PKT tpkt;
@@ -698,7 +700,8 @@ memcpy (&tpkt, pkt, sizeof (CI_PKT));                   /* make local copy */
 
 if (node->uptr) {                                       /* loopback? */
     uptr = node->uptr;                                  /* get local unit */
-    if (uptr->ci_state < PORT_ENABLED)  
+    dp = (CI_PORT *)uptr->port_ctx;                     /* get destination port ctx */
+    if (!dp->rx_state)                                  /* receiver disabled? */
         return SCPE_OK;                                 /* FIXME: return "no path" status */
     cp = (CI_PORT *)uptr->port_ctx;                     /* get local port */
     if (cp->rx_queue.count == CI_QUE_MAX)
@@ -744,7 +747,7 @@ t_stat r;
 
 if (cp->rx_queue.count == 0) {                          /* receive queue empty? */
     if (uptr->flags & UNIT_ATT) {
-        if (uptr->ci_state >= PORT_ENABLED) {           /* port enabled? */
+        if (cp->rx_state) {                             /* receiver enabled? */
             r = ci_poll_mc (uptr);                      /* poll multicast channel */
             if (r != SCPE_OK)
                 return r;
@@ -916,7 +919,7 @@ for (i = 0; (rdptr = sim_devices[i]) != NULL; i++) {    /* loop thru dev */
     }
 
 cp->nodes[uptr->ci_node].uptr = uptr;                   /* add self */
-uptr->ci_state = PORT_UNINIT;                           /* now uninitialised */
+cp->rx_state = 0;                                       /* receiver disabled */
 
 r = ciq_init (&cp->rx_queue, CI_QUE_MAX);               /* init read queue */
 if (r != SCPE_OK)

@@ -126,6 +126,12 @@
 
 #define port_ctx        up8
 
+/* Action for received packets */
+
+#define ACT_DISCARD     0                               /* discard packet */
+#define ACT_RECEIVE     1                               /* receive packet */
+#define ACT_UNRPKT      2                               /* process as unrecognised packet */
+
 uint32 ci_psr;                                          /* port status reg */
 uint32 ci_max_dg;                                       /* max datagram size */
 uint32 ci_max_msg;                                      /* max message size */
@@ -390,9 +396,14 @@ switch (rg) {
     case CI_PECR:
         sim_debug_unit (DBG_TRC, uptr, "port enable at %08X\n", fault_PC);
         if (val & 1) {
-            if (uptr->ci_state >= PORT_INIT) {
+            if (uptr->ci_state & PORT_DIS) {            /* currently disabled? */
                 ci_read_pqb (ci_pqbb_pa & PQBB_ADDR);
-                ci_set_state (uptr, PORT_ENABLED);
+                if (uptr->ci_state & PORT_MAINT)        /* maintenance? */
+                    uptr->ci_state = PORT_ENM;          /* now enabled maintenance */
+                else {
+                    uptr->ci_state = PORT_EN;           /* now enabled */
+                    ci_rx_enable (uptr, (CI_PATH_A | CI_PATH_B)); /* enable receiver */
+                    }
                 }
             }
         break;
@@ -400,8 +411,14 @@ switch (rg) {
     case CI_PDCR:
         sim_debug_unit (DBG_TRC, uptr, "port disable at %08X\n", fault_PC);
         if (val & 1) {
-            if (uptr->ci_state >= PORT_INIT)
-                ci_set_state (uptr, PORT_UNINIT);
+            if (uptr->ci_state >= PORT_EN) {            /* currently enabled? */
+                if (uptr->ci_state & PORT_MAINT)        /* maintenance? */
+                    uptr->ci_state = PORT_DISM;         /* now disabled maintenance */
+                else {
+                    uptr->ci_state = PORT_DIS;          /* now disabled */
+                    ci_rx_enable (uptr, 0);             /* disable receiver */
+                    }
+                }
             ci_psr |= PSR_PDC;
             ci_set_int ();
             }
@@ -410,8 +427,12 @@ switch (rg) {
     case CI_PICR:
         sim_debug_unit (DBG_TRC, uptr, "port init at %08X\n", fault_PC);
         if (val & 1) {
-            if (uptr->ci_state >= PORT_UNINIT)
-                ci_set_state (uptr, PORT_INIT);
+            if (uptr->ci_state & PORT_MAINT)            /* maintenance? */
+                uptr->ci_state = PORT_DISM;             /* now disabled maintenance */
+            else {
+                uptr->ci_state = PORT_DIS;              /* now disabled */
+                ci_rx_enable (uptr, 0);                 /* disable receiver */
+                }
             ci_psr |= PSR_PIC;
             ci_set_int ();
             }
@@ -432,8 +453,8 @@ switch (rg) {
     case CI_PMTECR:
         sim_debug_unit (DBG_REG, uptr, "PMTECR wr: %08X at %08X\n", val, fault_PC);
         if (val & 1) {
-//            if (uptr->ci_state >= PORT_INIT)
-//                ci_set_state (uptr, PORT_UNINIT);
+            uptr->ci_state = PORT_UIM;                  /* now uninitialised maintenance */
+            ci_rx_enable (uptr, (CI_PATH_A | CI_PATH_B)); /* enable receiver */
             ci_psr |= PSR_SE;
             ci_set_int ();
             }
@@ -943,6 +964,7 @@ return SCPE_IERR;
 t_stat ci_receive_int (UNIT *uptr, PPD_PKT *pkt)
 {
 uint8 opc = CI_GETB (pkt->data, PPD_OPC);
+uint8 act;
 t_stat r;
 
 if (pkt->addr == 0) {
@@ -961,6 +983,8 @@ if (pkt->addr == 0) {
         case OPC_STRTREC:
         case OPC_IDREC:
         case OPC_LBREC:
+        case OPC_REQMDATREC:
+        case OPC_SNDMDATREC:
         case OPC_MDATREC:
             r = ci_get_dfq (uptr, pkt);                 /* datagram */
             if (r == CISE_NOPKT) {
@@ -979,9 +1003,37 @@ if (pkt->addr == 0) {
     if (r != SCPE_OK)
         return r;
     }
-if (opc == OPC_RSTREC) {                                /* reset? */
-    pkt->data[PPD_OPC] &= ~OPC_M_RECV;
-    pkt->data[PPD_STATUS] = STS_URP;                    /* not recognised in enabled state */
+
+act = ACT_RECEIVE;                                      /* assume packet is OK */
+switch (opc) {                                          /* determine packet type */
+    case OPC_SNDMDATREC:
+    case OPC_MDATREC:
+        act = ACT_UNRPKT;
+        break;
+
+    case OPC_REQMDATREC:
+        if (uptr->ci_state != PORT_UIM)
+            act = ACT_UNRPKT;
+        break;
+
+    case OPC_STRTREC:
+        if (uptr->ci_state == PORT_UIM)
+            act = ACT_RECEIVE;
+        else if (uptr->ci_state != PORT_DISM)
+            act = ACT_UNRPKT;
+        break;
+
+    case OPC_RSTREC:
+        if (uptr->ci_state == PORT_EN)
+            act = ACT_UNRPKT;
+        break;
+
+    default:
+        break;
+    }
+if (act == ACT_UNRPKT) {                                /* unrecognised? */
+    pkt->data[PPD_OPC] &= ~OPC_M_RECV;                  /* clear receive flag */
+    pkt->data[PPD_STATUS] = STS_URP;                    /* set status */
     }
 ci_write_packet (uptr, pkt, pkt->length);
 return ci_put_rsq (uptr, pkt);
@@ -1127,29 +1179,76 @@ t_stat ci_vax_svc (UNIT *uptr)
 CI_PKT pkt;
 PPD_PKT ppd;
 t_stat r;
-uint8 opc;
+uint8 opc, act;
 
 do {
     r = ci_receive (uptr, &pkt);                        /* try to receive another packet */
     if (r == SCPE_OK) {
         opc = CI_GETB (pkt.data, CI_OPC);
+        act = ACT_DISCARD;                              /* assume packet will be discarded */
         switch (opc) {                                  /* opcodes handled at CI layer */
             case OPC_IDREQ:
                 r = ci_idreq (uptr, &pkt);
                 break;
 
             case OPC_SNTDAT:
-            case OPC_SNTMDAT:
             case OPC_RETDAT:
+                if (uptr->ci_state & PORT_EN)
+                    r = ci_receive_data (uptr, &pkt);
+                break;
+
+            case OPC_SNTMDAT:
             case OPC_RETMDAT:
-                r = ci_receive_data (uptr, &pkt);
+                if (uptr->ci_state == PORT_UIM)
+                    r = ci_receive_data (uptr, &pkt);
+                else if ((uptr->ci_state == PORT_ENM) && (pkt.node == uptr->ci_node))
+                    r = ci_receive_data (uptr, &pkt);
+                else
+                    act = ACT_UNRPKT;
+                break;
+
+            case OPC_MDATREQ:
+                if (uptr->ci_state == PORT_UIM)
+                    act = ACT_RECEIVE;
+                else if ((uptr->ci_state == PORT_ENM) && (pkt.node == uptr->ci_node))
+                    act = ACT_RECEIVE;
+                else
+                    act = ACT_UNRPKT;
+                break;
+
+            case OPC_STRT:
+                if (uptr->ci_state == PORT_UIM)
+                    act = ACT_RECEIVE;
+                else if (uptr->ci_state != PORT_DISM)
+                    act = ACT_UNRPKT;
+                break;
+
+            case OPC_RST:
+                if (uptr->ci_state != PORT_EN)          /* all but en */
+                    act = ACT_RECEIVE;
+                else
+                    act = ACT_UNRPKT;
                 break;
 
             default:
-                r = ci_fmt_receive (uptr, &pkt, &ppd); /* convert to PPD format */
-                if (r == SCPE_OK)
-                    r = ci_receive_ppd (uptr, &ppd);
+                if (uptr->ci_state & PORT_EN)           /* en or en maint */
+                    act = ACT_RECEIVE;
                 break;
+            }
+
+        if (act == ACT_RECEIVE) {                       /* receive packet? */
+            r = ci_fmt_receive (uptr, &pkt, &ppd);      /* convert to PPD format */
+            if (r == SCPE_OK)
+                r = ci_receive_ppd (uptr, &ppd);
+            }
+        else if (act == ACT_UNRPKT) {                   /* unrecognised packet? */
+            pkt.data[CI_OPC] = OPC_DG;
+            r = ci_fmt_receive (uptr, &pkt, &ppd);      /* convert to PPD format */
+            ppd.data[PPD_OPC] = opc | OPC_M_RECV;
+            pkt.data[CI_OPC] = opc;
+            ppd.data[PPD_FLAGS] = pkt.data[CI_FLAGS];
+            if (r == SCPE_OK)
+                r = ci_receive_ppd (uptr, &ppd);
             }
         }
 } while (r == SCPE_OK);
@@ -1179,6 +1278,7 @@ ci_bdt_len = 0;
 ci_cnt = CI_ALL;
 ci_dgd = 0;
 ci_ppr |= ((cp->iblen & PPR_M_IBLEN) << PPR_V_IBLEN);   /* internal buffer length */
+uptr->ci_state = PORT_UI;                               /* now uninitialised */
 gvp_tlb_reset (&ci_mmu);                                /* reset MMU */
 ci_port_reset (dptr);
 return SCPE_OK;

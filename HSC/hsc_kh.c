@@ -303,8 +303,8 @@ static STDEF sb_stc[] = {
 #define CB_CID          0020                            /* source connection ref */
 #define CB_VTI          0024                            /* destination connection ref (low) */
 #define CB_INC          0026                            /* destination connection ref (high) */
-#define CB_SRS          0030
-#define CB_DRS          0032
+#define CB_SRS          0030                            /* source reason (for reject or disconnect) */
+#define CB_DRS          0032                            /* destination reason (for reject or disconnect) */
 #define CB_MSC          0034                            /* minimum send credits */
 #define CB_RCC          0036                            /* receive credit count */
 #define CB_MRC          0040                            /* minimum receive credits */
@@ -465,7 +465,7 @@ DEBTAB kh_debug[] = {
     { "BLK",   DBG_BLK },
     { "LCMD",  DBG_LCMD },
     { "CONN",  DBG_CONN },
-    { "TRACE", DBG_TRC, "trace routine calls" },
+    { "TRACE", (DBG_TRC | KG_DBG_TRC), "trace routine calls" },
     { "PKT",   DBG_PKT },
     { "STRUCT", KG_DBG_STRUCT, "dump structures" },
     { 0 }
@@ -528,12 +528,11 @@ if (act == K_RUN) {
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
     if (!run)
         return SCPE_OK;
-    ci_set_state (&kh_unit, PORT_INIT);
-    ci_set_state (&kh_unit, PORT_ENABLED);
+    ci_rx_enable (&kh_unit, (CI_PATH_A | CI_PATH_B));
     }
 else {
     sim_debug (DBG_TRC, &kh_dev, "K.ci halt at %o\n", (uint16)inst_pc);
-    ci_set_state (&kh_unit, PORT_UNINIT);
+    ci_rx_enable (&kh_unit, 0);
     kh_dib.cma = 0;
     }
 return SCPE_OK;

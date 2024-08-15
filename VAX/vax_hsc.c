@@ -138,6 +138,6 @@ if (dptr->flags & DEV_DIS)
 ppd_reset (dptr);
 scs_reset (dptr);
 sim_activate_after (dptr->units + HSC_TIMER, 10000000);
-ci_set_state (&hsc_unit[0], PORT_ENABLED);
+ci_rx_enable (&hsc_unit[0], (CI_PATH_A | CI_PATH_B));
 return SCPE_OK;
 }

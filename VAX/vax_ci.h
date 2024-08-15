@@ -143,6 +143,7 @@
 #define OPC_REQMDATREC  (OPC_M_RECV | OPC_REQMDAT)      /* request maintenance data received */
 #define OPC_SNDDATREC   (OPC_M_RECV | OPC_SNDDAT)       /* send data received */
 #define OPC_DATREC      (OPC_M_RECV | OPC_RETDAT)       /* data recieved */
+#define OPC_SNDMDATREC  (OPC_M_RECV | OPC_SNDMDAT)      /* send maintenance data received */
 #define OPC_MDATREC     (OPC_M_RECV | OPC_RETMDAT)      /* maintenance data recieved */
 
 /* PPD Status */
@@ -195,6 +196,20 @@
 
 #define CI_ALL          255                             /* all ports */
 #define CI_MAX_VCD      256                             /* max virtual circuit descriptors */
+
+/* Port States */
+
+#define PORT_MAINT      1                               /* maintenance flag */
+#define PORT_UI         2                               /* uninitialised */
+#define PORT_DIS        4                               /* disabled */
+#define PORT_EN         8                               /* enabled */
+#define PORT_UIM        (PORT_MAINT | PORT_UI)          /* uninitialised maintenance */
+#define PORT_DISM       (PORT_MAINT | PORT_DIS)         /* disabled maintenance */
+#define PORT_ENM        (PORT_MAINT | PORT_EN)          /* enabled maintenance */
+
+/* Unit specific data */
+
+#define ci_state        u4                              /* port state */
 
 typedef struct {                                        /* register mappings */
     uint32 offset;                                      /* memory offset */
