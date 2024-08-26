@@ -102,9 +102,6 @@
 #define FL_NUMBY        512                             /* bytes/sector */
 #define FL_SIZE         (FL_NUMTR * FL_NUMHD * FL_NUMSC * FL_NUMBY) /* bytes/disk */
 #define GET_DA(t,h,s)   ((t * FL_NUMHD + h) * FL_NUMSC + (s - 1))
-#define UNIT_V_WLK      (UNIT_V_UF)                     /* write locked */
-#define UNIT_WLK        (1u << UNIT_V_UF)
-#define UNIT_WPRT       (UNIT_WLK | UNIT_RO)            /* write protect */
 
 int32 SDR = 0;                                          /* switch/display register */
 int32 PCSR = 0;                                         /* Pio control/status */
@@ -204,7 +201,7 @@ DEVICE pio_dev = {
     };
 
 /* ROM device */
-    
+
 DIB rom_dib = {
     IOBA_ROM, IOLN_ROM, &rom_rd, NULL,
     0, 0, 0, { NULL }
@@ -377,7 +374,7 @@ switch (rg) {                                           /* decode pa<2:1> */
         *data = 0;
         return SCPE_OK;
         }
-        
+
 *data = 0;
 return SCPE_NXM;
 }

@@ -647,7 +647,6 @@ MTAB cpu_mod[] = {
     { MTAB_XTD|MTAB_VDV, MOD_1184, NULL, "URH11", &cpu_set_model, NULL, NULL, "deprecated: same as 11/84" },
     { MTAB_XTD|MTAB_VDV, MOD_1170, NULL, "URH70", &cpu_set_model, NULL, NULL, "deprecated: same as 11/70" },
     { MTAB_XTD|MTAB_VDV, MOD_1145, NULL, "U18", &cpu_set_model, NULL, NULL, "deprecated: same as 11/45" },
-    { MTAB_XTD|MTAB_VDV, MOD_HSC70, NULL, "HSC70", &cpu_set_model, NULL, NULL, "Set CPU type to HSC70" },
     { MTAB_XTD|MTAB_VDV, OPT_EIS, NULL, "EIS", &cpu_set_opt, NULL, NULL, "enable EIS instructions" },
     { MTAB_XTD|MTAB_VDV, OPT_EIS, NULL, "NOEIS", &cpu_clr_opt, NULL, NULL, "disable EIS instructions" },
     { MTAB_XTD|MTAB_VDV, OPT_FIS, NULL, "FIS", &cpu_set_opt, NULL, NULL, "enable FIS instructions" },

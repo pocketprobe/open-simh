@@ -26,7 +26,7 @@
 
 /*
  * References:
- * 
+ *
  *    EK-OTA79-TM-001 - PDF page 120, 322
  */
 
@@ -35,29 +35,29 @@
  * T$ OPC = 027
  * V$ OPC = 4, FLG = 4
  * V$ OPC = 377, FLG = 0
- * 
+ *
  * WRT
  * T$ OPC = 216
  * V$ OPC = 377, FLG = 2
- * 
+ *
  * FSR
  * POSITION TAPE, p1 = 80, p2 = 01, p3 = 00
- * 
+ *
  * FSF
  * POSITION TAPE, p1 = A8, p2 = 01, p3 = 00
- * 
+ *
  * BSR
  * POSITION TAPE, p1 = 84, p2 = 01, p3 = 00
- * 
+ *
  * BSF
  * POSITION TAPE, p1 = AC, p2 = 01, p3 = 00
- * 
+ *
  * RWE
  * INITIATE REWIND, p1 = 40
- * 
+ *
  * UNL
  * INITIATE REWIND, p1 = 80
- * 
+ *
  */
 
 #include "pdp11_defs.h"
@@ -310,13 +310,11 @@ static STDEF t_stc[] = {
 #define KT_MAXFR        (1 << 16)                       /* max xfer */
 
 #define UNIT_V_ONL      (MTUF_V_UF + 0)                 /* online */
-#define UNIT_V_WLK      (MTUF_V_UF + 1)                 /* hwre write lock */
-#define UNIT_V_ATP      (MTUF_V_UF + 2)                 /* attn pending */
-#define UNIT_V_DTYPE    (MTUF_V_UF + 3)                 /* drive type */
+#define UNIT_V_ATP      (MTUF_V_UF + 1)                 /* attn pending */
+#define UNIT_V_DTYPE    (MTUF_V_UF + 2)                 /* drive type */
 #define UNIT_M_DTYPE    0x1F
-#define UNIT_V_NOAUTO   (MTUF_V_UF + 8)                 /* noautosize */
+#define UNIT_V_NOAUTO   (MTUF_V_UF + 7)                 /* noautosize */
 #define UNIT_ONL        (1 << UNIT_V_ONL)
-#define UNIT_WLK        (1 << UNIT_V_WLK)
 #define UNIT_ATP        (1 << UNIT_V_ATP)
 #define UNIT_NOAUTO     (1 << UNIT_V_NOAUTO)
 #define UNIT_DTYPE      (UNIT_M_DTYPE << UNIT_V_DTYPE)
@@ -671,7 +669,7 @@ uint16 kt_rewind (UNIT *uptr, uint32 cmd, uint32 rsp)
 uint8 flags = GETB (cmd + 002);
 
 sim_debug_unit (DBG_STI, uptr, "INITIATE REWIND, flags = %02X\n", flags);
-if (flags & 0x80) 
+if (flags & 0x80)
     sim_tape_detach (uptr);                             /* rewind & unload */
 else if (flags & 0x40)
     sim_tape_wreomrw (uptr);                            /* erase remainder of tape & rewind */
@@ -1387,7 +1385,7 @@ uint32 i;
 
 for (i = 0; i < KT_MAXDR; i++) {
     if (dptr->units[i].flags & UNIT_ATT)
-        return sim_messagef (SCPE_ALATT, "Can't change controller type on %s with %s attached to %s.\n", 
+        return sim_messagef (SCPE_ALATT, "Can't change controller type on %s with %s attached to %s.\n",
                                          dptr->name, sim_uname (&dptr->units[i]), dptr->units[i].filename);
     }
 dibp->sts = val;
@@ -1405,7 +1403,7 @@ switch (dibp->sts) {
     case K_STI:
         fprintf (st, "K.sti tape data channel");
         break;
-        
+
     case K_SI4:
     case K_SI4_TAPE:
         fprintf (st, "K.si 4-port data channel");

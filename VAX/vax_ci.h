@@ -76,8 +76,6 @@
 #define PPD_VCPVAL      0x18                            /* VCD previous value */
 
 #define PPD_XCTID       0x10                            /* transaction ID */
-#define PPD_LCONID      0x10                            /* local connection id */
-#define PPD_RSPID       0x14                            /* local response id */
 #define PPD_XFRSZ       0x18                            /* transfer size */
 #define PPD_SBNAM       0x1C                            /* send buffer name */
 #define PPD_SBOFF       0x20                            /* send buffer offset */

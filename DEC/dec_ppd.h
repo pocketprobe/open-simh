@@ -60,8 +60,8 @@
 #define PPD_SCS         (PPD_BASE + 0x02)               /* SCS message base */
 
 #if defined(CI_XCTID)
-#define PPD_LCONID      (CI_XCTID + 0)
-#define PPD_RSPID       (CI_XCTID + 4)
+#define PPD_LCONID      (CI_XCTID + 0)                  /* local connection id */
+#define PPD_RSPID       (CI_XCTID + 4)                  /* local response id */
 #endif
 
 /* Datagram and Message Types */

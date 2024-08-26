@@ -48,7 +48,7 @@
 #define CNFGR_PUP       0x04000000                      /* power up */
 #define CNFGR_PDN       0x08000000                      /* power down */
 #define CNFGR_BBE       0x10000000                      /* VAXBI BSY error */
-#define CNFGR_BIPE      0x20000000                      /* VAXBI parity error */ 
+#define CNFGR_BIPE      0x20000000                      /* VAXBI parity error */
 #define CNFGR_BAPE      0x40000000                      /* BICA parity error */
 #define CNFGR_CPPE      0x80000000                      /* CIPA bus parity error */
 #define CNFGR_RW        (CNFGR_DIAG)
@@ -119,10 +119,6 @@
 #define FUNC_MASK       0xFFFF0F00
 #define INT_BUF_LEN     0x3F9
 
-/* CIBCI Port States */
-
-#define PORT_UCODERUN   1                               /* microcode running */
-
 BIIC ci_biic;                                           /* BIIC standard registers */
 uint32 ci_cnfgr;                                        /* configuration reg */
 uint32 ci_pmcsr;                                        /* port maintenance csr */
@@ -132,6 +128,7 @@ uint32 ci_bcar;                                         /* BICA address register
 uint32 ci_bcmr;                                         /* BICA command/byte mask register */
 uint32 ci_dmaf[4];                                      /* DMA register file */
 uint32 ci_local_store[1024];
+t_bool ci_halt;                                         /* microcode halted */
 
 extern uint32 nexus_req[NEXUS_HLVL];
 
@@ -234,7 +231,7 @@ int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 
-if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
+if ((rg >= 0x800) && (ci_halt)) {                       /* microcode not running? */
     *val = ci_local_store[(rg - 0x800)];
     return SCPE_OK;
     }
@@ -297,10 +294,10 @@ switch (rg) {                                           /* CIBCI specific regist
 
     case PMCSR_OF:
         *val = ci_pmcsr & PMCSR_RD;
-        if (uptr->ci_state == PORT_UNINIT)
+        if (uptr->ci_state <= PORT_UIM)                 /* uninitialised? */
             *val |= PMCSR_UI;
-        if ((ci_pmcsr & 0x7F00) > 0)                /* any error bits set? */
-            *val |= PMCSR_PE;                       /* yes, set parity error */
+        if ((ci_pmcsr & 0x7F00) > 0)                    /* any error bits set? */
+            *val |= PMCSR_PE;                           /* yes, set parity error */
         sim_debug (DBG_REG, &ci_dev, "PMCSR rd: %08x\n", *val);
         break;
 
@@ -346,7 +343,7 @@ int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
 
-if ((rg >= 0x800) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
+if ((rg >= 0x800) && (ci_halt)) {                       /* microcode not running? */
     ci_local_store[(rg - 0x800)] = val;
     return SCPE_OK;
     }
@@ -418,9 +415,8 @@ switch (rg) {                                           /* case on type */
         if (val & PMCSR_MIF)                            /* interrupt W1C */
             ci_clr_int();
 
-        if ((val & PMCSR_PSA) && (uptr->ci_state < PORT_UCODERUN)) {
-            ci_set_state (uptr, PORT_UCODERUN);         /* Start microcode */
-            }
+        if ((val & PMCSR_PSA) && (ci_halt))
+            ci_halt = FALSE;                            /* start microcode */
         break;
 
     case MADR_OF:
@@ -489,6 +485,7 @@ ci_pmcsr = PMCSR_UI;
 ci_madr = 0;
 ci_bcar = 0;
 ci_bcmr = 0;
+ci_halt = TRUE;
 for (i = 0; i < 4; i++)
     ci_dmaf[i] = 0;
 for (i = 0; i < 8192; i++)

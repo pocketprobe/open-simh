@@ -104,16 +104,13 @@
 #define FUNC_MASK       0xFFFF0F00
 #define INT_BUF_LEN     0x3F9
 
-/* CIBCA Port States */
-
-#define PORT_UCODERUN   1                               /* microcode running */
-
 BIIC ca_biic;                                           /* BIIC standard registers */
 uint32 ca_pmcsr;                                        /* port maintenance csr */
 uint32 ca_psr_bi;                                       /* port status reg (CIBCA specific) */
 uint32 ca_madr;                                         /* mainteneance addr reg */
 uint32 ca_mdatr[0x4000];                                /* maintenanace data reg */
 uint32 ca_local_store[2048];
+t_bool ca_halt;                                         /* microcode halted */
 
 extern uint32 nexus_req[NEXUS_HLVL];
 
@@ -219,7 +216,7 @@ t_stat r;
 
 rg = NEXUS_GETOFS (pa);                                 /* get offset */
 
-if ((rg >= 0x414) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
+if ((rg >= 0x414) && (ca_halt)) {                       /* microcode not running? */
     *val = ca_local_store[(rg - 0x400)];
     sim_debug (DBG_REG, &ca_dev, "LOCAL STORE rd: %X = %08X\n", pa, *val);
     return SCPE_OK;
@@ -231,7 +228,7 @@ for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port regist
             return r;
         if (p->rg == CI_PSR) {
             *val = *val | ca_psr_bi;
-            if (uptr->ci_state <= PORT_UCODERUN)
+            if (uptr->ci_state <= PORT_UIM)             /* uninitialised? */
                 *val = *val | PSR_UNI;
             }
         return SCPE_OK;
@@ -240,7 +237,7 @@ for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port regist
 if (rg >= 0x700) {                                      /* virtual circuit descriptors */
     rg = (rg >> 2) & 0xFF;                              /* get node number */
     *val = ci_vcd[rg] & 0xFFFF;
-    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08X\n", rg, *val);
+    sim_debug (DBG_REG, &ca_dev, "VCD[%d] rd: %08X\n", rg, *val);
     return SCPE_OK;
     }
 switch (rg) {                                           /* CIBCA specific registers */
@@ -318,7 +315,7 @@ REGMAP *p;
 
 rg = NEXUS_GETOFS (pa);                                 /* get offset */
 
-if ((rg >= 0x414) && (uptr->ci_state < PORT_UCODERUN)) { /* microcode not running? */
+if ((rg >= 0x414) && (ca_halt)) {                       /* microcode not running? */
         sim_debug (DBG_REG, &ca_dev, "LOCAL STORE wr: %X = %08X\n", pa, val);
     ca_local_store[(rg - 0x400)] = val;
     return SCPE_OK;
@@ -330,7 +327,7 @@ for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port regist
 if (rg >= 0x700) {                                      /* virtual circuit descriptors */
     rg = (rg >> 2) & 0xFF;                              /* get node number */
     ci_vcd[rg] = val & 0xFFFF;
-    sim_debug (DBG_REG, &ci_dev, "VCD[%d] wr: %08X\n", rg, val);
+    sim_debug (DBG_REG, &ca_dev, "VCD[%d] wr: %08X\n", rg, val);
     return SCPE_OK;
     }
 switch (rg) {                                           /* case on type */
@@ -373,11 +370,11 @@ switch (rg) {                                           /* case on type */
         sim_debug (DBG_REG, &ca_dev, "PMCSR wr: %08X\n", val);
         if (val & PMCSR_START) {
             ca_reset (&ca_dev);
-            ci_set_state (uptr, PORT_UCODERUN);         /* start microcode */
+            ca_halt = FALSE;                            /* start microcode */
             break;
             }
         else if (val & PMCSR_HALT)
-            ci_set_state (uptr, PORT_UNINIT);           /* stop microcode */
+            ca_halt = TRUE;                             /* stop microcode */
         ca_pmcsr = (ca_pmcsr & ~PMCSR_RW) | (val & PMCSR_RW); /* set RW bits */
         break;
 
@@ -436,6 +433,7 @@ ca_biic.uiic = BIICR_EXV;
 ca_pmcsr = 0;
 ca_psr_bi = 0;
 ca_madr = 0;
+ca_halt = TRUE;
 ci_vax_reset (dptr, &ca_port);
 return SCPE_OK;
 }

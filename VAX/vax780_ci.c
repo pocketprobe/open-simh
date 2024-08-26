@@ -109,10 +109,6 @@
 #define FUNC_MASK       0xFFFFFF00
 #define INT_BUF_LEN     0x3F8
 
-/* CI780 Port States */
-
-#define PORT_UCODERUN   1                               /* microcode running */
-
 uint32 ci_cnfgr;                                        /* configuration reg */
 uint32 ci_pmcsr;                                        /* port maintenance csr */
 uint32 ci_madr;                                         /* mainteneance addr reg */

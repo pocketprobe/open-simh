@@ -540,7 +540,7 @@ uint32 processed = 0;
 DIB *dibp = (DIB *)cq_dev.ctxt;
 
 sim_debug (DBG_REG, &cq_dev, "cq_wr: %08X = %04X at %08X %s (%s)\n", PA, data, fault_PC, cq_rgd[rg], cq_sym(fault_PC));
-    
+
 switch (rg) {
 
     case CI_CONTROL_REG:
@@ -579,13 +579,12 @@ switch (rg) {
             sim_activate_abs (&cq_unit[0], 20);
             }
         else {
-            // TODO: handle transition back to halted state in vax_ci.c
             if (data & CCR_RUNDOWN)
                 cq_csr &= ~CSR_RUNNING;
             if (data & CCR_HALT) {
                 cq_csr &= ~CSR_RUNNING;
                 cq_csr &= ~CSR_INITIALIZED;
-                ci_set_state (&cq_unit[0], PORT_UNINIT);
+                ci_rx_enable (&cq_unit[0], 0);          /* disable receiver */
                 }
             }
         cq_ccr = data & CCR_ENABLE_INT;

@@ -443,14 +443,12 @@ static STDEF frb_stc[] = {
 #define OT_DBN          0003                            /* DBN offset type */
 
 #define UNIT_V_ONL      (DKUF_V_UF + 0)                 /* online */
-#define UNIT_V_WLK      (DKUF_V_UF + 1)                 /* hwre write lock */
-#define UNIT_V_ATP      (DKUF_V_UF + 2)                 /* attn pending */
-#define UNIT_V_DTYPE    (DKUF_V_UF + 3)                 /* drive type */
+#define UNIT_V_ATP      (DKUF_V_UF + 1)                 /* attn pending */
+#define UNIT_V_DTYPE    (DKUF_V_UF + 2)                 /* drive type */
 #define UNIT_M_DTYPE    0x1F
-#define UNIT_V_NOAUTO   (DKUF_V_UF + 8)                 /* noautosize */
-#define UNIT_V_FMT      (DKUF_V_UF + 9)                 /* drive format */
+#define UNIT_V_NOAUTO   (DKUF_V_UF + 7)                 /* noautosize */
+#define UNIT_V_FMT      (DKUF_V_UF + 8)                 /* drive format */
 #define UNIT_ONL        (1 << UNIT_V_ONL)
-#define UNIT_WLK        (1 << UNIT_V_WLK)
 #define UNIT_ATP        (1 << UNIT_V_ATP)
 #define UNIT_NOAUTO     (1 << UNIT_V_NOAUTO)
 #define UNIT_FMT        (1 << UNIT_V_FMT)
@@ -1575,7 +1573,7 @@ uint32 i;
 
 for (i = 0; i < KS_MAXDR; i++) {
     if (dptr->units[i].flags & UNIT_ATT)
-        return sim_messagef (SCPE_ALATT, "Can't change controller type on %s with %s attached to %s.\n", 
+        return sim_messagef (SCPE_ALATT, "Can't change controller type on %s with %s attached to %s.\n",
                                          dptr->name, sim_uname (&dptr->units[i]), dptr->units[i].filename);
     }
 dibp->sts = val;
@@ -1605,7 +1603,7 @@ switch (dibp->sts) {
     case K_SDI:
         fprintf (st, "K.sdi disk data channel");
         break;
-        
+
     case K_SI4:
     case K_SI4_DISK:
         fprintf (st, "K.si 4-port data channel");

@@ -503,7 +503,11 @@ typedef struct {
 
 #define DZ_MUXES        4                               /* default # of DZ muxes */
 #define VH_MUXES        4                               /* max # of VH muxes */
+#if defined (HSC)
 #define DLX_LINES       2                               /* max # of KL11/DL11's */
+#else
+#define DLX_LINES       16                              /* max # of KL11/DL11's */
+#endif
 #define DCX_LINES       16                              /* max # of DC11's */
 #define DUP_LINES       8                               /* max # of DUP11/DPV11's */
 #define KMC_UNITS       2                               /* max # of KMC11s */

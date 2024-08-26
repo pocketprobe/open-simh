@@ -94,7 +94,6 @@ int32 ub_map[UBM_LNT_LW] = { 0 };                       /* UBA map array */
 int32 toy_state = 0;
 uint8 toy_data[TOY_LNT] = { 0 };
 static int32 clk_tps_map[4] = { 0, 50, 60, 800 };       /* 0 = use BEVENT */
-DIB fl_dib;
 
 extern int32 R[8];
 extern int32 STKLIM, PIRQ;
@@ -298,8 +297,6 @@ REG sys_reg[] = {
                            "1123+, 11/24, 11/34, "
                            "11/70, 11/73B, 11/83, "
                            "11/84, 11/93, 11/94)") },
-    { ORDATA (SDR, SDR, 16, "switch/display register ("
-                           "HSC)") },
     { ORDATAD (MEMERR, MEMERR, 16, "memory error register ("
                            "11/44, 11/60, 11/70, "
                            "11/53, 11/73, 11/73B, "
@@ -498,7 +495,8 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
         return SCPE_OK;
 
     case 015:                                           /* PIRQ */
-        ODD_WO (data);
+        EVN_IGN (data);
+        ODD_SHF (data);
         put_PIRQ (data);
         return SCPE_OK;
         }
@@ -534,12 +532,14 @@ t_stat CPU45_wr (int32 data, int32 pa, int32 access)
 switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
 
     case 015:                                           /* PIRQ */
-        ODD_WO (data);
+        EVN_IGN (data);
+        ODD_SHF (data);
         put_PIRQ (data);
         return SCPE_OK;
 
     case 016:                                           /* STKLIM */
-        ODD_WO (data);
+        EVN_IGN (data);
+        ODD_SHF (data);
         STKLIM = data & STKLIM_RW;
         return SCPE_OK;
         }                                               /* end switch pa */
@@ -613,7 +613,8 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
         return SCPE_OK;
 
     case 016:                                           /* STKLIM */
-        ODD_WO (data);
+        EVN_IGN (data);
+        ODD_SHF (data);
         STKLIM = data & STKLIM_RW;
         return SCPE_OK;
         }                                               /* end switch pa */
@@ -684,12 +685,22 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
 return SCPE_NXM;                                        /* unimplemented */
 }
 
+/* From Walter Mueller: MEMERR is always written using the standard data
+   on the bus: the whole word for DATO, the high byte for DATOB odd,
+   and the low byte with DATOB even. The simulator always puts a byte
+   in the low 8 bits, so for an odd byte reference, it must be shifted
+   to the high byte.
+*/
+
 t_stat CPU70_wr (int32 data, int32 pa, int32 access)
 {
 switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
+    case 000:
+    case 001:
+        return SCPE_OK;                                 /* error addr */
 
     case 002:                                           /* MEMERR */
-        ODD_WO (data);
+        ODD_SHF (data);
         MEMERR = MEMERR & ~data;
         return SCPE_OK;
 
@@ -710,6 +721,9 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
     case 011:                                           /* high size */
         return SCPE_OK;
 
+    case 012:                                           /* system ID */
+        return SCPE_OK;
+
     case 013:                                           /* CPUERR */
         CPUERR = 0;
         return SCPE_OK;
@@ -720,12 +734,14 @@ switch ((pa >> 1) & 017) {                              /* decode pa<4:1> */
         return SCPE_OK;
 
     case 015:                                           /* PIRQ */
-        ODD_WO (data);
+        EVN_IGN (data);
+        ODD_SHF (data);
         put_PIRQ (data);
         return SCPE_OK;
 
     case 016:                                           /* STKLIM */
-        ODD_WO (data);
+        EVN_IGN (data);
+        ODD_SHF (data);
         STKLIM = data & STKLIM_RW;
         return SCPE_OK;
         }                                               /* end switch pa */
@@ -1088,93 +1104,6 @@ switch ((pa >> 1) & 03) {                               /* decode pa<2:1> */
         return SCPE_OK;
         }
 return SCPE_NXM;
-}
-
-t_stat fl_reset (DEVICE *dptr)
-{
-fl_unit[0].TRK = 0;
-fl_unit[0].CMD = 0;
-fl_unit[0].DIR = 1;
-fl_unit[1].TRK = 0;
-fl_unit[1].CMD = 0;
-fl_unit[1].DIR = 1;
-fl_csr = 0;
-fl_madr0 = 0;
-fl_madr1 = 0;
-fl_madr2 = 0;
-return SCPE_OK;
-}
-
-t_stat fl_boot (int32 unitno, DEVICE *dptr)
-{
-extern int32 REGFILE[6][2];
-extern int32 rs;
-extern int32 saved_PC;
-
-if (unitno != 0) {
-    sim_printf ("Boot only supported from unit 0\n");
-    return SCPE_NOFNC;
-    }
-fl_read (&fl_unit[unitno], 0, 1, 06000, FALSE);                           /* read first 8 blocks */
-fl_read (&fl_unit[unitno], 2, 7, 07000, FALSE);
-REGFILE[1][rs] = 0177400;                               /* boot device CSR */
-REGFILE[2][rs] = 06000;                                 /* boot base */
-saved_PC = 06000;
-return SCPE_OK;
-}
-
-t_stat rom_rd (int32 *data, int32 pa, int32 access)
-{
-int32 rg = (pa >> 1) & 0377;
-switch (rg) {                                           /* decode pa<2:1> */
-
-    case 007:                                           /* ptr to unknown subroutine 2 */
-        *data = 0173060;
-        break;
-
-    case 010:                                           /* ptr to boot device read */
-        *data = 0173030;
-        break;
-
-    case 012:                                           /* ptr to unknown subroutine 1 */
-        *data = 0173050;
-        break;
-
-    case 013:                                           /* ptr to console halt */
-        *data = 0173040;
-        break;
-
-    case 014:                                           /* boot device read */
-        fl_read (&fl_unit[0], R[5], R[4], R[2], TRUE);
-        *data = 0241;                                   /* CLC */
-        break;
-
-    case 015:
-        *data = 0207;                                   /* RTS PC */
-        break;
-
-    case 020:                                           /* console halt */
-//        sim_printf ("console halt, status = %o\n", R[0]);
-        *data = 0;                                      /* HALT */
-        break;
-
-    case 024:                                           /* unknown subroutine 1 */
-        *data = 0241;                                   /* CLC */
-        break;
-
-    case 025:
-        *data = 0207;                                   /* RTS PC */
-        break;
-
-    case 030:                                           /* unknown subroutine 2 */
-        *data = 0207;                                   /* RTS PC */
-        break;
-
-    default:
-//        sim_printf ("rom_rd: %o\n", pa);
-        *data = 0;
-        }
-return SCPE_OK;
 }
 
 /* KDJ11E TOY routines */
