@@ -1439,7 +1439,7 @@ SCSI = ${SIMHD}/sim_scsi.c
 
 CI = ${DECD}/dec_ci.c
 
-SCS = ${VAXD}/vax_hsc.c ${VAXD}/vax_rf.c \
+SCS = ${DECD}/dec_hsc.c ${DECD}/dec_rf.c \
 	${DECD}/dec_ppd.c ${DECD}/dec_scs.c ${DECD}/scs_directory.c \
 	${DECD}/scs_mscp.c ${DECD}/dec_dup.c ${DECD}/dec_ctp.c
 
@@ -2139,7 +2139,7 @@ KL10 =  ${KL10D}/kx10_cpu.c ${KL10D}/kx10_sys.c ${KL10D}/kx10_df.c \
     ${KL10D}/kx10_imp.c ${KL10D}/kl10_fe.c ${KL10D}/ka10_pd.c \
     ${KL10D}/ka10_ch10.c ${KL10D}/kl10_nia.c ${KL10D}/kx10_disk.c \
     ${KL10D}/kl10_ci.c ${CI} ${SCS}
-KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -I ${DECD} -I ${VAXD} -DUSE_SIM_CARD ${NETWORK_OPT}  ${AIO_CCDEFS}
+KL10_OPT = -DKL=1 -DUSE_INT64 -I $(KL10D) -I ${DECD} -DUSE_SIM_CARD ${NETWORK_OPT}  ${AIO_CCDEFS}
 
 KS10D = ${SIMHD}/PDP10
 KS10 = ${KS10D}/kx10_cpu.c ${KS10D}/kx10_sys.c ${KS10D}/kx10_disk.c \

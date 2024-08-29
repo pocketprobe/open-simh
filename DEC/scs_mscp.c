@@ -30,7 +30,7 @@
 #include "kx10_defs.h"
 #endif
 #include "dec_uqssp.h"
-#include "vax_rf.h"
+#include "dec_rf.h"
 #include "dec_ci.h"
 #include "dec_ppd.h"
 #include "dec_scs.h"

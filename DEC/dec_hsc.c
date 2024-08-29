@@ -1,4 +1,4 @@
-/* vax_hsc.c: Hierarchical Storage Controller
+/* dec_hsc.c: Hierarchical Storage Controller
 
    Copyright (c) 2019, Matt Burke
 

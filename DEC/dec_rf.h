@@ -1,4 +1,4 @@
-/* vax_rf.h: MSCP disk controller simulator
+/* dec_rf.h: MSCP disk controller simulator
 
    Copyright (c) 2001-2008, Robert M Supnik
    Derived from work by Stephen F. Shirron

@@ -1,4 +1,4 @@
-/* vax_rf.c: MSCP disk controller simulator
+/* dec_rf.c: MSCP disk controller simulator
 
    Copyright (c) 2002-2013, Robert M Supnik
    Derived from work by Stephen F. Shirron
@@ -117,7 +117,7 @@
 #include "dec_uqssp.h"
 #include "dec_mscp.h"
 #include "sim_disk.h"
-#include "vax_rf.h"
+#include "dec_rf.h"
 
 #define UF_MSK          (UF_CMR|UF_CMW)                 /* settable flags */
 
