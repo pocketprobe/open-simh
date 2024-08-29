@@ -187,6 +187,11 @@ DEVICE *sim_devices[] = {
 #if NUM_DEVS_NIA > 0
     &nia_dev,
 #endif
+#if NUM_DEVS_CI > 0
+    &ci_dev,
+    &hsc_dev,
+    &rf_dev,
+#endif
 #if NUM_DEVS_CH10 > 0
     &ch10_dev,
 #endif
@@ -255,6 +260,7 @@ const char *sim_stop_messages[SCPE_BASE] = {
     "HALT instruction",
     "Breakpoint",
     "Invalid access",
+    "Fatal RQ error",
 #if MAGIC_SWITCH
     "No magic"
 #endif

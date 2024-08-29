@@ -150,8 +150,9 @@ typedef t_uint64     uint64;
 #define STOP_HALT       1                               /* halted */
 #define STOP_IBKPT      2                               /* breakpoint */
 #define STOP_ACCESS     3                               /* invalid access */
+#define STOP_RQ         4                               /* RQ fatal error */
 #if MAGIC_SWITCH
-#define STOP_MAGIC      4                               /* low on magic */
+#define STOP_MAGIC      5                               /* low on magic */
 #endif
 
 /* Debuging controls */
@@ -444,6 +445,12 @@ extern DEBTAB crd_debug[];
 #define DEV_M_RH        (1 << DEV_V_RH)
 #define TYPE_RH10       (0 << DEV_V_RH)
 #define TYPE_RH20       (1 << DEV_V_RH)
+#define DEV_V_CI        (DEV_V_UF + 2)                  /* CI */
+#define DEV_CI          (1u << DEV_V_CI)
+#define DEV_V_HSC       (DEV_V_UF + 3)                  /* HSC */
+#define DEV_HSC         (1u << DEV_V_HSC)
+
+#define DEV_RDX         8                               /* default device radix */
 
 #if KL
 /* DTE memory access functions, n = DTE# */
@@ -482,6 +489,9 @@ extern DEVICE   dte_dev;
 extern DEVICE   lp20_dev;
 extern DEVICE   tty_dev;
 extern DEVICE   nia_dev;
+extern DEVICE   ci_dev;
+extern DEVICE   hsc_dev;
+extern DEVICE   rf_dev;
 #else
 extern DEVICE   cty_dev;
 #endif
@@ -764,6 +774,7 @@ extern void ka10_lights_clear_aux (int);
 #define NUM_DEVS_TTY    1
 #define NUM_LINES_TTY   64
 #define NUM_DEVS_NIA    1
+#define NUM_DEVS_CI     1
 #elif KS
 #define NUM_DEVS_LP20   1
 #define NUM_DEVS_DZ     4

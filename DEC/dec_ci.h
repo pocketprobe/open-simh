@@ -31,17 +31,17 @@
 
 /* Debug Streams */
 
-#define DBG_REG         0x0001                          /* registers */
-#define DBG_WRN         0x0002                          /* warnings */
-#define DBG_DIAG        0x0004                          /* diagnostic packets */
-#define DBG_CONF        0x0008                          /* configuration packets */
-#define DBG_PPD         0x0010                          /* PPD packets */
-#define DBG_SCS         0x0020                          /* SCS packets */
-#define DBG_BLK         0x0040                          /* block transfer packets */
-#define DBG_LCMD        0x0080                          /* local commands */
-#define DBG_CONN        0x0100                          /* socket connections */
-#define DBG_TRC         0x0200                          /* trace */
-#define DBG_PKT         0x0400                          /* packet data */
+#define DBG_REG         0x00100000                      /* registers */
+#define DBG_WRN         0x00200000                      /* warnings */
+#define DBG_DIAG        0x00400000                      /* diagnostic packets */
+#define DBG_CONF        0x00800000                      /* configuration packets */
+#define DBG_PPD         0x01000000                      /* PPD packets */
+#define DBG_SCS         0x02000000                      /* SCS packets */
+#define DBG_BLK         0x04000000                      /* block transfer packets */
+#define DBG_LCMD        0x08000000                      /* local commands */
+#define DBG_CONN        0x10000000                      /* socket connections */
+#define DBG_TRC         0x20000000                      /* trace */
+#define DBG_PKT         0x40000000                      /* packet data */
 
 /* Unit Specific Data */
 
@@ -90,7 +90,7 @@ typedef struct {
     uint32 path;
     size_t size;                                        /* associated structure size */
     size_t length;                                      /* packet length */
-    t_offset offset;                                    /* receive/send offset */ 
+    t_offset offset;                                    /* receive/send offset */
     uint8 data[CI_MAXFR];                               /* packet data */
 } CI_PKT;
 

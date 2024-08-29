@@ -32,8 +32,10 @@
 
 #if defined (VM_VAX)                                    /* VAX version */
 #include "vax_defs.h"
-#else                                                   /* PDP-11 version */
+#elif defined (VM_PDP11)                                /* PDP-11 version */
 #include "pdp11_defs.h"
+#else                                                   /* PDP-10 version */
+#include "kx10_defs.h"
 #endif
 #include "sim_sock.h"
 #include "dec_ci.h"
@@ -174,8 +176,8 @@ uint8 tbyte;
 uint32 i;
 int32 j;
 
-if ((uptr->dptr->dctrl & (DBG_PKT | dctrl)) != (DBG_PKT | dctrl))
-    return;
+//if ((uptr->dptr->dctrl & (DBG_PKT | dctrl)) != (DBG_PKT | dctrl))
+//    return;
 
 for (i = 0; i < length; i+=4) {
     sim_debug_unit (DBG_PKT, uptr, "  %04X: ", i);

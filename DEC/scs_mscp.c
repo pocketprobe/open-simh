@@ -24,9 +24,12 @@
    in this Software without prior written authorization from the author.
 */
 
-//#include "sim_defs.h"
+#if defined (VM_VAX)                                    /* VAX version */
 #include "vax_defs.h"
-#include "pdp11_uqssp.h"
+#else                                                   /* PDP-10 version */
+#include "kx10_defs.h"
+#endif
+#include "dec_uqssp.h"
 #include "vax_rf.h"
 #include "dec_ci.h"
 #include "dec_ppd.h"

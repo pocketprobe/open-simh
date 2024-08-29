@@ -26,13 +26,15 @@
    hsc            HSC50/HSC70
 */
 
+#if defined (VM_VAX)                                    /* VAX version */
 #include "vax_defs.h"
-#include "pdp11_uqssp.h"
+#else                                                   /* PDP-10 version */
+#include "kx10_defs.h"
+#endif
 #include "dec_ci.h"
 #include "dec_ppd.h"
 #include "dec_scs.h"
 #include "dec_sca.h"
-#include "vax_rf.h"
 
 #define HSC_TIMER       1
 

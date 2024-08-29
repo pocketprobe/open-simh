@@ -1,4 +1,4 @@
-/* pdp11_mscp.h: DEC MSCP and TMSCP definitionsn
+/* dec_mscp.h: DEC MSCP and TMSCP definitionsn
 
    Copyright (c) 2001-2008, Robert M Supnik
    Derived from work by Stephen F. Shirron
@@ -29,8 +29,8 @@
    20-Sep-02    RMS     Merged TMSCP definitions
 */
 
-#ifndef PDP11_MSCP_H_
-#define PDP11_MSCP_H_  0
+#ifndef DEC_MSCP_H_
+#define DEC_MSCP_H_  0
 
 /* Misc constants */
 
@@ -100,7 +100,7 @@
 #define CF_RPL          0x8000                          /* ctrl bad blk repl */
 #define CF_ATN          0x0080                          /* enb attention */
 #define CF_MSC          0x0040                          /* enb misc msgs */
-#define CF_OTH          0x0020                          /* enb othr host msgs */                
+#define CF_OTH          0x0020                          /* enb othr host msgs */
 #define CF_THS          0x0010                          /* enb this host msgs */
 #define CF_MLH          0x0004                          /* multihost support */
 #define CF_MSK          (CF_ATN|CF_MSC|CF_OTH|CF_THS)

@@ -98,22 +98,14 @@
    17-Dec-01    RMS     Added queue process
 */
 
-#if defined (VM_PDP10)                                  /* PDP10 version */
-#error "RQDX3 not supported on PDP-10!"
-
-#elif defined (VM_VAX)                                  /* VAX version */
+#if defined (VM_VAX)                                    /* VAX version */
 #include "vax_defs.h"
 #define RF_QTIME        100
 #define RF_XTIME        200
-#define OLDPC           fault_PC
-extern int32 fault_PC;
-
-#else                                                   /* PDP-11 version */
-#include "pdp11_defs.h"
-#define RF_QTIME        200
-#define RF_XTIME        500
-#define OLDPC           MMR2
-extern int32 MMR2;
+#else                                                   /* PDP-10 version */
+#include "kx10_defs.h"
+#define RF_QTIME        100
+#define RF_XTIME        200
 #endif
 
 #if !defined (RF_NUMCT)
@@ -122,8 +114,8 @@ extern int32 MMR2;
 #error "Assertion failure: RF_NUMCT exceeds 4"
 #endif
 
-#include "pdp11_uqssp.h"
-#include "pdp11_mscp.h"
+#include "dec_uqssp.h"
+#include "dec_mscp.h"
 #include "sim_disk.h"
 #include "vax_rf.h"
 
@@ -2926,7 +2918,7 @@ if (cidx < 0)                                           /* not found??? */
 cp = rf_ctxmap[cidx];                                   /* get context */
 cp->cnum = cidx;                                        /* init index */
 if (cp->ctype == DEFAULT_CTYPE)
-    cp->ctype = (UNIBUS? UDA50_CTYPE : RQDX3_CTYPE);
+    cp->ctype = UDA50_CTYPE;
 
 if (!plugs_inited ) {
     uint32 d, u = 0;
@@ -2973,9 +2965,6 @@ cp->s1dat = 0;                                          /* no S1 data */
 dibp->vec = 0;                                          /* no vector */
 #endif
 cp->comm = 0;                                           /* no comm region */
-if (UNIBUS)                                             /* Unibus? */
-    cp->sa = SA_S1 | SA_S1C_DI | SA_S1C_MP;
-else cp->sa = SA_S1 | SA_S1C_Q22 | SA_S1C_DI | SA_S1C_MP; /* init SA val */
 cp->cflgs = CF_RPL;                                     /* ctrl flgs off */
 cp->htmo = RF_DHTMO;                                    /* default timeout */
 cp->hat = cp->htmo;                                     /* default timer */
@@ -3008,7 +2997,7 @@ for (i = 0; i < dptr->numunits; i++) {                  /* init units */
 for (i=cp->max_plug = 0; i < (dptr->numunits - 2); i++)
     if ((0 == (dptr->units[i].flags & UNIT_DIS)) && (dptr->units[i].unit_plug > cp->max_plug))
         cp->max_plug = (uint16)dptr->units[i].unit_plug;
-return auto_config (0, 0);                              /* run autoconfig */
+return SCPE_OK;
 }
 
 void rf_show_pkt (FILE *st, MSC *cp, int32 pkt)

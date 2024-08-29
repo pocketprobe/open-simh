@@ -1,4 +1,4 @@
-/* pdp11_uqssp.h: Unibus/Qbus storage systems port definitions file
+/* dec_uqssp.h: Unibus/Qbus storage systems port definitions file
 
    Copyright (c) 2001-2008, Robert M Supnik
    Derived from work by Stephen F. Shirron
@@ -27,8 +27,8 @@
    30-Aug-02    RMS     Added TMSCP support
 */
 
-#ifndef PDP11_UQSSP_H_
-#define PDP11_UQSSP_H_ 0
+#ifndef DEC_UQSSP_H_
+#define DEC_UQSSP_H_ 0
 
 /* IP register - initialization and polling
 

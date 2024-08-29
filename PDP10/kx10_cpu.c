@@ -356,6 +356,9 @@ DEVICE *rh_devs[] = {
 #if (NUM_DEVS_NIA > 0)
     &nia_dev,
 #endif
+#if (NUM_DEVS_CI > 0)
+    &ci_dev,
+#endif
     NULL,
 };
 /* RH10 device numbers */
@@ -4909,7 +4912,7 @@ st_pi:
 #if PIDP10
     if (xct_sw) {    /* Handle Front panel xct switch */
         xct_sw = 0;
-    } else 
+    } else
 #endif
     f_pc_inh = 0;
 #if KL | KS
@@ -13865,12 +13868,12 @@ t_bool build_dev_tab (void)
             } else if (d & RH20_DEV) {                      /* RH20, grab next device */
 #if NUM_DEVS_NIA > 0
                 /* If NIA20 installed, skip this slot */
-                if ((nia_dev.flags & DEV_DIS) == 0 && dptr != &nia_dev &&
+                if ((nia_dev.flags & DEV_DIS) == 0 && dptr != &nia_dev && dptr != &ci_dev &&
                     rh20 == (((DIB *)nia_dev.ctxt)->dev_num & 0777))
                     rh20 += 4;
                 else
                 /* If NIA20, then assign it to it's requested address */
-                if ((nia_dev.flags & DEV_DIS) == 0 && dptr == &nia_dev)
+                if ((nia_dev.flags & DEV_DIS) == 0 && (dptr == &nia_dev || dptr == &ci_dev))
                     d = dibp->dev_num & 0777;
                 else
 #endif

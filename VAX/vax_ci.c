@@ -643,6 +643,7 @@ CI_PUTL (pkt->data, CI_CODE_REV, cp->coderev);          /* code revision */
 CI_PUTL (pkt->data, CI_PORT_FCN, cp->fmask);            /* function mask */
 CI_PUTB (pkt->data, CI_RST_PORT, uptr->ci_node);        /* resetting port */
 CI_PUTB (pkt->data, CI_SYS_STATE, CI_PTST_ENA);         /* port state */
+memset (&pkt->data[CI_ID_MBZ], 0, LEN_ID - CI_ID_MBZ);
 pkt->length = LEN_ID;
 
 return ci_send (uptr, pkt);
