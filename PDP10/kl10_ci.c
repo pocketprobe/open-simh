@@ -157,7 +157,7 @@
 #define PPD_REG         0x11                            /* register number */
 #define PPD_RDDAT       0x13                            /* read register data */
 
-/* PPD Lenths */
+/* PPD Lengths */
 
 #define LEN_HDR         0x10                            /* PPD header size */
 #define LEN_SNDDG       (LEN_HDR)
@@ -479,34 +479,6 @@ void ci_enable (UNIT *uptr)
     uint64   word;
     sim_debug (DEBUG_DETAIL, &ci_dev, "CI enable\n");
     ci_rx_enable (uptr, (CI_PATH_A | CI_PATH_B));       /* enable receiver */
-#if 0
-    /* Load pointers to various table */
-    if (Mem_read_word (ci_data.unk_hdr + PCB_UPL, &word, 0)) {
-        ci_error (EBSERR);
-        return;
-    }
-    ci_data.unk_len = (int)(word & AMASK);
-    /* Load PTT */
-    if (Mem_read_word (ci_data.pcb + PCB_PTT, &word, 0)) {
-        ci_error (EBSERR);
-        return;
-    }
-    ci_data.ptt_addr = (t_addr)(word & AMASK);
-    ci_load_ptt();
-    /* Load MCT */
-    if (Mem_read_word (ci_data.pcb + PCB_MCT, &word, 0)) {
-        ci_error (EBSERR);
-        return;
-    }
-    ci_data.mcast_addr = (t_addr)(word & AMASK);
-    ci_load_mcast();
-    /* Load read count buffer address */
-    if (Mem_read_word (ci_data.pcb + PCB_RCB, &word, 0)) {
-        ci_error (EBSERR);
-        return;
-    }
-    ci_data.rcb = (t_addr)(word & AMASK);
-#endif
     ci_data.csr |= CI_ECP;
     ci_data.csr &= ~CI_DCP;
 }
@@ -761,8 +733,19 @@ int ci_getq (t_addr head, t_addr *entry)
         /* Decrement lock here */
         return 1;
     }
+#if 0
+    temp = M[head + 1];
+    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue prior to ci_getq()\n");
+    for (int i = 0; i < 20; i++) {
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
+        temp = M[temp];
+        if (temp == (head + 1))
+            break;
+        }
+#endif
     /* Get link to next entry */
-    if (Mem_read_word (flink + 1, &temp, 0)) {
+    if (Mem_read_word (flink, &temp, 0)) {
         ci_error (EBSERR);
         return 0;
     }
@@ -783,7 +766,17 @@ int ci_getq (t_addr head, t_addr *entry)
     }
     /* Return entry */
     *entry = flink;
-
+#if 0
+    temp = M[head + 1];
+    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue after ci_getq()\n");
+    for (int i = 0; i < 20; i++) {
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
+        temp = M[temp];
+        if (temp == (head + 1))
+            break;
+        }
+#endif
     /* Decrement lock here */
     return 1;
 }
@@ -808,7 +801,17 @@ int ci_putq (t_addr head, t_addr *entry)
         return 0;
 
     /* Increment lock here */
-
+#if 0
+    temp = M[head + 1];
+    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue prior to ci_putq()\n");
+    for (int i = 0; i < 20; i++) {
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
+        temp = M[temp];
+        if (temp == (head + 1))
+            break;
+        }
+#endif
     /* Hook entry into tail of queue */
     if (Mem_read_word (head + 2, &temp, 0)) {
         ci_error (EBSERR);
@@ -845,7 +848,17 @@ int ci_putq (t_addr head, t_addr *entry)
                 head, *entry, blink);
     *entry = 0;
     /* Decement lock here */
-
+#if 0
+    temp = M[head + 1];
+    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue after ci_putq()\n");
+    for (int i = 0; i < 20; i++) {
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
+        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
+        temp = M[temp];
+        if (temp == (head + 1))
+            break;
+        }
+#endif
     /* Check if Queue was empty, and response queue */
     if (blink == (head+1) && head == (ci_data.pcb + PCB_RQI)) {
         ci_data.csr |= CI_RQA;
@@ -854,445 +867,6 @@ int ci_putq (t_addr head, t_addr *entry)
     }
     return 1;
 }
-
-#if 0
-/*
- * Send out a packet.
- */
-int ci_send_pkt (uint64 cmd)
-{
-    uint64    word1, word2;
-    struct    ci_eth_hdr  *hdr = (struct ci_eth_hdr *)(&ci_data.snd_buff.msg[0]);
-    uint8     *data = &ci_data.snd_buff.msg[sizeof(struct ci_eth_hdr)];
-    ETH_MAC   dest;
-    uint16    type;
-    int       len;
-    int       blen;
-
-    /* Read packet length */
-    if (Mem_read_word (ci_data.cmd_entry + 4, &word1, 0)) {
-        ci_error (EBSERR);
-        return 0;
-    }
-    len = (int)(word1 & 0177777);
-    blen = len + sizeof(struct ci_eth_hdr);
-    /* Check for runt packet */
-    if (blen < ETH_MIN_PACKET && (cmd & (NIA_FLG_PAD << 8)) == 0) {
-        return NIA_ERR_RUN;
-    }
-    /* Check for too long of a packet */
-    if (blen > ETH_MAX_PACKET) {
-        ci_data.pcnt[NIA_CNT_XF]++;
-        ci_data.pcnt[NIA_CNT_XFM] |= NIA_XFM_XFL;
-        return NIA_ERR_LNG;
-    }
-    /* If unit not attached, nothing more we can do */
-    if ((ci_recv_uptr->flags & UNIT_ATT) == 0)
-        return 0;
-    /* Read protocol type */
-    if (Mem_read_word (ci_data.cmd_entry + 5, &word1, 0)) {
-        ci_error (EBSERR);
-        return 0;
-    }
-    type = (uint16)(word1 >> 12) & 0xff;
-    type |= (uint16)(word1 << 4) & 0xff00;
-    hdr->type = htons(type);
-
-    /* Load destination address */
-    if (Mem_read_word (ci_data.cmd_entry + 7, &word1, 0)) {
-        ci_error (EBSERR);
-        return 0;
-    }
-    if (Mem_read_word (ci_data.cmd_entry + 8, &word2, 0)) {
-        ci_error (EBSERR);
-        return 0;
-    }
-    ci_cpy_mac(word1, word2, &dest);
-    memcpy(hdr->dest, dest, sizeof(ETH_MAC));
-    /* Copy our address over */
-    memcpy(hdr->src, ci_data.mac, sizeof(ETH_MAC));
-    /* Set packet length */
-    ci_data.snd_buff.len = len + sizeof(struct ci_eth_hdr);
-    /* Preappend length if asking for pad */
-    if ((cmd & (NIA_FLG_PAD << 8)) != 0) {
-        *data++ = len & 0377;
-        *data++ = (len >> 8) & 0377;
-        ci_data.snd_buff.len += 2;
-    }
-    /* Copy over rest of packet */
-    if (cmd & (NIA_FLG_BSD << 8)) {
-        if (Mem_read_word (ci_data.cmd_entry + 9, &word1, 0)) {
-            ci_error (EBSERR);
-            return 0;
-        }
-        while (len > 0) {
-            uint64  tlen;
-            /* Read pointer to buffer */
-            if (Mem_read_word ((t_addr)(word1 & AMASK), &word2, 0)) {
-                ci_error (EBSERR);
-                return 0;
-            }
-            /* Read length */
-            if (Mem_read_word ((t_addr)((word1+2) & AMASK), &tlen, 0)) {
-                ci_error (EBSERR);
-                return 0;
-            }
-            blen = (int)(tlen & 0177777);
-            data = ci_cpy_to((t_addr)(word2 & AMASK), data, blen);
-            len -= blen;
-            if (Mem_read_word ((t_addr)((word1 + 1) & AMASK), &word1, 0)) {
-                ci_error (EBSERR);
-                return 0;
-            }
-        }
-    } else {
-        data = ci_cpy_to(ci_data.cmd_entry + 9, data, len);
-    }
-    if (((cmd & (NIA_FLG_PAD << 8)) != 0) &&
-               ci_data.snd_buff.len < ETH_MIN_PACKET) {
-        while (ci_data.snd_buff.len < ETH_MIN_PACKET) {
-           *data++ = 0;
-           ci_data.snd_buff.len++;
-        }
-    }
-    ci_packet_debug(&ci_data, "send", &ci_data.snd_buff);
-    if (eth_write(&ci_data.etherface, &ci_data.snd_buff, NULL) != SCPE_OK) {
-        ci_data.pcnt[NIA_CNT_XF]++;
-        ci_data.pcnt[NIA_CNT_XFM] |= NIA_XFM_LOC;
-    }
-    ci_data.pcnt[NIA_CNT_BX] += ci_data.snd_buff.len;
-    ci_data.pcnt[NIA_CNT_FX] ++;
-    return 0;
-}
-
-/*
- * Process commands.
- */
-t_stat ci_cmd_srv (UNIT * uptr)
-{
-    uint64    word1, word2;
-    uint32    cmd;
-    int       len, i;
-    int       err;
-
-    /* See if we have command that we could not respond too */
-    if (ci_data.cmd_entry != 0) {
-       /* Have to put this either on response queue or free queue */
-       if (ci_putq(ci_data.cmd_rply, &ci_data.cmd_entry) == 0){
-           sim_activate(uptr, 200); /* Reschedule ourselves to deal with it */
-           return SCPE_OK;
-       }
-       ci_data.cmd_rply = 0;
-    }
-
-    /* Check if we are running */
-    if ((ci_data.csr & CI_MRN) == 0 || (ci_data.csr & CI_CQA) == 0) {
-        return SCPE_OK;
-    }
-
-    /* or no commands pending, just idle out */
-    /* Try to get command off queue */
-    if (ci_getq(ci_data.cmd_hdr, &ci_data.cmd_entry) == 0) {
-       sim_activate(uptr, 200); /* Reschedule ourselves to deal with it */
-       return SCPE_OK;
-    }
-
-    /* Check if we got one */
-    if (ci_data.cmd_entry == 0) {
-       /* Nothing to do */
-       ci_data.csr &= ~CI_CQA;
-       return SCPE_OK;
-    }
-
-    /* Get command */
-    if (Mem_read_word (ci_data.cmd_entry + 3, &word1, 0)) {
-        ci_error (EBSERR);
-        return SCPE_OK;
-    }
-    cmd = (uint32)(word1 >> 12);
-    /* Save initial status */
-    ci_data.cmd_status = ((uint8)(cmd >> 16)) & 0xff;
-    sim_debug (DEBUG_DETAIL, &ci_dev, "NIA cmd: %08x\n", cmd);
-    cmd &= 0xffff;
-    len = 5;
-    /* Preform function of command */
-    switch(cmd & 0xff) {
-    case NIA_CMD_SND:  /* Send a datagram */
-         err = ci_send_pkt(cmd);
-         if (err != 0)
-            cmd |= ((err<<1)|1) << 16;
-         cmd |= NIA_STS_SR << 16;
-         len = 10;
-         break;
-    case NIA_CMD_LPTT: /* Load Protocol Type table */
-         ci_load_ptt();
-         break;
-    case NIA_CMD_LMAC: /* Load Multicast table */
-         ci_load_mcast();
-         break;
-    case NIA_CMD_RCNT: /* Read counts */
-         for (i = 0; i < NIA_CNT_LEN; i++) {
-             word1 = ci_data.pcnt[i];
-             if (Mem_write_word(ci_data.cnt_addr + i, &word1, 0)) {
-                 ci_error (EBSERR);
-                 return SCPE_OK;
-             }
-             if ((cmd & (NIA_FLG_CLRC << 20)) != 0)
-                ci_data.pcnt[i] = 0;
-         }
-         break;
-    case NIA_CMD_WPLI: /* Write PLI */
-         break;
-    case NIA_CMD_RPLI: /* Read PLI */
-         break;
-    case NIA_CMD_RNSA: /* Read Station Address */
-         len = 8;
-         word1 = ((uint64)ci_data.mac[0]) << 28;
-         word1 |= ((uint64)ci_data.mac[1]) << 20;
-         word1 |= ((uint64)ci_data.mac[2]) << 12;
-         word1 |= ((uint64)ci_data.mac[3]) << 4;
-         word2 = ((uint64)ci_data.mac[4]) << 28;
-         word2 |= ((uint64)ci_data.mac[5]) << 20;
-         if (Mem_write_word(ci_data.cmd_entry + 4, &word1, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         if (Mem_write_word(ci_data.cmd_entry + 5, &word2, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         word1 = (uint64)((ci_data.amc << 2)| (ci_data.h4000 << 1)
-                                             | ci_data.prmsc);
-                                     /* Micro code version, PTT len MACS len */
-         word2 = (ci_data.uver[3] << 12) |(0xF << 6)|0xF;
-         if (Mem_write_word(ci_data.cmd_entry + 6, &word1, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         if (Mem_write_word(ci_data.cmd_entry + 7, &word2, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         break;
-    case NIA_CMD_WNSA: /* Write Station Address */
-         len = 8;
-         if (Mem_read_word (ci_data.cmd_entry + 4, &word1, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         if (Mem_read_word (ci_data.cmd_entry + 5, &word2, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         ci_cpy_mac(word1, word2, &ci_data.mac);
-         if (Mem_read_word (ci_data.cmd_entry + 6, &word1, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         if (Mem_read_word (ci_data.cmd_entry + 7, &word2, 0)) {
-             ci_error (EBSERR);
-             return SCPE_OK;
-         }
-         ci_data.prmsc = (int)(word1 & 1);
-         ci_data.h4000 = (int)((word1 & 2) != 0);
-         ci_data.amc = (int)((word1 & 4) != 0);
-         memcpy(&ci_data.macs[0], &ci_data.mac, sizeof (ETH_MAC));
-         if (ci_recv_uptr->flags & UNIT_ATT)
-             eth_filter (&ci_data.etherface, ci_data.macs_n + 2,
-                         ci_data.macs, 0, 0);
-         break;
-
-    case NIA_CMD_RCV:  /* Received datagram */
-    default:           /* Invalid command */
-         cmd |= ((NIA_ERR_UNK<<1)|1) << 16;
-         break;
-    }
-
-    ci_data.cmd_rply = ci_data.unk_hdr;
-    word1 = ((uint64)cmd) << 12;
-    if (Mem_write_word(ci_data.cmd_entry + 3, &word1, 0)) {
-        ci_error (EBSERR);
-        return SCPE_OK;
-    }
-    if (((cmd >> 16) & 1) != 0 || (cmd & (NIA_FLG_RESP << 8)) != 0) {
-       ci_data.cmd_rply = ci_data.resp_hdr;
-    } else if ((cmd & 0xff) == NIA_CMD_SND) {
-       if (Mem_read_word (ci_data.cmd_entry + 5, &word1, 0)) {
-           ci_error (EBSERR);
-           return SCPE_OK;
-       }
-       ci_data.cmd_rply = (t_addr)(word1 & AMASK);
-    }
-    for(i = 0; i < len; i++)
-        sim_debug (DEBUG_DETAIL, &ci_dev, "NIA rcmd: %d %09llx %012llo\n",
-                i, M[ci_data.cmd_entry + i], M[ci_data.cmd_entry + i]);
-    (void)ci_putq(ci_data.cmd_rply, &ci_data.cmd_entry);
-    sim_activate(uptr, 500);
-    return SCPE_OK;
-}
-
-
-int ci_rec_pkt ()
-{
-    struct ci_eth_hdr  *hdr;
-    uint16              type;
-    int                 i;
-    int                 len;
-    t_addr              queue;
-    t_addr              bsd;
-    uint64              word;
-    uint8               *data;
-
-    /* See if we have received packet to process */
-    if (ci_data.rec_entry != 0) {
-       /* Have to put this response queue */
-       if (ci_putq(ci_data.resp_hdr, &ci_data.rec_entry) == 0)
-           return 0;
-    }
-
-    /* If no pending packet, return success */
-    if (ci_data.r_pkt == 0)
-       return 1;
-
-    /* Determine which queue to get free packet from */
-    hdr = (struct ci_eth_hdr *)(&ci_data.rec_buff.msg[0]);
-    type = ntohs(hdr->type);
-
-    queue = ci_data.unk_hdr;
-    for (i = 0; i < ci_data.ptt_n; i++) {
-        if (ci_data.ptt_proto[i] == type) {
-            queue = ci_data.ptt_head[i];
-            break;
-        }
-    }
-
-    /* Try to grab place to save packet */
-    if (ci_getq(queue, &ci_data.rec_entry) == 0)
-       return 0;   /* Indicate packet not processed */
-
-    /* If we queue empty, just drop packet */
-    if (ci_data.rec_entry == 0) {
-       sim_debug (DEBUG_DETAIL, &ci_dev, "NIA drop packet\n");
-       ci_data.r_pkt = 0;  /* Drop packet it queue empty */
-       if (queue == ci_data.unk_hdr)
-           ci_data.pcnt[NIA_CNT_DUN]++;
-       else
-           ci_data.pcnt[NIA_CNT_D01 + i]++;
-       ci_data.pcnt[NIA_CNT_UBU] += ci_data.rec_buff.len;
-       ci_data.csr |= CI_FQE;
-       set_interrupt (CI_DEVNUM, ci_data.csr & CI_PIA);
-       return 1;  /* We did what we could with it. */
-    }
-
-    /* Get some information about packet */
-    len = ci_data.rec_buff.len - sizeof(struct ci_eth_hdr);
-    data = &ci_data.rec_buff.msg[sizeof(struct ci_eth_hdr)];
-
-    /* Got one, now fill in data */
-    word = (uint64)(NIA_CMD_RCV << 12);
-    if (Mem_write_word(ci_data.rec_entry + 3, &word, 0)) {
-        ci_error (EBSERR);
-        return SCPE_OK;
-    }
-    word = (uint64)len;
-    if (Mem_write_word(ci_data.rec_entry + 4, &word, 0)) {
-        ci_error (EBSERR);
-        return 0;
-    }
-    (void)ci_cpy_from(ci_data.rec_entry + 5,
-                         (uint8 *)&hdr->dest, sizeof(ETH_MAC));
-    (void)ci_cpy_from(ci_data.rec_entry + 7,
-                         (uint8 *)&hdr->src, sizeof(ETH_MAC));
-    word = (uint64)(((type & 0xff00) >> 4) |
-                           ((type & 0xff) << 12));
-    if (Mem_write_word(ci_data.rec_entry + 9, &word, 0)) {
-        ci_error (EBSERR);
-        return 0;
-    }
-    if (Mem_read_word (ci_data.rec_entry + 10, &word, 0)) {
-        ci_error (EBSERR);
-        return 0;
-    }
-    bsd = (t_addr)(word & AMASK);
-    while (len > 0) {
-        int  blen;
-        /* Get length of segment */
-        if (Mem_read_word (bsd+2, &word, 0)) {
-            ci_error (EBSERR);
-            return 0;
-        }
-        blen = (int)(word & 0177777);
-        if (blen > len)
-           blen = len;
-        /* Get address of where to put data */
-        if (Mem_read_word (bsd, &word, 0)) {
-            ci_error (EBSERR);
-            return 0;
-        }
-        data = ci_cpy_from((t_addr)(word & AMASK), data, blen);
-        len -= blen;
-        /* Get pointer to next segment */
-        if (Mem_read_word (bsd+1, &word, 0)) {
-            ci_error (EBSERR);
-            return 0;
-        }
-        bsd = (t_addr)(word & AMASK);
-    }
-
-    for(i = 0; i < 10; i++)
-         sim_debug (DEBUG_DETAIL, &ci_dev, "NIA recv: %d %09llx %012llo\n",
-                 i, M[ci_data.rec_entry + i], M[ci_data.rec_entry + i]);
-    /* All done with packet */
-    ci_data.r_pkt = 0;
-    /* Put on response queue */
-    return ci_putq(ci_data.resp_hdr, &ci_data.rec_entry);
-}
-
-/*
- * Receive ether net packets.
- */
-t_stat ci_eth_srv (UNIT * uptr)
-{
-    struct ci_eth_hdr  *hdr;
-    uint16              type;
-
-    if (ci_data.poll)
-        sim_clock_coschedule(uptr, 1000);             /* continue poll */
-    /* Check if we need to get a packet */
-    while (ci_data.r_pkt == 0) {
-        if (eth_read(&ci_data.etherface, &ci_data.rec_buff, NULL) <= 0)
-            return SCPE_OK;
-
-        ci_packet_debug(&ci_data, "recv", &ci_data.rec_buff);
-        hdr = (struct ci_eth_hdr *)(&ci_data.rec_buff.msg[0]);
-        type = ntohs(hdr->type);
-        /* Check if we are running */
-        if ((ci_data.csr & CI_MRN) == 0) {
-            sim_debug (DEBUG_DETAIL, &ci_dev,
-                "NIA read packet - not running: %d %04x\n",
-                 ci_data.rec_buff.len, type);
-            return SCPE_OK;
-        }
-
-        sim_debug (DEBUG_DETAIL, &ci_dev, "NIA read packet: %d %04x\n",
-                ci_data.rec_buff.len, type);
-        ci_data.r_pkt = 1;   /* Mark packet buffer full */
-        ci_data.pcnt[NIA_CNT_BR] += ci_data.rec_buff.len;
-        ci_data.pcnt[NIA_CNT_FR] ++;
-        if (hdr->dest[0] & 1) {
-            ci_data.pcnt[NIA_CNT_MCB] += ci_data.rec_buff.len;
-            ci_data.pcnt[NIA_CNT_MCF] ++;
-        }
-
-        /* Try to process the packet */
-        if (ci_rec_pkt() == 0) {
-            sim_activate(ci_proc_uptr, 100);
-            return SCPE_OK;
-        }
-    }
-    return SCPE_OK;
-}
-#endif
 
 /* Translate CI packet to CI 20 port format */
 
@@ -1777,13 +1351,17 @@ switch (opc) {                                      /* determine packet type */
         break;
 
     default:
-        sim_printf ("ci_receive_int() - Unhandled opcode 0x%02X\n", opc);
+        sim_printf ("ci_receive_ppd() - Unhandled opcode 0x%02X\n", opc);
         r = SCPE_IERR;
         break;
     }
 if (r != SCPE_OK)
     return r;
 
+if (ppd->addr == 0) {
+    sim_printf ("ci_receive_ppd() - No free queue entry available\n");
+    return SCPE_IERR;
+    }
 switch (opc) {
     case OPC_DGREC:
         ci_cpy_from (ppd->addr + 3, &ppd->data[PPD_PORT], LEN_SNDDG - 12);

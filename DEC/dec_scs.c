@@ -298,6 +298,7 @@ else {
         stat = SCS_STNORS;                              /* no resources */
     }
 CI_PUTL (pkt->data, SCS_SRCCON, cid);
+CI_PUTW (pkt->data, SCS_MINCR, 0);                      /* reserved, MBZ */
 CI_PUTW (pkt->data, SCS_STATUS, stat);
 pkt->length = LEN_CONRSP;
 ppd_sndmsg (uptr, pkt);                                 /* send CONRSP */

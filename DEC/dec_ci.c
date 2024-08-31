@@ -744,7 +744,6 @@ t_stat ci_receive_packet (UNIT *uptr, CI_PKT *pkt)
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
 CI_ITEM *item;
 uint8 opc;
-uint32 path;
 t_stat r;
 
 if (cp->rx_queue.count == 0) {                          /* receive queue empty? */
