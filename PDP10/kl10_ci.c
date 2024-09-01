@@ -157,6 +157,12 @@
 #define PPD_REG         0x11                            /* register number */
 #define PPD_RDDAT       0x13                            /* read register data */
 
+#define PPD_XFRSZ       0x18                            /* transfer size */
+#define PPD_SBNAM       0x1C                            /* send buffer name */
+#define PPD_SBOFF       0x20                            /* send buffer offset */
+#define PPD_RBNAM       0x24                            /* receive buffer name */
+#define PPD_RBOFF       0x28                            /* receive buffer offset */
+
 /* PPD Lengths */
 
 #define LEN_HDR         0x10                            /* PPD header size */
@@ -167,7 +173,7 @@
 #define LEN_SNDSTRT     (LEN_HDR + 12)
 #define LEN_REQDAT      (LEN_HDR + 28)
 #define LEN_SNDLB       (LEN_HDR)
-//#define LEN_SNDDAT      0x2C
+#define LEN_SNDDAT      (LEN_HDR + 28)
 #define LEN_SETCKT      (LEN_HDR + 12)
 #define LEN_CKTSET      (LEN_HDR + 16)
 #define LEN_SETCNT      (LEN_HDR + 16)
@@ -189,20 +195,22 @@
 #define OPC_REQDAT2     012
 #define OPC_RETID       013
 #define OPC_SNDLB       015
+#define OPC_SNDDAT      0x10                            /* send data */
 //#define OPC_RETDAT      021
 //#define OPC_SNTMDAT     022
 //#define OPC_MCNF        044
 
 #define OPC_M_RECV      040
 
-#define OPC_DGREC       (OPC_SNDDG | OPC_M_RECV)
-#define OPC_MSGREC      (OPC_SNDMSG | OPC_M_RECV)
-#define OPC_CNFREC      (OPC_CNFREC | OPC_M_RECV)
-#define OPC_RSTREC      (OPC_SNDRST | OPC_M_RECV)
-#define OPC_STRTREC     (OPC_SNDSTRT | OPC_M_RECV)
-#define OPC_IDREC       (OPC_RETID | OPC_M_RECV)
-#define OPC_LBREC       (OPC_SNDLB | OPC_M_RECV)
-#define OPC_DATREC      (OPC_RETDAT | OPC_M_RECV)
+#define OPC_DGREC       (OPC_M_RECV | OPC_SNDDG)
+#define OPC_MSGREC      (OPC_M_RECV | OPC_SNDMSG)
+#define OPC_CNFREC      (OPC_M_RECV | OPC_CNFRET)
+#define OPC_RSTREC      (OPC_M_RECV | OPC_SNDRST)
+#define OPC_STRTREC     (OPC_M_RECV | OPC_SNDSTRT)
+#define OPC_REQDATREC   (OPC_M_RECV | OPC_REQDAT0)       /* request data received */
+#define OPC_IDREC       (OPC_M_RECV | OPC_RETID)
+#define OPC_LBREC       (OPC_M_RECV | OPC_SNDLB)
+#define OPC_DATREC      (OPC_M_RECV | OPC_RETDAT)
 
 #define OPC_SETCKT      0200                            /* set circuit */
 #define OPC_SETCNT      0201                            /* set counters */
@@ -241,6 +249,28 @@
 #define CI_CNT_PTX   010                                /* Packets transmitted */
 #define CI_CNT_PRX   011                                /* Packets received */
 
+/* Buffer Header Descriptor */
+
+#define BHD_V_KEY       20                              /* buffer key */
+#define BHD_M_KEY       0177777
+#define BHD_NCV         010                             /* no clear valid */
+#define BHD_VLD         004                             /* valid */
+#define BHD_ERR         002                             /* error */
+#define BHD_WRT         001                             /* writeable */
+#define BHD_BSD         077777777                       /* BSD address */
+#define BHD_LEN         0777777777777                   /* length */
+
+/* Buffer Segment Descriptor */
+
+#define BSD_V_MODE      28                              /* transfer mode */
+#define BSD_M_MODE      003
+#define  BSD_IND        0                               /* industry compatible */
+#define  BSD_CD         1                               /* core dump */
+#define  BSD_HD         2                               /* high density */
+#define BSD_SA          077777777                       /* segment address */
+#define BSD_BSD         077777777                       /* next BSD address */
+#define BSD_LEN         0777777777777                   /* segment length */
+
 typedef struct {
     uint32 addr;                                        /* associated memory address */
     size_t length;                                      /* packet length */
@@ -273,6 +303,7 @@ void       ci_load_ptt ();
 void       ci_load_mcast ();
 void       ci_error (int);
 t_stat     ci_port_command (UNIT *uptr);
+t_stat     ci_receive_ppd (UNIT *uptr, PPD_PKT *ppd);
 t_stat     ci_svc (UNIT *uptr);
 t_stat     ci_reset (DEVICE *dptr);
 t_stat     ci_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
@@ -492,6 +523,280 @@ void ci_disable (UNIT *uptr)
     ci_rx_enable (uptr, 0);                             /* disable receiver */
     ci_data.csr |= CI_DCP;
     ci_data.csr &= ~CI_ECP;
+}
+
+/*
+ * Copy memory to a packet - High density format
+ */
+uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
+{
+    uint64 word;
+
+    while (len > 8) {                                   /* copy full words */
+        word = M[addr++];
+        if (lo_word) {
+            *data++ = (uint8)((word >> 28) & 0xff);
+            *data++ = (uint8)((word >> 20) & 0xff);
+            *data++ = (uint8)((word >> 12) & 0xff);
+            *data++ = (uint8)((word >> 4) & 0xff);
+            *data = *data & ~0xF0;
+            *data = *data | (uint8)((word << 4) & 0xf0);
+            }
+        else {
+            *data = *data & ~0x0F;
+            *data++ = *data | (uint8)((word >> 32) & 0x0F);
+            *data++ = (uint8)((word >> 24) & 0xff);
+            *data++ = (uint8)((word >> 16) & 0xff);
+            *data++ = (uint8)((word >> 8) & 0xff);
+            *data++ = (uint8)(word & 0xff);
+            }
+         len -= 9;
+    }
+
+    if (len) {                                          /* copy last partial word */
+        word = M[addr++];
+        if (lo_word) {
+            switch (len) {
+                case 8:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data++ = (uint8)((word >> 12) & 0xff);
+                    *data++ = (uint8)((word >> 4) & 0xff);
+                    break;
+                case 7:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data++ = (uint8)((word >> 12) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 4) & 0xF0);
+                    break;
+                case 6:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data++ = (uint8)((word >> 12) & 0xff);
+                    break;
+                case 5:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 12) & 0xF0);
+                    break;
+                case 4:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    break;
+                case 3:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 20) & 0xF0);
+                    break;
+                case 2:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    break;
+                case 1:
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 28) & 0xF0);
+                    break;
+                }
+            }
+        else {
+            switch (len) {
+                case 8:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    *data++ = (uint8)((word >> 24) & 0xff);
+                    *data++ = (uint8)((word >> 16) & 0xff);
+                    *data++ = (uint8)((word >> 8) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)(word & 0xF0);
+                    break;
+                case 7:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    *data++ = (uint8)((word >> 24) & 0xff);
+                    *data++ = (uint8)((word >> 16) & 0xff);
+                    *data++ = (uint8)((word >> 8) & 0xff);
+                    break;
+                case 6:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    *data++ = (uint8)((word >> 24) & 0xff);
+                    *data++ = (uint8)((word >> 16) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 8) & 0xF0);
+                    break;
+                case 5:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    *data++ = (uint8)((word >> 24) & 0xff);
+                    *data++ = (uint8)((word >> 16) & 0xff);
+                    break;
+                case 4:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    *data++ = (uint8)((word >> 24) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 16) & 0xF0);
+                    break;
+                case 3:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    *data++ = (uint8)((word >> 24) & 0xff);
+                    break;
+                case 2:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 24) & 0xF0);
+                    break;
+                case 1:
+                    *data = *data & ~0x0F;
+                    *data++ = *data | (uint8)((word >> 32) & 0x0F);
+                    break;
+                }
+            }
+        }
+    return data;
+}
+
+/*
+ * Copy a packet to memory - High density format
+ */
+uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
+{
+    uint64    word;
+
+    while (len > 8) {                                   /* copy full words */
+        if (lo_word) {
+            word =  (uint64)(*data++) << 28;
+            word |= (uint64)(*data++) << 20;
+            word |= (uint64)(*data++) << 12;
+            word |= (uint64)(*data++) << 4;
+            word |= (uint64)((*data) >> 4);
+            }
+        else {
+            word =  (uint64)(*data++ & 0xF) << 32;
+            word |= (uint64)(*data++) << 24;
+            word |= (uint64)(*data++) << 16;
+            word |= (uint64)(*data++) << 8;
+            word |= (uint64)(*data++);
+            }
+        M[addr++] = word;
+        len -= 9;
+        lo_word = !lo_word;
+    }
+
+    if (len) {                                          /* copy last partial word */
+        word = M[addr];
+        if (lo_word) {
+            switch (len) {
+                case 8:
+                    word = word & ~((uint64)0xFFFFFFFF0);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++) << 12;
+                    word |= (uint64)(*data++) << 4;
+                    break;
+                case 7:
+                    word = word & ~((uint64)0xFFFFFFF00);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++) << 12;
+                    word |= (uint64)(*data++ & 0xF0) << 4;
+                    break;
+                case 6:
+                    word = word & ~((uint64)0xFFFFFF000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++) << 12;
+                    break;
+                case 5:
+                    word = word & ~((uint64)0xFFFFF0000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++ & 0xF0) << 12;
+                    break;
+                case 4:
+                    word = word & ~((uint64)0xFFFF00000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    break;
+                case 3:
+                    word = word & ~((uint64)0xFFF000000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++ & 0xF0) << 20;
+                    break;
+                case 2:
+                    word = word & ~((uint64)0xFF000000);
+                    word |= (uint64)(*data++) << 28;
+                    break;
+                case 1:
+                    word = word & ~((uint64)0xF0000000);
+                    word |= (uint64)(*data++ & 0xF0) << 28;
+                    break;
+                default:
+                    word = 0;
+                    break;
+                }
+            }
+        else {
+            switch (len) {
+                case 8:
+                    word = word & ~((uint64)0xFFFFFFFF0);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    word |= (uint64)(*data++) << 24;
+                    word |= (uint64)(*data++) << 16;
+                    word |= (uint64)(*data++) << 8;
+                    word |= (uint64)(*data++ & 0xF0);
+                    break;
+                case 7:
+                    word = word & ~((uint64)0xFFFFFFF00);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    word |= (uint64)(*data++) << 24;
+                    word |= (uint64)(*data++) << 16;
+                    word |= (uint64)(*data++) << 8;
+                    break;
+                case 6:
+                    word = word & ~((uint64)0xFFFFFF000);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    word |= (uint64)(*data++) << 24;
+                    word |= (uint64)(*data++) << 16;
+                    word |= (uint64)(*data++ & 0xF0) << 8;
+                    break;
+                case 5:
+                    word = word & ~((uint64)0xFFFFF0000);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    word |= (uint64)(*data++) << 24;
+                    word |= (uint64)(*data++) << 16;
+                    break;
+                case 4:
+                    word = word & ~((uint64)0xFFFF00000);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    word |= (uint64)(*data++) << 24;
+                    word |= (uint64)(*data++ & 0xF0) << 16;
+                    break;
+                case 3:
+                    word = word & ~((uint64)0xFFF000000);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    word |= (uint64)(*data++) << 24;
+                    break;
+                case 2:
+                    word = word & ~((uint64)0xFF000000);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    word |= (uint64)(*data++ & 0xF0) << 24;
+                    break;
+                case 1:
+                    word = word & ~((uint64)0xF0000000);
+                    word =  (uint64)((*data++ & 0xF)) << 32;
+                    break;
+                default:
+                    word = 0;
+                    break;
+                }
+            }
+        M[addr++] = word;
+        }
+    return data;
 }
 
 /*
@@ -936,6 +1241,180 @@ pkt->path = GET_PATH (flags);
 return SCPE_OK;
 }
 
+t_stat ci_send_data (UNIT *uptr, PPD_PKT *ppd)
+{
+uint64 bdt, bhd, bsd, bhd0, bsd0, tlen, sa, sl, seg, so, tl;
+uint32 len, nlen, xfrsz, sbnam, sboff, rbnam, rboff, pkt_off;
+uint16 snd_key, key, mode;
+CI_PKT pkt;
+t_stat r;
+
+ci_dump_pkt (DBG_BLK, uptr, ppd->data, ppd->length);
+xfrsz = CI_GETL (ppd->data, PPD_XFRSZ);
+sbnam = CI_GETW (ppd->data, PPD_SBNAM);                 /* BDT table offset */
+snd_key = CI_GETW (ppd->data, PPD_SBNAM + 2);
+sboff = CI_GETL (ppd->data, PPD_SBOFF) << 1;                 /* send buffer offset */
+rboff = CI_GETL (ppd->data, PPD_RBOFF);                 /* receive buffer offset */
+
+bdt = M[ci_data.pcb + PCB_BDT];                         /* get BDT address */
+bhd = bdt + sbnam;                                      /* get BHD address */
+bhd0 = M[bhd];                                          /* get BHD */
+key = (bhd0 >> BHD_V_KEY) & BHD_M_KEY;                  /* buffer key */
+
+if (((bhd0 & BHD_VLD) == 0) || (snd_key != key)) {      /* check valid, buffer key */
+    sim_printf ("CI: send buffer invalid\n");
+    return SCPE_IERR;
+    }
+
+CI_PUTB (ppd->data, PPD_OPC, OPC_RETDAT);
+r = ci_fmt_send (uptr, ppd, &pkt);                      /* convert to CI format */
+if (r != SCPE_OK)
+    return r;
+
+rbnam = CI_GETL (ppd->data, PPD_RBNAM);                 /* BDT table offset */
+CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
+CI_PUTL (pkt.data, CI_RBNAM, rbnam);                    /* receive buffer name */
+
+while (xfrsz > 0) {
+    if (xfrsz > CI_MAXDAT)                              /* limit to max transfer */
+        len = CI_MAXDAT;
+    else
+        len = xfrsz;
+
+    nlen = len << 1;                                    /* get length in nibbles */
+    bsd = M[bhd + 1] & BHD_BSD;                         /* get BSD address */
+    tlen = M[bhd + 2] & BHD_LEN;                        /* get total len */
+    if (xfrsz > tlen) {
+        sim_printf ("ci_send_data() - Transfer size limited to %d from %d\n", tlen, xfrsz);
+        xfrsz = tlen;
+        }
+    seg = 0;
+    do {
+        bsd0 = M[bsd];                                  /* get BSD */
+
+        mode = (bsd0 >> BSD_V_MODE) & BSD_M_MODE;       /* get transfer mode */
+        sa = bsd0 & BSD_SA;                             /* get segment address */
+        sl = M[bsd + 2] & BSD_LEN;                      /* get segment len */
+        if ((sboff < (seg + sl)) && ((sboff + nlen) > seg)) {
+            if (sboff < seg)
+                so = 0;                                 /* starts in a previous segment */
+            else
+                so = (sboff - seg);                     /* starts in this segment */
+            if ((sboff + nlen) < (seg + sl))
+                tl = (sboff + nlen) - (seg + so);       /* ends in this segment */
+            else
+                tl = sl - so;                           /* ends in a subsequent segment */
+
+            if (so != 0) {
+                sim_printf ("ci_send_data() - Non-zero segment offset not supported\n");
+                return SCPE_IERR;
+                }
+            pkt_off = (seg >> 1) % CI_MAXDAT;
+            if (mode == BSD_HD)
+                ci_cpy_to_hd (sa, &pkt.data[CI_DATA + pkt_off], tl, (seg & 1));
+            else {
+                sim_printf ("ci_send_data() - Unsupported transfer mode %d\n", mode);
+                return SCPE_IERR;
+                }
+            }
+        seg = seg + sl;
+        bsd = M[bsd + 1] & BSD_BSD;                     /* get next segment address */
+    } while (bsd != 0);
+
+    CI_PUTL (pkt.data, CI_RBOFF, rboff);                /* update packet */
+    if (xfrsz <= CI_MAXDAT)
+        pkt.data[CI_FLAGS] |= CI_LP;                    /* last packet */
+    pkt.length = len + CI_DATA;
+    r = ci_send (uptr, &pkt);                           /* send data */
+    if (r != SCPE_OK)
+        return r;
+    xfrsz -= len;
+    sboff += nlen;
+    rboff += len;
+    }
+return SCPE_OK;
+}
+
+t_stat ci_receive_data (UNIT *uptr, CI_PKT *pkt)
+{
+uint64 bdt, bhd, bsd, bhd0, bsd0, tlen, sa, sl, seg, so, tl;
+uint32 len, nlen, rboff, opc, pkt_off;
+uint16 rbnam, rec_key, key, mode;
+PPD_PKT ppd;
+t_stat r = SCPE_OK;
+
+opc = CI_GETB (pkt->data, CI_OPC);
+rbnam = CI_GETW (pkt->data, CI_RBNAM);                  /* BDT table offset */
+rec_key = CI_GETW (pkt->data, CI_RBNAM + 2);
+rboff = CI_GETL (pkt->data, CI_RBOFF) << 1;             /* receive buffer offset */
+
+bdt = M[ci_data.pcb + PCB_BDT];                         /* get BDT address */
+bhd = bdt + rbnam;                                      /* get BHD address */
+bhd0 = M[bhd];                                          /* get BHD */
+key = (bhd0 >> BHD_V_KEY) & BHD_M_KEY;                  /* buffer key */
+
+if (((bhd0 & BHD_VLD) == 0) || (rec_key != key)) {      /* check valid, buffer key */
+    sim_printf ("CI: receive buffer invalid\n");
+    return SCPE_IERR;
+    }
+len = pkt->length - CI_DATA;
+if (len > CI_MAXDAT)                                    /* limit to max transfer FIXME */
+    len = CI_MAXDAT;
+
+bsd = M[bhd + 1] & BHD_BSD;                             /* get BSD address */
+tlen = M[bhd + 2] & BHD_LEN;                            /* get total len */
+seg = 0;
+nlen = len << 1;
+do {
+    bsd0 = M[bsd];                                      /* get BSD */
+
+    mode = (bsd0 >> BSD_V_MODE) & BSD_M_MODE;           /* get transfer mode */
+    sa = bsd0 & BSD_SA;                                 /* get segment address */
+    sl = M[bsd + 2] & BSD_LEN;                          /* get segment len */
+    if ((rboff < (seg + sl)) && ((rboff + nlen) > seg)) {
+        if (rboff < seg)
+            so = 0;                                     /* starts in a previous segment */
+        else
+            so = (rboff - seg);                         /* starts in this segment */
+        if ((rboff + nlen) < (seg + sl))
+            tl = (rboff + nlen) - (seg + so);            /* ends in this segment */
+        else
+            tl = sl - so;                               /* ends in a subsequent segment */
+
+        if (so != 0) {
+            sim_printf ("ci_receive_data() - Non-zero segment offset not supported\n");
+            return SCPE_IERR;
+            }
+        pkt_off = (seg >> 1) % CI_MAXDAT;
+        if (mode == BSD_HD)
+            ci_cpy_from_hd (sa, &pkt->data[CI_DATA + pkt_off], tl, (seg & 1));
+        else {
+            sim_printf ("ci_receive_data() - Unsupported transfer mode %d\n", mode);
+            return SCPE_IERR;
+            }
+        }
+    seg = seg + sl;
+    bsd = M[bsd + 1] & BSD_BSD;                         /* get next segment address */
+} while (bsd != 0);
+
+if (pkt->data[CI_FLAGS] & CI_LP) {                      /* last packet? */
+    if (opc == OPC_SNTDAT) {
+        CI_PUTB (pkt->data, CI_OPC, OPC_CNF);
+        pkt->length = LEN_CNF;
+        r = ci_send (uptr, pkt);                        /* send confirmation */
+        }
+    else if (opc == OPC_RETDAT) {
+        pkt->length = LEN_DAT;
+        r = ci_fmt_receive (uptr, pkt, &ppd);           /* convert to PPD format */
+        if (r == SCPE_OK)
+            r = ci_receive_ppd (uptr, &ppd);            /* pass to system */
+        }
+    else
+        r = SCPE_IERR;
+    }
+return r;
+}
+
 /* ID request - dealt with at CI layer */
 
 t_stat ci_idreq (UNIT *uptr, CI_PKT *pkt)
@@ -1048,8 +1527,6 @@ switch (rg) {
     }
 sim_debug_unit (DBG_LCMD, uptr, "==> RDREG, rg = %o, data = %o\n", rg, data);
 CI_PUTB (ppd->data, PPD_RDDAT, data);
-//ci_cpy_from (ppd->addr + 3, &ppd->data[PPD_PORT], ppd->length - 12);
-//ci_putq (ci_data.pcb + PCB_RQI, &ppd->addr);
 return SCPE_OK;
 }
 
@@ -1106,8 +1583,6 @@ switch (rg) {
         break;
     }
 sim_debug_unit (DBG_LCMD, uptr, "==> WRREG, rg = %o, data = %o\n", rg, data);
-//ci_cpy_from (ppd->addr + 3, &ppd->data[PPD_PORT], ppd->length - 12);
-//ci_putq (ci_data.pcb + PCB_RQI, &ppd->addr);
 return SCPE_OK;
 }
 
@@ -1142,9 +1617,8 @@ switch (ppd->data[PPD_OPC]) {                           /* opcodes handled by po
     case OPC_CLSBUF:
         return ci_clsbuf (uptr, ppd);
 
-//    case OPC_SNDDAT:
-//    case OPC_SNDMDAT:
-//        return ci_send_data (uptr, ppd);
+    case OPC_SNDDAT:
+        return ci_send_data (uptr, ppd);
         }
 r = ci_fmt_send (uptr, ppd, &pkt);                      /* convert to CI format */
 if (r == SCPE_OK)
@@ -1155,7 +1629,7 @@ return r;
 t_stat ci_process_entry (UNIT *uptr, t_addr entry)
 {
 PPD_PKT pkt;
-uint8 opc, flags, type;
+uint8 opc, flags, type, port;
 uint32 i;
 uint64 word;
 
@@ -1165,6 +1639,7 @@ for (i = 0; i < 20; i++)
 ci_cpy_to (pkt.addr, pkt.data, LEN_HDR);                /* read header */
 
 opc = CI_GETB (pkt.data, PPD_OPC);
+port = CI_GETB (pkt.data, PPD_PORT);
 flags = CI_GETB (pkt.data, PPD_FLAGS);
 switch (opc) {
     case OPC_SNDDG:
@@ -1188,10 +1663,18 @@ switch (opc) {
     case OPC_REQID:
         pkt.length = LEN_REQID;
         ci_cpy_to (pkt.addr, pkt.data, pkt.length);
-        if (GET_PATH (pkt.data[PPD_FLAGS]) == PPD_PS0)
-            pkt.data[PPD_STATUS] = 0304;                /* no response on path A */
-        else
-            pkt.data[PPD_STATUS] = 0244;                /* no response on path B */
+        if (ci_check_vc (uptr, port) == SCPE_OK) {      /* VC open to destination node? */
+            if (GET_PATH (pkt.data[PPD_FLAGS]) == PPD_PS0)
+                CI_PUTB (pkt.data, PPD_STATUS, 0040);   /* ACK on path A */
+            else
+                CI_PUTB (pkt.data, PPD_STATUS, 0004);   /* ACK on path A */
+            }
+        else {
+            if (GET_PATH (pkt.data[PPD_FLAGS]) == PPD_PS0)
+                pkt.data[PPD_STATUS] = 0304;            /* no response on path A */
+            else
+                pkt.data[PPD_STATUS] = 0244;            /* no response on path B */
+            }
 //        pkt.data[PPD_STATUS] = 0344;                    /* no response on either path */
         type = PPD_DG;
         break;
@@ -1223,11 +1706,11 @@ switch (opc) {
         type = PPD_DG;
         break;
 
-//    case OPC_SNDDAT:
+    case OPC_SNDDAT:
 //    case OPC_SNDMDAT:
-//        pkt.length = LEN_SNDDAT;
-//        type = PPD_MSG;
-//        break;
+        pkt.length = LEN_SNDDAT;
+        type = PPD_MSG;
+        break;
 
     case OPC_SETCKT:
         pkt.length = LEN_SETCKT;
@@ -1270,7 +1753,7 @@ switch (opc) {
     }
 
 ci_send_ppd (uptr, &pkt);                   /* process it */
-if ((opc == OPC_RDREG) || (flags & PPD_RSP) || (pkt.data[PPD_STATUS] != 0)) {
+if ((opc == OPC_RDREG) || (flags & PPD_RSP) || (pkt.data[PPD_STATUS] & 0200)) {
     ci_cpy_from (pkt.addr + 3, &pkt.data[PPD_PORT], pkt.length - 12);
     ci_putq (ci_data.pcb + PCB_RQI, &pkt.addr);
     }
@@ -1324,8 +1807,8 @@ uint8 opc = CI_GETB (ppd->data, PPD_OPC);
 switch (opc) {                                      /* determine packet type */
     case OPC_MSGREC:
     case OPC_DATREC:
-//    case OPC_CNFREC:
-//    case OPC_RETCNF:
+    case OPC_CNFREC:
+    case OPC_CNFRET:
     case OPC_RETDAT:
         ci_getq (ci_data.pcb + PCB_MQI, &ppd->addr);    /* message */
         break;
@@ -1349,6 +1832,9 @@ switch (opc) {                                      /* determine packet type */
             }
 #endif
         break;
+
+    case OPC_REQDATREC:
+        return ci_send_data (uptr, ppd);
 
     default:
         sim_printf ("ci_receive_ppd() - Unhandled opcode 0x%02X\n", opc);
@@ -1401,6 +1887,11 @@ do {
                 r = ci_idreq (uptr, &pkt);
                 break;
 
+            case OPC_SNTDAT:
+            case OPC_RETDAT:
+                r = ci_receive_data (uptr, &pkt);
+                break;
+
             default:
                 r = ci_fmt_receive (uptr, &pkt, &ppd);      /* convert to PPD format */
                 if (r == SCPE_OK)
@@ -1426,7 +1917,6 @@ return ci_port_reset (dptr);
 t_stat ci_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, const char *cptr)
 {
 fprintf (st, "CI interface\n\n");
-fprintf (st, "The CI interfaces to the network. Setting MAC defines default MAC address\n");
 fprint_set_help (st, dptr);
 fprint_show_help (st, dptr);
 return SCPE_OK;

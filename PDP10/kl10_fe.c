@@ -155,6 +155,7 @@
 #define PRI_EMEDR      027          /* Enable/Disable line */
 #define PRI_EMLDR      030          /* Load LP RAM */
 #define PRI_EMLDV      031          /* Load LP VFU */
+#define PRI_EMSER      040          /* Here is front-end disk serial numbers */
 
 #define PRI_EMCTY      001          /* Device code for CTY */
 #define PRI_EMDL1      002          /* DL11 */
@@ -1017,6 +1018,10 @@ dte_function(UNIT *uptr)
 #endif
                data1[0] = 0;
                if (dte_queue(PRI_EMAKA, PRI_EMCLK, 1, data1) == 0)
+                   return;
+               data1[0] = 0123;
+               data1[1] = 0456;
+               if (dte_queue(PRI_EMSER, PRI_EMFED, 2, data1) == 0)
                    return;
                break;
 

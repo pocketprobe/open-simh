@@ -103,6 +103,7 @@
 #define CF_OTH          0x0020                          /* enb othr host msgs */
 #define CF_THS          0x0010                          /* enb this host msgs */
 #define CF_MLH          0x0004                          /* multihost support */
+#define CF_576          0x0001                          /* 576 byte sectors */
 #define CF_MSK          (CF_ATN|CF_MSC|CF_OTH|CF_THS)
 
 /* Unit flags */
@@ -119,6 +120,7 @@
 #define UF_VSS          0x0020                          /* t: supr var speed NI */
 #define UF_VSU          0x0010                          /* t: var speed unit NI */
 #define UF_EWR          0x0008                          /* t: enh wr recovery NI */
+#define UF_576          0x0004                          /* 576 byte sectors */
 #define UF_CMW          0x0002                          /* cmp writes NI */
 #define UF_CMR          0x0001                          /* cmp reads NI */
 

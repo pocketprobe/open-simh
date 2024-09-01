@@ -126,7 +126,7 @@
 /* Limits */
 
 #define CI_MAXFR        1024                            /* max transfer */
-#define CI_MAXDAT       512                             /* max block data */
+#define CI_MAXDAT       576                             /* max block data */
 #define CI_MAX_NODES    32
 
 #endif

@@ -137,7 +137,7 @@
 #define RF_DCTMO        120                             /* def ctrl timeout */
 #define RF_NUMDR        4                               /* def # drives */
 #define RF_MAXDR        254                             /* max # drives */
-#define RF_NUMBY        512                             /* bytes per block */
+#define RF_NUMBY        576                             /* bytes per block */
 #define RF_MAXFR        (1 << 16)                       /* max xfer */
 #define RF_MAPXFER      (1u << 31)                      /* mapped xfer */
 #define RF_M_PFN        0x1FFFFF                        /* map entry PFN */
@@ -1900,7 +1900,7 @@ else {
     sts = ST_SUC;                                       /* success */
     cmd = GETP (pkt, CMD_OPC, OPC);                     /* get opcode */
     cp->cflgs = (cp->cflgs & CF_RPL) |                  /* hack ctrl flgs */
-        cp->pak[pkt].d[SCC_CFL] | CF_MLH;
+        cp->pak[pkt].d[SCC_CFL] | CF_MLH | CF_576;
     if ((cp->htmo = cp->pak[pkt].d[SCC_TMO]))           /* set timeout */
         cp->htmo = cp->htmo + 2;                        /* if nz, round up */
     cp->pak[pkt].d[RSP_UN] = 5;
@@ -2630,6 +2630,7 @@ return NULL;
 void rf_setf_unit (MSC *cp, uint16 pkt, UNIT *uptr)
 {
 uptr->uf = cp->pak[pkt].d[ONL_UFL] & UF_MSK;            /* settable flags */
+uptr->uf = uptr->uf | UF_576;
 if ((cp->pak[pkt].d[CMD_MOD] & MD_SWP) &&               /* swre wrp enb? */
     (cp->pak[pkt].d[ONL_UFL] & UF_WPS))                 /* swre wrp on? */
     uptr->uf = uptr->uf | UF_WPS;                       /* simon says... */
