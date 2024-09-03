@@ -176,8 +176,8 @@ uint8 tbyte;
 uint32 i;
 int32 j;
 
-//if ((uptr->dptr->dctrl & (DBG_PKT | dctrl)) != (DBG_PKT | dctrl))
-//    return;
+if ((uptr->dptr->dctrl & (DBG_PKT | dctrl)) != (DBG_PKT | dctrl))
+    return;
 
 for (i = 0; i < length; i+=4) {
     sim_debug_unit (DBG_PKT, uptr, "  %04X: ", i);

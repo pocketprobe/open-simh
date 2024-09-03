@@ -30,91 +30,91 @@
 
 /* CSR - CONI */
 
-#define CI_PPT     0400000000000LL                      /* Port present */
-#define CI_DCC     0100000000000LL                      /* Diag CSR */
-#define CI_CPE     0004000000000LL                      /* CRAM Parity error */
-#define CI_MBE     0002000000000LL                      /* MBUS error */
-#define CI_ILD     0000100000000LL                      /* Idle */
-#define CI_DCP     0000040000000LL                      /* Disable complete */
-#define CI_ECP     0000020000000LL                      /* Enable complete */
-#define CI_PID     0000007000000LL                      /* Port ID */
+#define CI_PPT          0400000000000LL                 /* port present */
+#define CI_DCC          0100000000000LL                 /* diag CSR */
+#define CI_CPE          0004000000000LL                 /* CRAM Parity error */
+#define CI_MBE          0002000000000LL                 /* MBUS error */
+#define CI_ILD          0000100000000LL                 /* idle */
+#define CI_DCP          0000040000000LL                 /* disable complete */
+#define CI_ECP          0000020000000LL                 /* enable complete */
+#define CI_PID          0000007000000LL                 /* port ID */
 
 /* CSR - CONO/CONI */
 
-#define CI_CPT     0000000400000LL                      /* Clear Port */
-#define CI_SEB     0000000200000LL                      /* Diag Select EBUF */
-#define CI_GEB     0000000100000LL                      /* Diag Gen Ebus PE */
-#define CI_LAR     0000000040000LL                      /* Diag select LAR */
-#define CI_SSC     0000000020000LL                      /* Diag Single Cycle */
-#define CI_EPE     0000000004000LL                      /* Ebus parity error */
-#define CI_FQE     0000000002000LL                      /* Free Queue Error */
-#define CI_DME     0000000001000LL                      /* Data mover error */
-#define CI_CQA     0000000000400LL                      /* Command Queue Available */
-#define CI_RQA     0000000000200LL                      /* Response Queue Available */
-#define CI_DIS     0000000000040LL                      /* Disable */
-#define CI_ENB     0000000000020LL                      /* Enable */
-#define CI_MRN     0000000000010LL                      /* RUN */
-#define CI_PIA     0000000000007LL                      /* PIA */
+#define CI_CPT          0000000400000LL                 /* clear Port */
+#define CI_SEB          0000000200000LL                 /* diag Select EBUF */
+#define CI_GEB          0000000100000LL                 /* diag Gen Ebus PE */
+#define CI_LAR          0000000040000LL                 /* diag select LAR */
+#define CI_SSC          0000000020000LL                 /* diag Single Cycle */
+#define CI_EPE          0000000004000LL                 /* EBUS parity error */
+#define CI_FQE          0000000002000LL                 /* free Queue Error */
+#define CI_DME          0000000001000LL                 /* data mover error */
+#define CI_CQA          0000000000400LL                 /* command Queue Available */
+#define CI_RQA          0000000000200LL                 /* response Queue Available */
+#define CI_DIS          0000000000040LL                 /* disable */
+#define CI_ENB          0000000000020LL                 /* enable */
+#define CI_MRN          0000000000010LL                 /* run */
+#define CI_PIA          0000000000007LL                 /* PIA */
 
-#define CI_LRA     0400000000000LL                      /* Load Ram address */
-#define CI_RAR     0377760000000LL                      /* Microcode address mask */
-#define CI_MSB     0000020000000LL                      /* Half word select */
+#define CI_LRA          0400000000000LL                 /* load RAM address */
+#define CI_RAR          0377760000000LL                 /* microcode address mask */
+#define CI_MSB          0000020000000LL                 /* half word select */
 
 /* PCB Offsets */
 
-#define PCB_BDT     000                        /* Buffer descriptor table start address */
-#define PCB_MQE     001                        /* Message free queue entry length */
-#define PCB_DQE     002                        /* Datagram free queue entry length */
-#define PCB_RS0     003                        /* Reserved */
-#define PCB_C3I     004                        /* Command queue 3 interlock */
-#define PCB_C3F     005                        /* Command queue 3 flink */
-#define PCB_C3B     006                        /* Command queue 3 blink */
-#define PCB_C2I     007                        /* Command queue 2 interlock */
-#define PCB_C2F     010                        /* Command queue 2 flink */
-#define PCB_C2B     011                        /* Command queue 2 blink */
-#define PCB_C1I     012                        /* Command queue 1 interlock */
-#define PCB_C1F     013                        /* Command queue 1 flink */
-#define PCB_C1B     014                        /* Command queue 1 blink */
-#define PCB_C0I     015                        /* Command queue 0 interlock */
-#define PCB_C0F     016                        /* Command queue 0 flink */
-#define PCB_C0B     017                        /* Command queue 0 blink */
-#define PCB_RQI     020                        /* Response queue interlock */
-#define PCB_RQF     021                        /* Response queue flink */
-#define PCB_RQB     022                        /* Response queue blink */
-#define PCB_MQI     023                        /* Message free queue interlock */
-#define PCB_MQF     024                        /* Message free queue flink */
-#define PCB_MQB     025                        /* Message free queue blink */
-#define PCB_DQI     026                        /* Datagram free queue interlock */
-#define PCB_DQF     027                        /* Datagram free queue flink */
-#define PCB_DQB     030                        /* Datagram free queue blink */
-#define PCB_RS1     031                        /* Reserved */
-#define PCB_RS2     032                        /* Reserved */
-#define PCB_RS3     033                        /* Reserved */
-#define PCB_RS4     034                        /* Reserved */
-#define PCB_PE0     035                        /* Port error word 0 */
-#define PCB_PE1     036                        /* Port error word 1 */
-#define PCB_PE2     037                        /* Port error word 2 */
-#define PCB_PE3     040                        /* Port error word 3 */
-#define PCB_PE4     041                        /* Port error word 4 */
-#define PCB_PCB     042                        /* PCB base address */
-#define PCB_PIL     043                        /* PI level */
-#define PCB_CL1     044                        /* Channel logout word 1 address */
-#define PCB_CCW     045                        /* Channel command word */
-#define PCB_RS5     046                        /* Reserved to port */
+#define PCB_BDT         000                             /* buffer descriptor table start address */
+#define PCB_MQE         001                             /* message free queue entry length */
+#define PCB_DQE         002                             /* datagram free queue entry length */
+#define PCB_RS0         003                             /* reserved */
+#define PCB_C3I         004                             /* command queue 3 interlock */
+#define PCB_C3F         005                             /* command queue 3 flink */
+#define PCB_C3B         006                             /* command queue 3 blink */
+#define PCB_C2I         007                             /* command queue 2 interlock */
+#define PCB_C2F         010                             /* command queue 2 flink */
+#define PCB_C2B         011                             /* command queue 2 blink */
+#define PCB_C1I         012                             /* command queue 1 interlock */
+#define PCB_C1F         013                             /* command queue 1 flink */
+#define PCB_C1B         014                             /* command queue 1 blink */
+#define PCB_C0I         015                             /* command queue 0 interlock */
+#define PCB_C0F         016                             /* command queue 0 flink */
+#define PCB_C0B         017                             /* command queue 0 blink */
+#define PCB_RQI         020                             /* response queue interlock */
+#define PCB_RQF         021                             /* response queue flink */
+#define PCB_RQB         022                             /* response queue blink */
+#define PCB_MQI         023                             /* message free queue interlock */
+#define PCB_MQF         024                             /* message free queue flink */
+#define PCB_MQB         025                             /* message free queue blink */
+#define PCB_DQI         026                             /* datagram free queue interlock */
+#define PCB_DQF         027                             /* datagram free queue flink */
+#define PCB_DQB         030                             /* datagram free queue blink */
+#define PCB_RS1         031                             /* reserved */
+#define PCB_RS2         032                             /* reserved */
+#define PCB_RS3         033                             /* reserved */
+#define PCB_RS4         034                             /* reserved */
+#define PCB_PE0         035                             /* port error word 0 */
+#define PCB_PE1         036                             /* port error word 1 */
+#define PCB_PE2         037                             /* port error word 2 */
+#define PCB_PE3         040                             /* port error word 3 */
+#define PCB_PE4         041                             /* port error word 4 */
+#define PCB_PCB         042                             /* PCB base address */
+#define PCB_PIL         043                             /* PI level */
+#define PCB_CL1         044                             /* channel logout word 1 address */
+#define PCB_CCW         045                             /* channel command word */
+#define PCB_RS5         046                             /* reserved to port */
 
-#define CHNERR      07762
-#define SLFTST      07751
-#define INTERR      07750
-#define EBSERR      07752
+#define CHNERR          07762
+#define SLFTST          07751
+#define INTERR          07750
+#define EBSERR          07752
 
 /* Virtual Circuit Flags */
 
-#define VC_LDST     0400000000000LL                     /* load circuit state */
-#define VC_CST      0200000000000LL                     /* circuit state */
-#define VC_NR       0100000000000LL                     /* receiving sequence number */
-#define VC_NS       0040000000000LL                     /* sending sequence number */
-#define VC_LDPS     0020000000000LL                     /* load path select */
-#define VC_PS       0014000000000LL                     /* path select */
+#define VC_LDST         0400000000000LL                 /* load circuit state */
+#define VC_CST          0200000000000LL                 /* circuit state */
+#define VC_NR           0100000000000LL                 /* receiving sequence number */
+#define VC_NS           0040000000000LL                 /* sending sequence number */
+#define VC_LDPS         0020000000000LL                 /* load path select */
+#define VC_PS           0014000000000LL                 /* path select */
 
 /* Diagnostic Registers */
 
@@ -278,18 +278,12 @@ typedef struct {
 } PPD_PKT;
 
 struct ci_device {
-    t_addr            cmd_entry;                        /* Pointer to current command entry */
-    t_addr            cmd_rply;                         /* Pointer to reply entry */
-    uint8             cmd_status;                       /* Status field of current command */
-    t_addr            rec_entry;                        /* Pointer to current recieve entry */
     t_addr            pcb;                              /* address of PCB */
-    int               pia;                              /* Interrupt channel */
+    int               pia;                              /* interrupt channel */
     int               rar;
     uint64            ebuf;
     uint64            csr;                              /* control/status register */
-    uint32            uver[4];                          /* Version information */
-    int               r_pkt;                            /* Packet pending */
-    int               poll;                             /* Need to poll receiver */
+    uint32            uver[4];                          /* version information */
     uint64            vcd[CI_MAX_NODES];                /* virtual circuit descriptors */
 } ci_data;
 
@@ -305,18 +299,22 @@ void       ci_error (int);
 t_stat     ci_port_command (UNIT *uptr);
 t_stat     ci_receive_ppd (UNIT *uptr, PPD_PKT *ppd);
 t_stat     ci_svc (UNIT *uptr);
+t_stat     ci_cmd_svc (UNIT *uptr);
 t_stat     ci_reset (DEVICE *dptr);
 t_stat     ci_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag, CONST char *cptr);
 const char *ci_description (DEVICE *dptr);
 
 struct rh_if   ci_rh = { NULL, NULL, NULL };
 
-UNIT ci_unit = { UDATA (&ci_svc, UNIT_IDLE|UNIT_ATTABLE, 0) };
+UNIT ci_unit[] = {
+    { UDATA (&ci_svc, UNIT_IDLE|UNIT_ATTABLE, 0) },
+    { UDATA (&ci_cmd_svc, UNIT_IDLE, 0) }
+    };
 
 REG ci_reg[] = {
     { SAVEDATA(DATA, ci_data) },
     { 0 }
-};
+    };
 
 DIB ci_dib = { CI_DEVNUM | RH20_DEV, 1, &ci_devio, NULL, &ci_rh };
 
@@ -340,19 +338,19 @@ DEBTAB ci_debug[] = {
     { "CONO", DEBUG_CONO, "Show cono instructions" },
     { "DATAIO", DEBUG_DATAIO, "Show datai and datao instructions" },
     { "IRQ", DEBUG_IRQ, "Show IRQ requests" },
-    { "DIAG",  DBG_DIAG, "Show diagnostic packets" },
-    { "CONF",  DBG_CONF, "Show configuration packets" },
-    { "PPD",   DBG_PPD, "Show port to port datagrams" },
-    { "SCS",   DBG_SCS, "Show SCS messages" },
-    { "BLK",   DBG_BLK, "Show block transfers" },
-    { "LCMD",  DBG_LCMD, "Show local commands" },
-    { "CONN",  DBG_CONN, "Show connection activity" },
-    { "PKT",   DBG_PKT, "Dump packet data" },
+    { "DIAG", DBG_DIAG, "Show diagnostic packets" },
+    { "CONF", DBG_CONF, "Show configuration packets" },
+    { "PPD", DBG_PPD, "Show port to port datagrams" },
+    { "SCS", DBG_SCS, "Show SCS messages" },
+    { "BLK", DBG_BLK, "Show block transfers" },
+    { "LCMD", DBG_LCMD, "Show local commands" },
+    { "CONN", DBG_CONN, "Show connection activity" },
+    { "PKT", DBG_PKT, "Dump packet data" },
     { 0, 0 }
     };
 
 DEVICE ci_dev = {
-    "CI", &ci_unit, ci_reg, ci_mod,
+    "CI", ci_unit, ci_reg, ci_mod,
     1, DEV_RDX, 0, 1, DEV_RDX, 36,
     NULL, NULL, &ci_reset, NULL, &ci_attach, &ci_detach,
     &ci_dib, DEV_DISABLE | DEV_DIS | DEV_DEBUG | DEV_CI, 0, ci_debug,
@@ -362,7 +360,7 @@ DEVICE ci_dev = {
 t_stat ci_devio (uint32 dev, uint64 *data)
 {
 DEVICE *dptr = &ci_dev;
-UNIT   *uptr = &ci_unit;
+UNIT   *uptr = &ci_unit[0];
 
 switch (dev & 03) {
     case CONO:
@@ -401,8 +399,8 @@ switch (dev & 03) {
             (ci_data.csr & CI_MRN) != 0) {
             sim_debug (DEBUG_DETAIL, &ci_dev, "CI CQA\n");
            ci_data.csr |= CI_CQA;
-            ci_port_command (uptr);
-//           sim_activate (uptr, 200);                    /* process command queue */
+//            ci_port_command (uptr);
+           sim_activate (&ci_unit[1], 200);             /* process command queue */
         }
         if (ci_data.csr & (CI_CPE|CI_RQA))
             set_interrupt (CI_DEVNUM, ci_data.csr & CI_PIA);
@@ -455,9 +453,8 @@ switch (dev & 03) {
 return SCPE_OK;
 }
 
-/*
- * Set error code and stop.
- */
+/* Set error code and stop */
+
 void ci_error (int err)
 {
     ci_data.rar = err;
@@ -467,9 +464,8 @@ void ci_error (int err)
     ci_stop ();
 }
 
-/*
- * Start CI device, load in 2 words using RH20 mode.
- */
+/* Start CI device, load in 2 words using RH20 mode */
+
 void ci_start ()
 {
     sim_debug (DEBUG_DETAIL, &ci_dev, "CI start\n");
@@ -500,11 +496,8 @@ void ci_stop ()
     ci_data.csr &= ~CI_MRN;
 }
 
-/*
- * Enable CI 20.
- *
- * Read in PTT and MACS table.
- */
+/* Enable CI 20 */
+
 void ci_enable (UNIT *uptr)
 {
     uint64   word;
@@ -514,9 +507,8 @@ void ci_enable (UNIT *uptr)
     ci_data.csr &= ~CI_DCP;
 }
 
-/*
- * Disable CI 20.
- */
+/* Disable CI 20 */
+
 void ci_disable (UNIT *uptr)
 {
     sim_debug (DEBUG_DETAIL, &ci_dev, "CI disable\n");
@@ -525,9 +517,8 @@ void ci_disable (UNIT *uptr)
     ci_data.csr &= ~CI_ECP;
 }
 
-/*
- * Copy memory to a packet - High density format
- */
+/* Copy memory to a packet - High density format */
+
 uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
 {
     uint64 word;
@@ -551,6 +542,7 @@ uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
             *data++ = (uint8)(word & 0xff);
             }
          len -= 9;
+         lo_word = !lo_word;
     }
 
     if (len) {                                          /* copy last partial word */
@@ -659,9 +651,8 @@ uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
     return data;
 }
 
-/*
- * Copy a packet to memory - High density format
- */
+/* Copy a packet to memory - High density format */
+
 uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
 {
     uint64    word;
@@ -799,32 +790,33 @@ uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
     return data;
 }
 
-/*
- * Copy memory to a packet - Industry standard format
- */
+/* Copy memory to a packet - Industry standard format */
+
 uint8 *ci_cpy_to_ind (t_addr addr, uint8 *data, int off, int len)
 {
     uint64 word;
 
     addr = addr + (off >> 2);                           /* apply offset */
-    word = M[addr++];                                   /* copy first partial word */
-    switch (off & 0x3) {
-        case 3:
-            *data++ = (uint8)((word >> 28) & 0xff);
-            break;
-        case 2:
-            *data++ = (uint8)((word >> 28) & 0xff);
-            *data++ = (uint8)((word >> 20) & 0xff);
-            break;
-        case 1:
-            *data++ = (uint8)((word >> 28) & 0xff);
-            *data++ = (uint8)((word >> 20) & 0xff);
-            *data++ = (uint8)((word >> 12) & 0xff);
-            break;
-        default:
-            break;
+    if (off & 0x3) {
+        word = M[addr++];                                   /* copy first partial word */
+        switch (off & 0x3) {
+            case 3:
+                *data++ = (uint8)((word >> 28) & 0xff);
+                break;
+            case 2:
+                *data++ = (uint8)((word >> 28) & 0xff);
+                *data++ = (uint8)((word >> 20) & 0xff);
+                break;
+            case 1:
+                *data++ = (uint8)((word >> 28) & 0xff);
+                *data++ = (uint8)((word >> 20) & 0xff);
+                *data++ = (uint8)((word >> 12) & 0xff);
+                break;
+            default:
+                break;
+            }
+        len -= (off & 0x3);
         }
-    len -= (off & 0x3);
 
     while (len > 3) {                                   /* copy full words */
         word = M[addr++];
@@ -855,73 +847,37 @@ uint8 *ci_cpy_to_ind (t_addr addr, uint8 *data, int off, int len)
     return data;
 }
 
-/*
- * Copy memory to a packet - Header
- */
-uint8 *ci_cpy_to (t_addr addr, uint8 *data, int len)
-{
-    uint64    word;
+/* Copy a packet to memory - Industry standard format */
 
-    /* Copy full words */
-    while (len > 3) {
-        word = M[addr++];
-        *data++ = (uint8)((word >> 4) & 0xff);
-        *data++ = (uint8)((word >> 12) & 0xff);
-        *data++ = (uint8)((word >> 20) & 0xff);
-        *data++ = (uint8)((word >> 28) & 0xff);
-         len -= 4;
-    }
-    /* Grab last partial word */
-    if (len) {
-        word = M[addr++];
-        switch (len) {
-        case 3:
-            *data++ = (uint8)((word >> 12) & 0xff);
-            *data++ = (uint8)((word >> 20) & 0xff);
-            *data++ = (uint8)((word >> 28) & 0xff);
-            break;
-        case 2:
-            *data++ = (uint8)((word >> 20) & 0xff);
-            *data++ = (uint8)((word >> 28) & 0xff);
-            break;
-        case 1:
-            *data++ = (uint8)((word >> 28) & 0xff);
-            break;
-        }
-    }
-    return data;
-}
-
-/*
- * Copy a packet to memory - Industry standard format
- */
 uint8 *ci_cpy_from_ind (t_addr addr, uint8 *data, int off, int len)
 {
     uint64    word;
 
     addr = addr + (off >> 2);                           /* apply offset */
-    word = M[addr];                                     /* copy first partial word */
-    switch (off & 0x3) {
-        case 3:
-            word = word & ~((uint64)0xFF << 28);
-            word |= (uint64)(*data++) << 28;
-            break;
-        case 2:
-            word = word & ~((uint64)0xFFFF << 20);
-            word |= (uint64)(*data++) << 28;
-            word |= (uint64)(*data++) << 20;
-            break;
-        case 1:
-            word = word & ~((uint64)0xFFFFFF << 12);
-            word |= (uint64)(*data++) << 28;
-            word |= (uint64)(*data++) << 20;
-            word |= (uint64)(*data++) << 12;
-            break;
-        default:
-            break;
+    if (off & 0x3) {
+        word = M[addr];                                     /* copy first partial word */
+        switch (off & 0x3) {
+            case 3:
+                word = word & ~((uint64)0xFF << 28);
+                word |= (uint64)(*data++) << 28;
+                break;
+            case 2:
+                word = word & ~((uint64)0xFFFF << 20);
+                word |= (uint64)(*data++) << 28;
+                word |= (uint64)(*data++) << 20;
+                break;
+            case 1:
+                word = word & ~((uint64)0xFFFFFF << 12);
+                word |= (uint64)(*data++) << 28;
+                word |= (uint64)(*data++) << 20;
+                word |= (uint64)(*data++) << 12;
+                break;
+            default:
+                break;
+            }
+        M[addr++] = word;
+        len -= (off & 0x3);
         }
-    M[addr++] = word;
-    len -= (off & 0x3);
 
     while (len > 3) {                                   /* copy full words */
         word =  (uint64)(*data++) << 28;
@@ -959,9 +915,44 @@ uint8 *ci_cpy_from_ind (t_addr addr, uint8 *data, int off, int len)
     return data;
 }
 
-/*
- * Copy a packet to memory - Header
- */
+/* Copy memory to a packet - Header */
+
+uint8 *ci_cpy_to (t_addr addr, uint8 *data, int len)
+{
+    uint64    word;
+
+    /* Copy full words */
+    while (len > 3) {
+        word = M[addr++];
+        *data++ = (uint8)((word >> 4) & 0xff);
+        *data++ = (uint8)((word >> 12) & 0xff);
+        *data++ = (uint8)((word >> 20) & 0xff);
+        *data++ = (uint8)((word >> 28) & 0xff);
+         len -= 4;
+    }
+    /* Grab last partial word */
+    if (len) {
+        word = M[addr++];
+        switch (len) {
+        case 3:
+            *data++ = (uint8)((word >> 12) & 0xff);
+            *data++ = (uint8)((word >> 20) & 0xff);
+            *data++ = (uint8)((word >> 28) & 0xff);
+            break;
+        case 2:
+            *data++ = (uint8)((word >> 20) & 0xff);
+            *data++ = (uint8)((word >> 28) & 0xff);
+            break;
+        case 1:
+            *data++ = (uint8)((word >> 28) & 0xff);
+            break;
+        }
+    }
+    return data;
+}
+
+/* Copy a packet to memory - Header */
+
 uint8 *ci_cpy_from (t_addr addr, uint8 *data, int len)
 {
     uint64    word;
@@ -1262,7 +1253,8 @@ bhd0 = M[bhd];                                          /* get BHD */
 key = (bhd0 >> BHD_V_KEY) & BHD_M_KEY;                  /* buffer key */
 
 if (((bhd0 & BHD_VLD) == 0) || (snd_key != key)) {      /* check valid, buffer key */
-    sim_printf ("CI: send buffer invalid\n");
+    sim_printf ("CI: send buffer invalid - bdt = %012llo, sbnam = %o, snd_key = %d, key = %d, bhd0 = %012llo\n",
+        bdt, sbnam, snd_key, key, bhd0);
     return SCPE_IERR;
     }
 
@@ -1332,6 +1324,10 @@ while (xfrsz > 0) {
     sboff += nlen;
     rboff += len;
     }
+if ((bhd0 & BHD_NCV) == 0) {
+    bhd0 = bhd0 & ~BHD_VLD;
+    M[bhd] = bhd0;                                      /* set BHD */
+    }
 return SCPE_OK;
 }
 
@@ -1353,8 +1349,19 @@ bhd = bdt + rbnam;                                      /* get BHD address */
 bhd0 = M[bhd];                                          /* get BHD */
 key = (bhd0 >> BHD_V_KEY) & BHD_M_KEY;                  /* buffer key */
 
-if (((bhd0 & BHD_VLD) == 0) || (rec_key != key)) {      /* check valid, buffer key */
-    sim_printf ("CI: receive buffer invalid\n");
+if ((bhd0 & BHD_VLD) == 0) {                            /* check valid */
+    sim_printf ("ci_receive_data(): buffer not valid - bdt = %012llo, rbnam = %o, rec_key = %d, key = %d, bhd0 = %012llo\n",
+        bdt, rbnam, rec_key, key, bhd0);
+    return SCPE_IERR;
+    }
+if (rec_key != key) {                                   /* check buffer key */
+    sim_printf ("ci_receive_data(): wrong buffer key - bdt = %012llo, rbnam = %o, rec_key = %d, key = %d, bhd0 = %012llo\n",
+        bdt, rbnam, rec_key, key, bhd0);
+    return SCPE_IERR;
+    }
+if ((bhd0 & BHD_WRT) == 0) {                            /* check buffer writeable */
+    sim_printf ("ci_receive_data(): buffer not writeable - bdt = %012llo, rbnam = %o, rec_key = %d, key = %d, bhd0 = %012llo\n",
+        bdt, rbnam, rec_key, key, bhd0);
     return SCPE_IERR;
     }
 len = pkt->length - CI_DATA;
@@ -1377,7 +1384,7 @@ do {
         else
             so = (rboff - seg);                         /* starts in this segment */
         if ((rboff + nlen) < (seg + sl))
-            tl = (rboff + nlen) - (seg + so);            /* ends in this segment */
+            tl = (rboff + nlen) - (seg + so);           /* ends in this segment */
         else
             tl = sl - so;                               /* ends in a subsequent segment */
 
@@ -1398,6 +1405,10 @@ do {
 } while (bsd != 0);
 
 if (pkt->data[CI_FLAGS] & CI_LP) {                      /* last packet? */
+    if ((bhd0 & BHD_NCV) == 0) {
+        bhd0 = bhd0 & ~BHD_VLD;
+        M[bhd] = bhd0;                                  /* set BHD */
+        }
     if (opc == OPC_SNTDAT) {
         CI_PUTB (pkt->data, CI_OPC, OPC_CNF);
         pkt->length = LEN_CNF;
@@ -1597,7 +1608,6 @@ t_stat ci_send_ppd (UNIT *uptr, PPD_PKT *ppd)
 CI_PKT pkt;
 t_stat r;
 
-//ppd->data[PPD_STATUS] = 0; //STS_OK;                         /* assume ok */
 switch (ppd->data[PPD_OPC]) {                           /* opcodes handled by port */
     case OPC_SETCKT:
         return ci_setckt (uptr, ppd);
@@ -1635,18 +1645,26 @@ uint64 word;
 
 pkt.addr = entry;
 for (i = 0; i < 20; i++)
-    sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo\n", M[entry++]);
+    sim_debug (DEBUG_DETAIL, &ci_dev, "   RD: %012llo\n", M[entry++]);
 ci_cpy_to (pkt.addr, pkt.data, LEN_HDR);                /* read header */
 
 opc = CI_GETB (pkt.data, PPD_OPC);
 port = CI_GETB (pkt.data, PPD_PORT);
 flags = CI_GETB (pkt.data, PPD_FLAGS);
+if (GET_PATH (pkt.data[PPD_FLAGS]) == PPD_PS1)
+    CI_PUTB (pkt.data, PPD_STATUS, 0004);               /* ACK on path B */
+else
+    CI_PUTB (pkt.data, PPD_STATUS, 0040);               /* ACK on path A */
 switch (opc) {
     case OPC_SNDDG:
         pkt.length = LEN_SNDDG;
         ci_cpy_to (pkt.addr, pkt.data, pkt.length);
         word = M[pkt.addr + 4] & 0xFFFFF;
-        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, word);  /* FIXME: include length field in PPD? */
+        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, 2);  /* FIXME: include length field in PPD? */
+        if (flags & 0x80)
+            ci_cpy_to_hd (pkt.addr + 5, &pkt.data[PPD_TEXT + 2], (word - 2) * 2, 1);  /* FIXME: include length field in PPD? */
+        else
+            ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT + 2], PPD_TEXT + 4, word - 2);  /* FIXME: include length field in PPD? */
         pkt.length = LEN_SNDDG + word;
         type = PPD_DG;
         break;
@@ -1655,7 +1673,11 @@ switch (opc) {
         pkt.length = LEN_SNDMSG;
         ci_cpy_to (pkt.addr, pkt.data, pkt.length);
         word = M[pkt.addr + 4] & 0xFFFFF;
-        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, word);  /* FIXME: include length field in PPD? */
+        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, 2);  /* FIXME: include length field in PPD? */
+        if (flags & 0x80)
+            ci_cpy_to_hd (pkt.addr + 5, &pkt.data[PPD_TEXT + 2], (word - 2) * 2, 1);  /* FIXME: include length field in PPD? */
+        else
+            ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT + 2], PPD_TEXT + 4, word - 2);  /* FIXME: include length field in PPD? */
         pkt.length = LEN_SNDMSG + word;
         type = PPD_MSG;
         break;
@@ -1663,13 +1685,7 @@ switch (opc) {
     case OPC_REQID:
         pkt.length = LEN_REQID;
         ci_cpy_to (pkt.addr, pkt.data, pkt.length);
-        if (ci_check_vc (uptr, port) == SCPE_OK) {      /* VC open to destination node? */
-            if (GET_PATH (pkt.data[PPD_FLAGS]) == PPD_PS0)
-                CI_PUTB (pkt.data, PPD_STATUS, 0040);   /* ACK on path A */
-            else
-                CI_PUTB (pkt.data, PPD_STATUS, 0004);   /* ACK on path A */
-            }
-        else {
+        if (ci_check_vc (uptr, port) != SCPE_OK) {      /* no VC to destination node? */
             if (GET_PATH (pkt.data[PPD_FLAGS]) == PPD_PS0)
                 pkt.data[PPD_STATUS] = 0304;            /* no response on path A */
             else
@@ -1803,8 +1819,9 @@ t_stat ci_receive_ppd (UNIT *uptr, PPD_PKT *ppd)
 {
 t_stat r = SCPE_OK;
 uint8 opc = CI_GETB (ppd->data, PPD_OPC);
+uint8 flags = CI_GETB (ppd->data, PPD_FLAGS);
 
-switch (opc) {                                      /* determine packet type */
+switch (opc) {                                          /* determine packet type */
     case OPC_MSGREC:
     case OPC_DATREC:
     case OPC_CNFREC:
@@ -1853,22 +1870,39 @@ switch (opc) {
         ci_cpy_from (ppd->addr + 3, &ppd->data[PPD_PORT], LEN_SNDDG - 12);
         ppd->length = ppd->length - LEN_SNDDG;
         M[ppd->addr + 4] = ppd->length;
-        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
+        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, 2);
+        if (flags & 0x80)
+            ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 1);
+        else
+            ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT + 2], PPD_TEXT + 4, ppd->length - 2);
+//        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
         break;
 
     case OPC_MSGREC:
         ci_cpy_from (ppd->addr + 3, &ppd->data[PPD_PORT], LEN_SNDMSG - 12);
         ppd->length = ppd->length - LEN_SNDMSG;
         M[ppd->addr + 4] = ppd->length;
-        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
+        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, 2);
+        if (flags & 0x80)
+            ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 1);
+        else
+            ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT + 2], PPD_TEXT + 4, ppd->length - 2);
+//        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
         break;
 
     default:
         ci_cpy_from (ppd->addr + 3, &ppd->data[PPD_PORT], ppd->length - 12);
         break;
     }
+for (uint32 i = 0; i < 20; i++)
+    sim_debug (DEBUG_DETAIL, &ci_dev, "   WR: %012llo\n", M[ppd->addr + i]);
 ci_putq (ci_data.pcb + PCB_RQI, &ppd->addr);
 return SCPE_OK;
+}
+
+t_stat ci_cmd_svc (UNIT *uptr)
+{
+return ci_port_command (&ci_unit[0]);
 }
 
 t_stat ci_svc (UNIT *uptr)
@@ -1878,7 +1912,7 @@ PPD_PKT ppd;
 t_stat r;
 uint8 opc;
 
-do {
+//do {
     r = ci_receive (uptr, &pkt);                        /* try to receive another packet */
     if (r == SCPE_OK) {
         opc = CI_GETB (pkt.data, CI_OPC);
@@ -1899,8 +1933,8 @@ do {
                 break;
             }
         }
-} while (r == SCPE_OK);
-if (r != CISE_NOPKT)
+//} while (r == SCPE_OK);
+if ((r != SCPE_OK) && (r != CISE_NOPKT))
     return r;
 return ci_port_svc (uptr);
 }
