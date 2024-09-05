@@ -238,16 +238,16 @@
                                                         /*  to PDP 10/20 ports. */
 /* Counters */
 
-#define CI_CNT_UV    000                                /* Microcode version */
-#define CI_CNT_AKA   001                                /* Path A ACK count */
-#define CI_CNT_NKA   002                                /* Path A NAK count */
-#define CI_CNT_NRA   003                                /* Path A no response count */
-#define CI_CNT_AKB   004                                /* Path B ACK count */
-#define CI_CNT_NKB   005                                /* Path B NAK count */
-#define CI_CNT_NRB   006                                /* Path B no response count */
-#define CI_CNT_DGD   007                                /* Datagrams discarded */
-#define CI_CNT_PTX   010                                /* Packets transmitted */
-#define CI_CNT_PRX   011                                /* Packets received */
+#define CI_CNT_UV       000                             /* microcode version */
+#define CI_CNT_AKA      001                             /* path A ACK count */
+#define CI_CNT_NKA      002                             /* path A NAK count */
+#define CI_CNT_NRA      003                             /* path A no response count */
+#define CI_CNT_AKB      004                             /* path B ACK count */
+#define CI_CNT_NKB      005                             /* path B NAK count */
+#define CI_CNT_NRB      006                             /* path B no response count */
+#define CI_CNT_DGD      007                             /* datagrams discarded */
+#define CI_CNT_PTX      010                             /* packets transmitted */
+#define CI_CNT_PRX      011                             /* packets received */
 
 /* Buffer Header Descriptor */
 
@@ -519,21 +519,13 @@ void ci_disable (UNIT *uptr)
 
 /* Copy memory to a packet - High density format */
 
-uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
+uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool hi_word)
 {
     uint64 word;
 
     while (len > 8) {                                   /* copy full words */
         word = M[addr++];
-        if (lo_word) {
-            *data++ = (uint8)((word >> 28) & 0xff);
-            *data++ = (uint8)((word >> 20) & 0xff);
-            *data++ = (uint8)((word >> 12) & 0xff);
-            *data++ = (uint8)((word >> 4) & 0xff);
-            *data = *data & ~0xF0;
-            *data = *data | (uint8)((word << 4) & 0xf0);
-            }
-        else {
+        if (hi_word) {
             *data = *data & ~0x0F;
             *data++ = *data | (uint8)((word >> 32) & 0x0F);
             *data++ = (uint8)((word >> 24) & 0xff);
@@ -541,57 +533,21 @@ uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
             *data++ = (uint8)((word >> 8) & 0xff);
             *data++ = (uint8)(word & 0xff);
             }
+        else {
+            *data++ = (uint8)((word >> 28) & 0xff);
+            *data++ = (uint8)((word >> 20) & 0xff);
+            *data++ = (uint8)((word >> 12) & 0xff);
+            *data++ = (uint8)((word >> 4) & 0xff);
+            *data = *data & ~0xF0;
+            *data = *data | (uint8)((word << 4) & 0xf0);
+            }
          len -= 9;
-         lo_word = !lo_word;
+         hi_word = !hi_word;
     }
 
     if (len) {                                          /* copy last partial word */
         word = M[addr++];
-        if (lo_word) {
-            switch (len) {
-                case 8:
-                    *data++ = (uint8)((word >> 28) & 0xff);
-                    *data++ = (uint8)((word >> 20) & 0xff);
-                    *data++ = (uint8)((word >> 12) & 0xff);
-                    *data++ = (uint8)((word >> 4) & 0xff);
-                    break;
-                case 7:
-                    *data++ = (uint8)((word >> 28) & 0xff);
-                    *data++ = (uint8)((word >> 20) & 0xff);
-                    *data++ = (uint8)((word >> 12) & 0xff);
-                    *data = *data & ~0xF0;
-                    *data++ = *data | (uint8)((word >> 4) & 0xF0);
-                    break;
-                case 6:
-                    *data++ = (uint8)((word >> 28) & 0xff);
-                    *data++ = (uint8)((word >> 20) & 0xff);
-                    *data++ = (uint8)((word >> 12) & 0xff);
-                    break;
-                case 5:
-                    *data++ = (uint8)((word >> 28) & 0xff);
-                    *data++ = (uint8)((word >> 20) & 0xff);
-                    *data = *data & ~0xF0;
-                    *data++ = *data | (uint8)((word >> 12) & 0xF0);
-                    break;
-                case 4:
-                    *data++ = (uint8)((word >> 28) & 0xff);
-                    *data++ = (uint8)((word >> 20) & 0xff);
-                    break;
-                case 3:
-                    *data++ = (uint8)((word >> 28) & 0xff);
-                    *data = *data & ~0xF0;
-                    *data++ = *data | (uint8)((word >> 20) & 0xF0);
-                    break;
-                case 2:
-                    *data++ = (uint8)((word >> 28) & 0xff);
-                    break;
-                case 1:
-                    *data = *data & ~0xF0;
-                    *data++ = *data | (uint8)((word >> 28) & 0xF0);
-                    break;
-                }
-            }
-        else {
+        if (hi_word) {
             switch (len) {
                 case 8:
                     *data = *data & ~0x0F;
@@ -647,90 +603,83 @@ uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
                     break;
                 }
             }
+        else {
+            switch (len) {
+                case 8:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data++ = (uint8)((word >> 12) & 0xff);
+                    *data++ = (uint8)((word >> 4) & 0xff);
+                    break;
+                case 7:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data++ = (uint8)((word >> 12) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 4) & 0xF0);
+                    break;
+                case 6:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data++ = (uint8)((word >> 12) & 0xff);
+                    break;
+                case 5:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 12) & 0xF0);
+                    break;
+                case 4:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data++ = (uint8)((word >> 20) & 0xff);
+                    break;
+                case 3:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 20) & 0xF0);
+                    break;
+                case 2:
+                    *data++ = (uint8)((word >> 28) & 0xff);
+                    break;
+                case 1:
+                    *data = *data & ~0xF0;
+                    *data++ = *data | (uint8)((word >> 28) & 0xF0);
+                    break;
+                }
+            }
         }
     return data;
 }
 
 /* Copy a packet to memory - High density format */
 
-uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
+uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool hi_word)
 {
     uint64    word;
 
     while (len > 8) {                                   /* copy full words */
-        if (lo_word) {
-            word =  (uint64)(*data++) << 28;
-            word |= (uint64)(*data++) << 20;
-            word |= (uint64)(*data++) << 12;
-            word |= (uint64)(*data++) << 4;
-            word |= (uint64)((*data) >> 4);
-            }
-        else {
+        if (hi_word) {
             word =  (uint64)(*data++ & 0xF) << 32;
             word |= (uint64)(*data++) << 24;
             word |= (uint64)(*data++) << 16;
             word |= (uint64)(*data++) << 8;
             word |= (uint64)(*data++);
             }
+        else {
+            word =  (uint64)(*data++) << 28;
+            word |= (uint64)(*data++) << 20;
+            word |= (uint64)(*data++) << 12;
+            word |= (uint64)(*data++) << 4;
+            word |= (uint64)((*data) >> 4);
+            }
         M[addr++] = word;
         len -= 9;
-        lo_word = !lo_word;
+        hi_word = !hi_word;
     }
 
     if (len) {                                          /* copy last partial word */
         word = M[addr];
-        if (lo_word) {
-            switch (len) {
-                case 8:
-                    word = word & ~((uint64)0xFFFFFFFF0);
-                    word |= (uint64)(*data++) << 28;
-                    word |= (uint64)(*data++) << 20;
-                    word |= (uint64)(*data++) << 12;
-                    word |= (uint64)(*data++) << 4;
-                    break;
-                case 7:
-                    word = word & ~((uint64)0xFFFFFFF00);
-                    word |= (uint64)(*data++) << 28;
-                    word |= (uint64)(*data++) << 20;
-                    word |= (uint64)(*data++) << 12;
-                    word |= (uint64)(*data++ & 0xF0) << 4;
-                    break;
-                case 6:
-                    word = word & ~((uint64)0xFFFFFF000);
-                    word |= (uint64)(*data++) << 28;
-                    word |= (uint64)(*data++) << 20;
-                    word |= (uint64)(*data++) << 12;
-                    break;
-                case 5:
-                    word = word & ~((uint64)0xFFFFF0000);
-                    word |= (uint64)(*data++) << 28;
-                    word |= (uint64)(*data++) << 20;
-                    word |= (uint64)(*data++ & 0xF0) << 12;
-                    break;
-                case 4:
-                    word = word & ~((uint64)0xFFFF00000);
-                    word |= (uint64)(*data++) << 28;
-                    word |= (uint64)(*data++) << 20;
-                    break;
-                case 3:
-                    word = word & ~((uint64)0xFFF000000);
-                    word |= (uint64)(*data++) << 28;
-                    word |= (uint64)(*data++ & 0xF0) << 20;
-                    break;
-                case 2:
-                    word = word & ~((uint64)0xFF000000);
-                    word |= (uint64)(*data++) << 28;
-                    break;
-                case 1:
-                    word = word & ~((uint64)0xF0000000);
-                    word |= (uint64)(*data++ & 0xF0) << 28;
-                    break;
-                default:
-                    word = 0;
-                    break;
-                }
-            }
-        else {
+        if (hi_word) {
             switch (len) {
                 case 8:
                     word = word & ~((uint64)0xFFFFFFFF0);
@@ -779,6 +728,57 @@ uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool lo_word)
                 case 1:
                     word = word & ~((uint64)0xF0000000);
                     word =  (uint64)((*data++ & 0xF)) << 32;
+                    break;
+                default:
+                    word = 0;
+                    break;
+                }
+            }
+        else {
+            switch (len) {
+                case 8:
+                    word = word & ~((uint64)0xFFFFFFFF0);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++) << 12;
+                    word |= (uint64)(*data++) << 4;
+                    break;
+                case 7:
+                    word = word & ~((uint64)0xFFFFFFF00);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++) << 12;
+                    word |= (uint64)(*data++ & 0xF0) << 4;
+                    break;
+                case 6:
+                    word = word & ~((uint64)0xFFFFFF000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++) << 12;
+                    break;
+                case 5:
+                    word = word & ~((uint64)0xFFFFF0000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    word |= (uint64)(*data++ & 0xF0) << 12;
+                    break;
+                case 4:
+                    word = word & ~((uint64)0xFFFF00000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++) << 20;
+                    break;
+                case 3:
+                    word = word & ~((uint64)0xFFF000000);
+                    word |= (uint64)(*data++) << 28;
+                    word |= (uint64)(*data++ & 0xF0) << 20;
+                    break;
+                case 2:
+                    word = word & ~((uint64)0xFF000000);
+                    word |= (uint64)(*data++) << 28;
+                    break;
+                case 1:
+                    word = word & ~((uint64)0xF0000000);
+                    word |= (uint64)(*data++ & 0xF0) << 28;
                     break;
                 default:
                     word = 0;
@@ -1180,7 +1180,7 @@ ppd->length += (PPD_XCTID - CI_XCTID);                  /* set new length */
 
 CI_PUTB (ppd->data, PPD_PORT, pkt->node);
 CI_PUTB (ppd->data, PPD_OPC, opc);
-CI_PUTB (ppd->data, PPD_FLAGS, flags);
+CI_PUTB (ppd->data, PPD_FLAGS, flags & 0xF0);           /* only top bits are common */
 CI_PUTB (ppd->data, PPD_STATUS, 0); // STS_OK);
 ppd->data[PPD_OPC] |= OPC_M_RECV;                       /* convert to rcv opcode */
 
@@ -1208,7 +1208,7 @@ uint8 flags = CI_GETB (ppd->data, PPD_FLAGS);
 pkt->length = ppd->length;
 memcpy (&pkt->data[CI_XCTID], &ppd->data[PPD_XCTID], ppd->length - PPD_XCTID);
 CI_PUTB (pkt->data, CI_OPC, opc);
-CI_PUTB (pkt->data, CI_FLAGS, flags);
+CI_PUTB (pkt->data, CI_FLAGS, flags & 0xF0);            /* only top bits are common */
 
 switch (opc) {                                          /* set new length */
     case OPC_REQID:
@@ -1288,22 +1288,24 @@ while (xfrsz > 0) {
         sa = bsd0 & BSD_SA;                             /* get segment address */
         sl = M[bsd + 2] & BSD_LEN;                      /* get segment len */
         if ((sboff < (seg + sl)) && ((sboff + nlen) > seg)) {
-            if (sboff < seg)
+            if (sboff <= seg)
                 so = 0;                                 /* starts in a previous segment */
             else
                 so = (sboff - seg);                     /* starts in this segment */
-            if ((sboff + nlen) < (seg + sl))
+            if ((sboff + nlen) <= (seg + sl))
                 tl = (sboff + nlen) - (seg + so);       /* ends in this segment */
             else
                 tl = sl - so;                           /* ends in a subsequent segment */
 
-            if (so != 0) {
-                sim_printf ("ci_send_data() - Non-zero segment offset not supported\n");
+            if ((so % 9) != 0) {
+                sim_printf ("ci_send_data() - Segment offset %d not supported\n", so);
                 return SCPE_IERR;
                 }
             pkt_off = (seg >> 1) % CI_MAXDAT;
-            if (mode == BSD_HD)
+            if (mode == BSD_HD) {
+                sa = sa + (so / 9);
                 ci_cpy_to_hd (sa, &pkt.data[CI_DATA + pkt_off], tl, (seg & 1));
+                }
             else {
                 sim_printf ("ci_send_data() - Unsupported transfer mode %d\n", mode);
                 return SCPE_IERR;
@@ -1379,22 +1381,24 @@ do {
     sa = bsd0 & BSD_SA;                                 /* get segment address */
     sl = M[bsd + 2] & BSD_LEN;                          /* get segment len */
     if ((rboff < (seg + sl)) && ((rboff + nlen) > seg)) {
-        if (rboff < seg)
+        if (rboff <= seg)
             so = 0;                                     /* starts in a previous segment */
         else
             so = (rboff - seg);                         /* starts in this segment */
-        if ((rboff + nlen) < (seg + sl))
+        if ((rboff + nlen) <= (seg + sl))
             tl = (rboff + nlen) - (seg + so);           /* ends in this segment */
         else
             tl = sl - so;                               /* ends in a subsequent segment */
 
-        if (so != 0) {
-            sim_printf ("ci_receive_data() - Non-zero segment offset not supported\n");
+        if ((so % 9) != 0) {
+            sim_printf ("ci_receive_data() - Segment offset %d not supported\n", so);
             return SCPE_IERR;
             }
         pkt_off = (seg >> 1) % CI_MAXDAT;
-        if (mode == BSD_HD)
+        if (mode == BSD_HD) {
+            sa = sa + (so / 9);
             ci_cpy_from_hd (sa, &pkt->data[CI_DATA + pkt_off], tl, (seg & 1));
+            }
         else {
             sim_printf ("ci_receive_data() - Unsupported transfer mode %d\n", mode);
             return SCPE_IERR;
@@ -1660,11 +1664,11 @@ switch (opc) {
         pkt.length = LEN_SNDDG;
         ci_cpy_to (pkt.addr, pkt.data, pkt.length);
         word = M[pkt.addr + 4] & 0xFFFFF;
-        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, 2);  /* FIXME: include length field in PPD? */
+        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, 2);
         if (flags & 0x80)
-            ci_cpy_to_hd (pkt.addr + 5, &pkt.data[PPD_TEXT + 2], (word - 2) * 2, 1);  /* FIXME: include length field in PPD? */
+            ci_cpy_to_hd (pkt.addr + 5, &pkt.data[PPD_TEXT + 2], (word - 2) * 2, 0);
         else
-            ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT + 2], PPD_TEXT + 4, word - 2);  /* FIXME: include length field in PPD? */
+            ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT + 2], PPD_TEXT + 4, word - 2);
         pkt.length = LEN_SNDDG + word;
         type = PPD_DG;
         break;
@@ -1673,11 +1677,11 @@ switch (opc) {
         pkt.length = LEN_SNDMSG;
         ci_cpy_to (pkt.addr, pkt.data, pkt.length);
         word = M[pkt.addr + 4] & 0xFFFFF;
-        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, 2);  /* FIXME: include length field in PPD? */
+        ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT], PPD_TEXT + 2, 2);
         if (flags & 0x80)
-            ci_cpy_to_hd (pkt.addr + 5, &pkt.data[PPD_TEXT + 2], (word - 2) * 2, 1);  /* FIXME: include length field in PPD? */
+            ci_cpy_to_hd (pkt.addr + 5, &pkt.data[PPD_TEXT + 2], (word - 2) * 2, 0);
         else
-            ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT + 2], PPD_TEXT + 4, word - 2);  /* FIXME: include length field in PPD? */
+            ci_cpy_to_ind (pkt.addr, &pkt.data[PPD_TEXT + 2], PPD_TEXT + 4, word - 2);
         pkt.length = LEN_SNDMSG + word;
         type = PPD_MSG;
         break;
@@ -1872,7 +1876,7 @@ switch (opc) {
         M[ppd->addr + 4] = ppd->length;
         ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, 2);
         if (flags & 0x80)
-            ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 1);
+            ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 0);
         else
             ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT + 2], PPD_TEXT + 4, ppd->length - 2);
 //        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
@@ -1884,7 +1888,7 @@ switch (opc) {
         M[ppd->addr + 4] = ppd->length;
         ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, 2);
         if (flags & 0x80)
-            ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 1);
+            ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 0);
         else
             ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT + 2], PPD_TEXT + 4, ppd->length - 2);
 //        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
