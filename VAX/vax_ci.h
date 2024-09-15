@@ -1,6 +1,6 @@
 /* vax_ci.h: Computer Interconnect adapter (VAX Common)
 
-   Copyright (c) 2019, Matt Burke
+   Copyright (c) 2019-2024, Matt Burke
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -31,20 +31,20 @@
 
 #define CI_PSR          0                               /* port status */
 #define CI_PQBBR        1                               /* port queue block base */
-#define CI_PCQ0CR       2                               /* port cmd queue 0 control */
-#define CI_PCQ1CR       3                               /* port cmd queue 1 control */
-#define CI_PCQ2CR       4                               /* port cmd queue 2 control */
-#define CI_PCQ3CR       5                               /* port cmd queue 3 control */
-#define CI_PSRCR        6                               /* FIXME - description */
-#define CI_PECR         7                               /* FIXME - description */
-#define CI_PDCR         8                               /* FIXME - description */
-#define CI_PICR         9                               /* FIXME - description */
+#define CI_PCQ0CR       2                               /* port command queue 0 control */
+#define CI_PCQ1CR       3                               /* port command queue 1 control */
+#define CI_PCQ2CR       4                               /* port command queue 2 control */
+#define CI_PCQ3CR       5                               /* port command queue 3 control */
+#define CI_PSRCR        6                               /* port status release control */
+#define CI_PECR         7                               /* port enable control */
+#define CI_PDCR         8                               /* port disable control */
+#define CI_PICR         9                               /* port initialise control */
 #define CI_PDFQCR       10                              /* port datagram free queue control */
 #define CI_PMFQCR       11                              /* port message free queue control */
-#define CI_PMTCR        12                              /* FIXME - description */
-#define CI_PMTECR       13                              /* FIXME - description */
+#define CI_PMTCR        12                              /* port maintenance timer control */
+#define CI_PMTECR       13                              /* port maintenance timer expiration control */
 #define CI_PFAR         14                              /* port failing address */
-#define CI_PESR         15                              /* FIXME - description */
+#define CI_PESR         15                              /* port error status */
 #define CI_PPR          16                              /* port parameter */
 
 /* Datastructure types */
@@ -219,6 +219,8 @@ typedef struct {
     uint32 coderev;                                     /* code revision */
     uint32 fmask;                                       /* function mask */
     uint32 iblen;                                       /* internal buffer length */
+    void (*set_int)(void);                              /* set interrupt callback */
+    void (*clr_int)(void);                              /* clear interrupt callback */
 } CI_PORT;
 
 typedef struct {

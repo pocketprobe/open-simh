@@ -1,6 +1,6 @@
-/* vaxbi_ci.c: VAXBI Computer Interconnect adapter
+/* vax_cibca.c: VAXBI Computer Interconnect adapter
 
-   Copyright (c) 2019, Matt Burke
+   Copyright (c) 2019-2024, Matt Burke
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -23,19 +23,43 @@
    used in advertising or otherwise to promote the sale, use or other dealings
    in this Software without prior written authorization from the author.
 
-   ci             CIBCA CI adapter
+   ca             CIBCA CI adapter
 */
 
 #include "vax_defs.h"
 #include "dec_ci.h"
 #include "vax_ci.h"
 
-/* CIBCA Registers */
+/* CIBCA Hardware Registers */
 
-#define PMCSR_OF        0x401                           /* port maintenanace CSR */
+#define PMCSR_OF        0x401                           /* port maintenanace control/status */
 #define MADR_OF         0x402                           /* maintenanace address */
 #define MDATR_OF        0x403                           /* maintenanace data */
 #define EADR_OF         0x410                           /* EEPROM address */
+
+/* CIBCA Software Registers */
+
+#define PQBBR_OF        BI_GPR0                         /* port queue block base */
+#define PFAR_OF         BI_GPR1                         /* port failing address */
+#define PPR_OF          BI_GPR2                         /* port parameter */
+#define PESR_OF         BI_GPR3                         /* port error status */
+#define PSR_OF          0x400                           /* port status */
+#define PCQ0CR_OF       0x404                           /* port command queue 0 control */
+#define PCQ1CR_OF       0x405                           /* port command queue 1 control */
+#define PCQ2CR_OF       0x406                           /* port command queue 2 control */
+#define PCQ3CR_OF       0x407                           /* port command queue 3 control */
+#define PSRCR_OF        0x408                           /* port status release control */
+#define PECR_OF         0x409                           /* port enable control */
+#define PDCR_OF         0x40A                           /* port disable control */
+#define PICR_OF         0x40B                           /* port initialise control */
+#define PDFQCR_OF       0x40C                           /* port datagram free queue control */
+#define PMFQCR_OF       0x40D                           /* port message free queue control */
+#define PMTCR_OF        0x40E                           /* port maintenance timer control */
+#define PMTECR_OF       0x40F                           /* port maintenance timer expiration control */
+#define LSTOR_OF        0x414                           /* local store */
+#define VCD_OF          0x700                           /* virtual circuit descriptors */
+
+/* Device Type Register */
 
 #define DTYPE_BCA       0x00400000                      /* CIBCA-BA */
 #define DTYPE_EPRM      0x00800000                      /* EEPROM size (0 = 8k, 1 = 32k) */
@@ -47,7 +71,7 @@
 #define DTYPE_P4K       0x40000000                      /* packet buffer size 4k */
 #define DTYPE_FDX       0x80000000                      /* full duplex */
 
-/* Port maintenance control/status register */
+/* Port Maintenance Control/Status Register */
 
 #define PMCSR_START     0x00000001                      /* start */
 #define PMCSR_MTD       0x00000002                      /* maintenance timer disable */
@@ -65,7 +89,13 @@
 #define PMCSR_RW        (PMCSR_HALT | PMCSR_MIE | PMCSR_WP | \
                          PMCSR_MTD)
 
-/* Port status register - CIBCA specific bits */
+/* Maintenance Address Register */
+
+#define MADR_ADDR       0x1FFF
+#define MADR_M_WORD     0xC000
+#define MADR_V_WORD     14
+
+/* Port Status Register - CIBCA specific bits */
 
 #define PSR_MISC        0x00000080                      /* miscellaneous error */
 #define PSR_MTE         0x00000100                      /* maintenance error */
@@ -73,48 +103,23 @@
 #define PSR_UNI         0x00000400                      /* uninitialised */
 #define PSR_NRSPE       0x00008000                      /* no response error */
 
-#define MADR_ADDR       0x1FFF
-#define MADR_M_WORD     0xC000
-#define MADR_V_WORD     14
-
-/* Standard Port Registers */
-
-#define PQBBR_OF        BI_GPR0
-#define PFAR_OF         BI_GPR1
-#define PPR_OF          BI_GPR2
-#define PESR_OF         BI_GPR3
-#define PSR_OF          0x400
-#define PCQ0CR_OF       0x404
-#define PCQ1CR_OF       0x405
-#define PCQ2CR_OF       0x406
-#define PCQ3CR_OF       0x407
-#define PSRCR_OF        0x408
-#define PECR_OF         0x409
-#define PDCR_OF         0x40A
-#define PICR_OF         0x40B
-#define PDFQCR_OF       0x40C
-#define PMFQCR_OF       0x40D
-#define PMTCR_OF        0x40E
-#define PMTECR_OF       0x40F
-
 /* CIBCA Port Parameters */
 
-#define RPORT_TYPE      0x80000002
-#define CODE_REV        0x00700040
-#define FUNC_MASK       0xFFFF0F00
-#define INT_BUF_LEN     0x3F9
+#define LPORT_TYPE      (ID_DUAL | ID_BCA)              /* local port type */
+#define CODE_REV        0x00700040                      /* code revision */
+#define FUNC_MASK       0xFFFF0F00                      /* funcion mask */
+#define INT_BUF_LEN     0xFF0                           /* internal buffer length */
 
 BIIC ca_biic;                                           /* BIIC standard registers */
 uint32 ca_pmcsr;                                        /* port maintenance csr */
 uint32 ca_psr_bi;                                       /* port status reg (CIBCA specific) */
 uint32 ca_madr;                                         /* mainteneance addr reg */
 uint32 ca_mdatr[0x4000];                                /* maintenanace data reg */
-uint32 ca_local_store[2048];
-t_bool ca_halt;                                         /* microcode halted */
+uint32 ca_lstor[2048];                                  /* local store */
+t_bool ca_run;                                          /* microcode running */
 
 extern uint32 nexus_req[NEXUS_HLVL];
 
-t_stat ca_svc (UNIT *uptr);
 t_stat ca_reset (DEVICE *dptr);
 t_stat ca_rdreg (int32 *val, int32 pa, int32 mode);
 t_stat ca_wrreg (int32 val, int32 pa, int32 lnt);
@@ -130,7 +135,7 @@ void ca_clr_int ();
 
 DIB ca_dib = { TR_CI, 0, &ca_rdreg, &ca_wrreg, 0, NVCL (CI) };
 
-UNIT ca_unit = { UDATA (&ca_svc, UNIT_IDLE|UNIT_ATTABLE, 0) };
+UNIT ca_unit = { UDATA (&ci_vax_svc, UNIT_IDLE|UNIT_ATTABLE, 0) };
 
 REG ca_reg[] = {
     { HRDATA (PMCSR, ca_pmcsr, 32) },
@@ -199,10 +204,12 @@ REGMAP ca_regmap[] = {
     };
 
 CI_PORT ca_port = {
-    (ID_DUAL | ID_BCA),                                 /* port type */
-    0x00700040,                                         /* code revision */
-    0xFFFF0F00,                                         /* function mask */
-    0xFF0                                               /* internal buffer length */
+    LPORT_TYPE,
+    CODE_REV,
+    FUNC_MASK,
+    INT_BUF_LEN,
+    &ca_set_int,
+    &ca_clr_int
     };
 
 /* Read CIBCA adapter register */
@@ -216,28 +223,30 @@ t_stat r;
 
 rg = NEXUS_GETOFS (pa);                                 /* get offset */
 
-if ((rg >= 0x414) && (ca_halt)) {                       /* microcode not running? */
-    *val = ca_local_store[(rg - 0x400)];
-    sim_debug (DBG_REG, &ca_dev, "LOCAL STORE rd: %X = %08X\n", pa, *val);
-    return SCPE_OK;
-    }
-for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port register */
-    if (p->offset == rg) {                              /* mapped? */
-        r = ci_vax_rd (uptr, val, p->rg, lnt);
-        if (r != SCPE_OK)
-            return r;
-        if (p->rg == CI_PSR) {
-            *val = *val | ca_psr_bi;
-            if (uptr->ci_state <= PORT_UIM)             /* uninitialised? */
-                *val = *val | PSR_UNI;
+if (ca_run) {                                           /* microcode running? */
+    for (p = &ca_regmap[0]; p->offset != 0; p++) {      /* check for port register */
+        if (p->offset == rg) {                          /* mapped? */
+            r = ci_vax_rd (uptr, val, p->rg, lnt);
+            if (r != SCPE_OK)
+                return r;
+            if (p->rg == CI_PSR) {                      /* reading port status? */
+                *val = *val | ca_psr_bi;                /* yes, add CIBCA specific bits */
+                if (uptr->ci_state <= PORT_UIM)         /* uninitialised? */
+                    *val = *val | PSR_UNI;              /* yes, set flag */
+                }
+            return SCPE_OK;
             }
-        return SCPE_OK;
         }
     }
-if (rg >= 0x700) {                                      /* virtual circuit descriptors */
+if (rg >= VCD_OF) {                                     /* virtual circuit descriptors */
     rg = (rg >> 2) & 0xFF;                              /* get node number */
     *val = ci_vcd[rg] & 0xFFFF;
     sim_debug (DBG_REG, &ca_dev, "VCD[%d] rd: %08X\n", rg, *val);
+    return SCPE_OK;
+    }
+if (rg >= LSTOR_OF) {                                   /* local store */
+    *val = ca_lstor[(rg - LSTOR_OF)];
+    sim_debug (DBG_REG, &ca_dev, "LSTOR rd: %X = %08X\n", pa, *val);
     return SCPE_OK;
     }
 switch (rg) {                                           /* CIBCA specific registers */
@@ -315,19 +324,21 @@ REGMAP *p;
 
 rg = NEXUS_GETOFS (pa);                                 /* get offset */
 
-if ((rg >= 0x414) && (ca_halt)) {                       /* microcode not running? */
-        sim_debug (DBG_REG, &ca_dev, "LOCAL STORE wr: %X = %08X\n", pa, val);
-    ca_local_store[(rg - 0x400)] = val;
-    return SCPE_OK;
+if (ca_run) {                                           /* microcode running? */
+    for (p = &ca_regmap[0]; p->offset != 0; p++) {      /* check for port register */
+        if (p->offset == rg)                            /* mapped? */
+            return ci_vax_wr (uptr, val, p->rg, lnt);
+        }
     }
-for (p = &ca_regmap[0]; p->offset != 0; p++) {          /* check for port register */
-    if (p->offset == rg)                                /* mapped? */
-        return ci_vax_wr (uptr, val, p->rg, lnt);
-    }
-if (rg >= 0x700) {                                      /* virtual circuit descriptors */
+if (rg >= VCD_OF) {                                     /* virtual circuit descriptors */
     rg = (rg >> 2) & 0xFF;                              /* get node number */
     ci_vcd[rg] = val & 0xFFFF;
     sim_debug (DBG_REG, &ca_dev, "VCD[%d] wr: %08X\n", rg, val);
+    return SCPE_OK;
+    }
+if (rg >= LSTOR_OF) {                                   /* local store */
+    sim_debug (DBG_REG, &ca_dev, "LSTOR wr: %X = %08X\n", pa, val);
+    ca_lstor[(rg - LSTOR_OF)] = val;
     return SCPE_OK;
     }
 switch (rg) {                                           /* case on type */
@@ -370,11 +381,11 @@ switch (rg) {                                           /* case on type */
         sim_debug (DBG_REG, &ca_dev, "PMCSR wr: %08X\n", val);
         if (val & PMCSR_START) {
             ca_reset (&ca_dev);
-            ca_halt = FALSE;                            /* start microcode */
+            ca_run = TRUE;                              /* start microcode */
             break;
             }
         else if (val & PMCSR_HALT)
-            ca_halt = TRUE;                             /* stop microcode */
+            ca_run = FALSE;                             /* stop microcode */
         ca_pmcsr = (ca_pmcsr & ~PMCSR_RW) | (val & PMCSR_RW); /* set RW bits */
         break;
 
@@ -401,6 +412,8 @@ switch (rg) {                                           /* case on type */
 return SCPE_OK;
 }
 
+/* Set CIBCA interrupt */
+
 void ca_set_int ()
 {
 ca_psr_bi |= PSR_MIF;
@@ -408,22 +421,21 @@ if (ca_pmcsr & PMCSR_MIE)
     SET_NEXUS_INT (CI);
 }
 
+/* Clear CIBCA interrupt */
+
 void ca_clr_int ()
 {
 ca_psr_bi &= ~PSR_MIF;
 CLR_NEXUS_INT (CI);
 }
 
-t_stat ca_svc (UNIT *uptr)
-{
-return ci_vax_svc (uptr);
-}
-
 /* Reset CIBCA adapter */
 
 t_stat ca_reset (DEVICE *dptr)
 {
-int32 i;
+REGMAP *p;
+int32 val, i;
+t_stat r;
 
 ca_biic.csr = (1u << BICSR_V_IF) | BICSR_STS | (TR_CI & BICSR_NODE);
 ca_biic.ber = 0;
@@ -433,7 +445,7 @@ ca_biic.uiic = BIICR_EXV;
 ca_pmcsr = 0;
 ca_psr_bi = 0;
 ca_madr = 0;
-ca_halt = TRUE;
+ca_run = FALSE;
 ci_vax_reset (dptr, &ca_port);
 return SCPE_OK;
 }

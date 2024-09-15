@@ -1,6 +1,6 @@
 /* vax_ci.c: Computer Interconnect adapter (VAX Common)
 
-   Copyright (c) 2019, Matt Burke
+   Copyright (c) 2019-2024, Matt Burke
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -149,9 +149,6 @@ uint32 ci_dgd;                                          /* datagrams discarded *
 GVPMMU ci_mmu;                                          /* memory management unit */
 
 extern int32 tmxr_poll;
-
-extern void ci_set_int (void);
-extern void ci_clr_int (void);
 
 void ci_read_packet (UNIT *uptr, PPD_PKT *pkt, size_t length);
 void ci_write_packet (UNIT *uptr, PPD_PKT *pkt, size_t length);
@@ -354,6 +351,8 @@ return SCPE_OK;
 
 t_stat ci_vax_wr (UNIT *uptr, int32 val, int32 rg, int32 lnt)
 {
+CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+
 switch (rg) {
 
     case CI_PSR:
@@ -389,7 +388,7 @@ switch (rg) {
         sim_debug_unit (DBG_TRC, uptr, "port status release control at %08X\n", fault_PC);
         if (val & 1) {
             ci_psr = 0;
-            ci_clr_int ();
+            cp->clr_int ();
             }
         break;
 
@@ -420,7 +419,7 @@ switch (rg) {
                     }
                 }
             ci_psr |= PSR_PDC;
-            ci_set_int ();
+            cp->set_int ();
             }
         break;
 
@@ -434,7 +433,7 @@ switch (rg) {
                 ci_rx_enable (uptr, 0);                 /* disable receiver */
                 }
             ci_psr |= PSR_PIC;
-            ci_set_int ();
+            cp->set_int ();
             }
         break;
 
@@ -456,7 +455,7 @@ switch (rg) {
             uptr->ci_state = PORT_UIM;                  /* now uninitialised maintenance */
             ci_rx_enable (uptr, (CI_PATH_A | CI_PATH_B)); /* enable receiver */
             ci_psr |= PSR_SE;
-            ci_set_int ();
+            cp->set_int ();
             }
         break;
 
@@ -847,10 +846,12 @@ sim_debug_unit (DBG_TRC, uptr, "-%08X\n", pa);
 
 t_stat ci_put_rsq (UNIT *uptr, PPD_PKT *pkt)
 {
+CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+
 sim_debug_unit (DBG_TRC, uptr, "ci_put_rsq: queue: %08X, pkt: %08X\n", ci_pqbb_va + PQB_RESP_OF, pkt->addr);
 if (gvp_insqti (&ci_mmu, ci_pqbb_va + PQB_RESP_OF, pkt->addr) > 1) {
     ci_psr |= PSR_RQA;
-    ci_set_int ();
+    cp->set_int ();
     }
 return SCPE_OK;
 }
@@ -899,6 +900,7 @@ return SCPE_OK;
 
 t_stat ci_get_mfq (UNIT *uptr, PPD_PKT *pkt)
 {
+CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
 uint32 hdr;
 
 hdr = GVP_Read (&ci_mmu, ci_pqbb_va + PQB_MFQA_OF, L_LONG);
@@ -908,7 +910,7 @@ if (pkt->addr == 0)                                     /* queue error? */
     return CISE_QERR;
 if (pkt->addr == hdr) {                                 /* queue empty? */
     ci_psr |= PSR_MFQE;
-    ci_set_int ();
+    cp->set_int ();
     return CISE_NOPKT;
     }
 return SCPE_OK;
@@ -1064,6 +1066,8 @@ switch (pkt->data[PPD_OPC]) {                           /* opcodes handled by po
         break;
 
     case OPC_REQDATREC:
+    case OPC_REQDATREC1:
+    case OPC_REQDATREC2:
     case OPC_REQMDATREC:
         r = ci_send_data (uptr, pkt);
         if (r == SCPE_OK)

@@ -1,6 +1,6 @@
 /* vax_cibci.c: VAXBI Computer Interconnect adapter
 
-   Copyright (c) 2020, Matt Burke
+   Copyright (c) 2020-2024, Matt Burke
 
    Permission is hereby granted, free of charge, to any person obtaining a
    copy of this software and associated documentation files (the "Software"),
@@ -30,15 +30,39 @@
 #include "dec_ci.h"
 #include "vax_ci.h"
 
-/* CIBCI Registers */
+/* CIBCI Hardware Registers */
 
-#define CNFGR_OF        0x100
-#define PMCSR_OF        0x110
-#define MADR_OF         0x114
-#define MDATR_OF        0x118
-#define BCAR_OF         0x124
-#define BCMR_OF         0x128
-#define DMAF_OF         0x12C
+#define CNFGR_OF        0x040                           /* 0x100 - configuration register */
+#define PMCSR_OF        0x044                           /* 0x110 - port maintenance control/status */
+#define MADR_OF         0x045                           /* 0x114 - maintenance address */
+#define MDATR_OF        0x046                           /* 0x118 - maintenance data */
+#define BCAR_OF         0x049                           /* 0x124 - BICA address */
+#define BCMR_OF         0x04A                           /* 0x128 - BICA command/byte mask */
+#define DMAF_OF         0x04B                           /* 0x12C - DMA register file */
+
+/* CIBCI Software Registers */
+
+#define LSTOR_OF        0x200                           /* 0x800 - local store */
+#define PSR_OF          0x240                           /* 0x900 - port status */
+#define PQBBR_OF        0x241                           /* 0x904 - port queue block base */
+#define PCQ0CR_OF       0x242                           /* 0x908 - port command queue 0 control */
+#define PCQ1CR_OF       0x243                           /* 0x90C - port command queue 1 control */
+#define PCQ2CR_OF       0x244                           /* 0x910 - port command queue 2 contro */
+#define PCQ3CR_OF       0x245                           /* 0x914 - port command queue 3 control  */
+#define PSRCR_OF        0x246                           /* 0x918 - port status release control */
+#define PECR_OF         0x247                           /* 0x91C - port enable control */
+#define PDCR_OF         0x248                           /* 0x920 - port disable control  */
+#define PICR_OF         0x249                           /* 0x924 - port initialise control */
+#define PDFQCR_OF       0x24A                           /* 0x928 - port datagram free queue control */
+#define PMFQCR_OF       0x24B                           /* 0x92C - port message free queue control */
+#define PMTCR_OF        0x24C                           /* 0x930 - port maintenance timer control */
+#define PMTECR_OF       0x24D                           /* 0x934 - port maintenance timer expiration control */
+#define PFAR_OF         0x24E                           /* 0x938 - port failing address */
+#define PESR_OF         0x24F                           /* 0x93C - port error status */
+#define PPR_OF          0x250                           /* 0x940 - port parameter */
+#define VCD_OF          0x300                           /* 0xC00 - virtual circuit descriptors */
+
+/* Configuration Register */
 
 #define CNFGR_BCMR      0x0000FFFF
 #define CNFGR_CMD       0x000F0000                      /* corrected read data */
@@ -52,6 +76,8 @@
 #define CNFGR_BAPE      0x40000000                      /* BICA parity error */
 #define CNFGR_CPPE      0x80000000                      /* CIPA bus parity error */
 #define CNFGR_RW        (CNFGR_DIAG)
+
+/* Port Maintenance Control/Status Register */
 
 #define PMCSR_MI        0x00000001                      /* maintenance initialise */
 #define PMCSR_MTD       0x00000002                      /* maintenance timer disable */
@@ -76,10 +102,18 @@
                          PMCSR_RBPE | PMCSR_TMPE | PMCSR_IPE | \
                          PMCSR_OPE | PMCSR_TBPE | PMCSR_MIF)
 
+/* Maintenance Address Register */
+
+#define MADR_ADDR       0x1FFF
+
+/* BICA Address Register */
+
 #define BCAR_ADDR       0x0FFFFFFF                      /* DMA address */
 #define BCAR_V_ADDR     2                               /* offset for read only */
 #define BCAR_CMD        0xF0000000                      /* SBI command */
 #define BCAR_LEN        0xE0000000                      /* transfer length */
+
+/* BICA Command/Byte Mask Register */
 
 #define BCMR_MSK0       0x0000000F                      /* first longword mask */
 #define BCMR_MSK1       0x000000F0                      /* second longword mask */
@@ -88,36 +122,16 @@
 #define BCMR_CMD        0x00003C00                      /* SBI command */
 #define BCMR_LEN        0x0001C000                      /* transfer length */
 
+/* Port Status Register */
+
 #define PSR_MTE         0x80000000                      /* maintenance error */
-
-#define MADR_ADDR       0x1FFF
-
-/* Standard Port Registers */
-
-#define PSR_OF          0x900
-#define PQBBR_OF        0x904
-#define PCQ0CR_OF       0x908
-#define PCQ1CR_OF       0x90C
-#define PCQ2CR_OF       0x910
-#define PCQ3CR_OF       0x914
-#define PSRCR_OF        0x918
-#define PECR_OF         0x91C
-#define PDCR_OF         0x920
-#define PICR_OF         0x924
-#define PDFQCR_OF       0x928
-#define PMFQCR_OF       0x92C
-#define PMTCR_OF        0x930
-#define PMTECR_OF       0x934
-#define PFAR_OF         0x938
-#define PESR_OF         0x93C
-#define PPR_OF          0x940
 
 /* CIBCI Port Parameters */
 
-#define RPORT_TYPE      0x80000002
-#define CODE_REV        0x00700040
-#define FUNC_MASK       0xFFFF0F00
-#define INT_BUF_LEN     0x3F9
+#define LPORT_TYPE      (ID_DUAL | ID_CI780)            /* local port type */
+#define CODE_REV        0x00700040                      /* code revision */
+#define FUNC_MASK       0xFFFF0F00                      /* function mask */
+#define INT_BUF_LEN     0x3F8                           /* internal buffer length */
 
 BIIC ci_biic;                                           /* BIIC standard registers */
 uint32 ci_cnfgr;                                        /* configuration reg */
@@ -127,7 +141,7 @@ uint32 ci_mdatr[8192];                                  /* maintenanace data reg
 uint32 ci_bcar;                                         /* BICA address register */
 uint32 ci_bcmr;                                         /* BICA command/byte mask register */
 uint32 ci_dmaf[4];                                      /* DMA register file */
-uint32 ci_local_store[1024];
+uint32 ci_lstor[1024];                                  /* local store */
 t_bool ci_halt;                                         /* microcode halted */
 
 extern uint32 nexus_req[NEXUS_HLVL];
@@ -217,35 +231,40 @@ REGMAP ci_regmap[] = {
     };
 
 CI_PORT ci_port = {
-    (ID_DUAL | ID_CI780),                               /* port type */
-    0x00700040,                                         /* code revision */
-    0xFFFFFF00,                                         /* function mask */
-    0x3F8                                               /* internal buffer length */
+    LPORT_TYPE,
+    CODE_REV,
+    FUNC_MASK,
+    INT_BUF_LEN,
+    &ci_set_int,
+    &ci_clr_int
     };
 
 /* Read CIBCI adapter register */
 
 t_stat ci_rdreg (int32 *val, int32 pa, int32 lnt)
 {
-int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
+int32 ofs;
 
-if ((rg >= 0x800) && (ci_halt)) {                       /* microcode not running? */
-    *val = ci_local_store[(rg - 0x800)];
+ofs = NEXUS_GETOFS (pa);                                /* get offset */
+if (ci_pmcsr & PMCSR_PSA) {                             /* microcode running? */
+    for (p = &ci_regmap[0]; p->offset != 0; p++) {      /* check for port register */
+        if (p->offset == ofs)                           /* mapped? */
+            return ci_vax_rd (uptr, val, p->rg, lnt);
+        }
+    }
+if (ofs >= VCD_OF) {                                    /* virtual circuit descriptors */
+    ofs = ofs & 0xFF;                                   /* get node number */
+    *val = ci_vcd[ofs] & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08X\n", ofs, *val);
     return SCPE_OK;
     }
-for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
-    if (p->offset == rg)                                /* mapped? */
-        return ci_vax_rd (uptr, val, p->rg, lnt);
-    }
-if (rg >= 0xC00) {                                      /* virtual circuit descriptors */
-    rg = (rg >> 2) & 0xFF;                              /* get node number */
-    *val = ci_vcd[rg] & 0xFFFF;
-    sim_debug (DBG_REG, &ci_dev, "VCD[%d] rd: %08X\n", rg, *val);
+if (ofs >= LSTOR_OF) {                                  /* local store */
+    *val = ci_lstor[(ofs - LSTOR_OF)];
     return SCPE_OK;
     }
-switch (rg) {                                           /* CIBCI specific registers */
+switch (ofs) {                                          /* CIBCI hardware register */
 
     case BI_DTYPE:
         *val = DTYPE_CIBCI;
@@ -321,15 +340,15 @@ switch (rg) {                                           /* CIBCI specific regist
         sim_debug (DBG_REG, &ci_dev, "BCMR rd: %08x\n", *val);
         break;
 
-    case DMAF_OF + 0x0:
-    case DMAF_OF + 0x4:
-    case DMAF_OF + 0x8:
-    case DMAF_OF + 0xC:
-        *val = ci_dmaf[(rg - DMAF_OF) >> 2];
+    case DMAF_OF + 0:
+    case DMAF_OF + 1:
+    case DMAF_OF + 2:
+    case DMAF_OF + 3:
+        *val = ci_dmaf[(ofs - DMAF_OF) >> 2];
         break;
 
     default:
-        sim_debug (DBG_WRN, &ci_dev, "defaulting on read: %X\n", rg);
+        sim_debug (DBG_WRN, &ci_dev, "defaulting on read: %X\n", ofs);
         }
 
 return SCPE_OK;
@@ -339,25 +358,28 @@ return SCPE_OK;
 
 t_stat ci_wrreg (int32 val, int32 pa, int32 lnt)
 {
-int32 rg = (pa & 0xFFC);
 UNIT *uptr = &ci_unit;
 REGMAP *p;
+int32 ofs;
 
-if ((rg >= 0x800) && (ci_halt)) {                       /* microcode not running? */
-    ci_local_store[(rg - 0x800)] = val;
+ofs = NEXUS_GETOFS (pa);                                /* get offset */
+if (ci_pmcsr & PMCSR_PSA) {                             /* microcode running? */
+    for (p = &ci_regmap[0]; p->offset != 0; p++) {      /* check for port register */
+        if (p->offset == ofs)                           /* mapped? */
+            return ci_vax_wr (uptr, val, p->rg, lnt);
+        }
+    }
+if (ofs >= VCD_OF) {                                    /* virtual circuit descriptors */
+    ofs = ofs & 0xFF;                                   /* get node number */
+    ci_vcd[ofs] = val & 0xFFFF;
+    sim_debug (DBG_REG, &ci_dev, "VCD[%d] wr: %08X\n", ofs, val);
     return SCPE_OK;
     }
-for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* check for port register */
-    if (p->offset == rg)                                /* mapped? */
-        return ci_vax_wr (uptr, val, p->rg, lnt);
-    }
-if (rg >= 0xC00) {                                      /* virtual circuit descriptors */
-    rg = (rg >> 2) & 0xFF;                              /* get node number */
-    ci_vcd[rg] = val & 0xFFFF;
-    sim_debug (DBG_REG, &ci_dev, "VCD[%d] wr: %08X\n", rg, val);
+if (ofs >= LSTOR_OF) {                                  /* local store */
+    ci_lstor[(ofs - LSTOR_OF)] = val;
     return SCPE_OK;
     }
-switch (rg) {                                           /* case on type */
+switch (ofs) {                                          /* CIBCI hardware register */
 
     case BI_CSR:
         sim_debug (DBG_REG, &ci_dev, "VAXBICSR wr: %08X\n", val);
@@ -414,9 +436,6 @@ switch (rg) {                                           /* case on type */
 
         if (val & PMCSR_MIF)                            /* interrupt W1C */
             ci_clr_int();
-
-        if ((val & PMCSR_PSA) && (ci_halt))
-            ci_halt = FALSE;                            /* start microcode */
         break;
 
     case MADR_OF:
@@ -439,19 +458,21 @@ switch (rg) {                                           /* case on type */
         ci_bcmr = (val & BCMR_MSK) << BCMR_V_MSK;
         break;
 
-    case DMAF_OF + 0x0:
-    case DMAF_OF + 0x4:
-    case DMAF_OF + 0x8:
-    case DMAF_OF + 0xC:
-        ci_dmaf[(rg - DMAF_OF) >> 2] = val;
+    case DMAF_OF + 0:
+    case DMAF_OF + 1:
+    case DMAF_OF + 2:
+    case DMAF_OF + 3:
+        ci_dmaf[ofs - DMAF_OF] = val;
         break;
 
     default:
-        sim_debug (DBG_WRN, &ci_dev, "defaulting on write: %X\n", rg);
+        sim_debug (DBG_WRN, &ci_dev, "defaulting on write: %X\n", ofs);
         }
 
 return SCPE_OK;
 }
+
+/* Set CIBCI interrupt */
 
 void ci_set_int ()
 {
@@ -460,6 +481,8 @@ if (ci_pmcsr & PMCSR_MIE)
     SET_NEXUS_INT (CI);
 return;
 }
+
+/* Clear CIBCI interrupt */
 
 void ci_clr_int ()
 {
@@ -472,7 +495,9 @@ return;
 
 t_stat ci_reset (DEVICE *dptr)
 {
-int32 i;
+REGMAP *p;
+int32 val, i;
+t_stat r;
 
 ci_biic.csr = (1u << BICSR_V_IF) | BICSR_STS | (TR_CI & BICSR_NODE);
 ci_biic.ber = 0;
@@ -485,7 +510,13 @@ ci_pmcsr = PMCSR_UI;
 ci_madr = 0;
 ci_bcar = 0;
 ci_bcmr = 0;
-ci_halt = TRUE;
+for (p = &ci_regmap[0]; p->offset != 0; p++) {          /* cache port registers in local store */
+    if (p->offset >= LSTOR_OF) {
+        r = ci_vax_rd (&ci_unit, &val, p->rg, L_LONG);  /* read port register */
+        if (r == SCPE_OK)                               /* success? */
+            ci_lstor[p->offset - LSTOR_OF] = val;       /* cache value */
+        }
+    }
 for (i = 0; i < 4; i++)
     ci_dmaf[i] = 0;
 for (i = 0; i < 8192; i++)
