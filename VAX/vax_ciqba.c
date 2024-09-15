@@ -1178,6 +1178,7 @@ else
 
 t_stat cq_sw_reset (DEVICE *dptr)
 {
+t_stat r;
 int32 i;
 
 cq_ccr = 0;
@@ -1191,9 +1192,11 @@ for (i = 0; i < MAX_BMAP; i++) {                        /* clear buffer map */
     cq_map[i].length = 0;
     cq_map[i].bnam = 0;
     }
-ci_rx_enable (&cq_unit[0], 0);                          /* disable receiver */
 CLR_INT (CI);
-return ci_port_reset (dptr);
+r = ci_port_reset (dptr);
+if (r == SCPE_OK)
+    ci_rx_enable (&cq_unit[0], 0);                      /* disable receiver */
+return r;
 }
 
 /* Reset CI adapter */
