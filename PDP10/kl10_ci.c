@@ -285,6 +285,8 @@ struct ci_device {
     uint64            csr;                              /* control/status register */
     uint32            uver[4];                          /* version information */
     uint64            vcd[CI_MAX_NODES];                /* virtual circuit descriptors */
+    PPD_PKT           ppd;
+    uint32            ppdq;
 } ci_data;
 
 
@@ -334,9 +336,9 @@ DEBTAB ci_debug[] = {
     { "DATA", DEBUG_DATA, "Show data transfers" },
     { "DETAIL", DEBUG_DETAIL, "Show details about device" },
     { "EXP", DEBUG_EXP, "Show exception information" },
-    { "CONI", DEBUG_CONI, "Show coni instructions" },
-    { "CONO", DEBUG_CONO, "Show cono instructions" },
-    { "DATAIO", DEBUG_DATAIO, "Show datai and datao instructions" },
+    { "CONI", DEBUG_CONI, "Show CONI instructions" },
+    { "CONO", DEBUG_CONO, "Show CONO instructions" },
+    { "DATAIO", DEBUG_DATAIO, "Show DATI and DATO instructions" },
     { "IRQ", DEBUG_IRQ, "Show IRQ requests" },
     { "DIAG", DBG_DIAG, "Show diagnostic packets" },
     { "CONF", DBG_CONF, "Show configuration packets" },
@@ -399,10 +401,9 @@ switch (dev & 03) {
             (ci_data.csr & CI_MRN) != 0) {
             sim_debug (DEBUG_DETAIL, &ci_dev, "CI CQA\n");
            ci_data.csr |= CI_CQA;
-//            ci_port_command (uptr);
-           sim_activate (&ci_unit[1], 200);             /* process command queue */
+           sim_activate (&ci_unit[1], 5000);             /* process command queue */
         }
-        if (ci_data.csr & (CI_CPE|CI_RQA))
+        if (ci_data.csr & (CI_CPE|CI_MBE|CI_RQA))
             set_interrupt (CI_DEVNUM, ci_data.csr & CI_PIA);
         sim_debug (DEBUG_CONO, dptr, "CI %03o CONO %06o PC=%06o %012llo\n", dev,
                  (uint32)(*data & RMASK), PC, ci_data.csr);
@@ -429,8 +430,8 @@ switch (dev & 03) {
 //                 dev, ci_data.rar, (uint32)(*data & RMASK));
             }
         }
-//        sim_debug (DEBUG_DATAIO, dptr, "CI %03o DATO %012llo PC=%o\n",
-//                 dev, *data, PC);
+        sim_debug (DEBUG_DATAIO, dptr, "CI %03o DATO %012llo PC=%o\n",
+                 dev, *data, PC);
         break;
 
     case DATAI:
@@ -445,8 +446,8 @@ switch (dev & 03) {
                    *data = (uint64)ci_data.uver[ci_data.rar - 0274];
             }
         }
-//        sim_debug (DEBUG_DATAIO, dptr, "CI %03o DATI %012llo PC=%o\n",
-//                 dev, *data, PC);
+        sim_debug (DEBUG_DATAIO, dptr, "CI %03o DATI %012llo PC=%o\n",
+                 dev, *data, PC);
         break;
     }
 
@@ -459,7 +460,7 @@ void ci_error (int err)
 {
     ci_data.rar = err;
     sim_debug (DEBUG_DETAIL, &ci_dev, "CI error %03o\n", err);
-    ci_data.csr |= CI_CPE;
+    ci_data.csr |= CI_MBE;
     set_interrupt (CI_DEVNUM, ci_data.csr & CI_PIA);
     ci_stop ();
 }
@@ -476,6 +477,7 @@ void ci_start ()
           ci_error (CHNERR);
           return;
     }
+    sim_printf ("CI PCB %012llo\n", ci_rh.buf);
     sim_debug (DEBUG_DETAIL, &ci_dev, "CI PCB %012llo %o\n", ci_rh.buf,
                                                               ci_rh.wcr);
     ci_data.pcb = (t_addr)(ci_rh.buf & AMASK);
@@ -489,6 +491,8 @@ void ci_start ()
     ci_data.pia = (int)(ci_rh.buf & 7);
     ci_data.csr |= CI_MRN;                              /* now running */
 }
+
+/* Stop CI 20 */
 
 void ci_stop ()
 {
@@ -517,7 +521,7 @@ void ci_disable (UNIT *uptr)
     ci_data.csr &= ~CI_ECP;
 }
 
-/* Copy memory to a packet - High density format */
+/* Copy memory to packet - High density format */
 
 uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool hi_word)
 {
@@ -651,7 +655,7 @@ uint8 *ci_cpy_to_hd (t_addr addr, uint8 *data, int len, t_bool hi_word)
     return data;
 }
 
-/* Copy a packet to memory - High density format */
+/* Copy packet to memory - High density format */
 
 uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool hi_word)
 {
@@ -790,7 +794,7 @@ uint8 *ci_cpy_from_hd (t_addr addr, uint8 *data, int len, t_bool hi_word)
     return data;
 }
 
-/* Copy memory to a packet - Industry standard format */
+/* Copy memory to packet - Industry standard format */
 
 uint8 *ci_cpy_to_ind (t_addr addr, uint8 *data, int off, int len)
 {
@@ -847,7 +851,7 @@ uint8 *ci_cpy_to_ind (t_addr addr, uint8 *data, int off, int len)
     return data;
 }
 
-/* Copy a packet to memory - Industry standard format */
+/* Copy packet to memory - Industry standard format */
 
 uint8 *ci_cpy_from_ind (t_addr addr, uint8 *data, int off, int len)
 {
@@ -915,7 +919,7 @@ uint8 *ci_cpy_from_ind (t_addr addr, uint8 *data, int off, int len)
     return data;
 }
 
-/* Copy memory to a packet - Header */
+/* Copy memory to packet - Header */
 
 uint8 *ci_cpy_to (t_addr addr, uint8 *data, int len)
 {
@@ -951,7 +955,7 @@ uint8 *ci_cpy_to (t_addr addr, uint8 *data, int len)
     return data;
 }
 
-/* Copy a packet to memory - Header */
+/* Copy packet to memory - Header */
 
 uint8 *ci_cpy_from (t_addr addr, uint8 *data, int len)
 {
@@ -1029,17 +1033,6 @@ int ci_getq (t_addr head, t_addr *entry)
         /* Decrement lock here */
         return 1;
     }
-#if 0
-    temp = M[head + 1];
-    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue prior to ci_getq()\n");
-    for (int i = 0; i < 20; i++) {
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
-        temp = M[temp];
-        if (temp == (head + 1))
-            break;
-        }
-#endif
     /* Get link to next entry */
     if (Mem_read_word (flink, &temp, 0)) {
         ci_error (EBSERR);
@@ -1062,17 +1055,7 @@ int ci_getq (t_addr head, t_addr *entry)
     }
     /* Return entry */
     *entry = flink;
-#if 0
-    temp = M[head + 1];
-    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue after ci_getq()\n");
-    for (int i = 0; i < 20; i++) {
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
-        temp = M[temp];
-        if (temp == (head + 1))
-            break;
-        }
-#endif
+
     /* Decrement lock here */
     return 1;
 }
@@ -1097,17 +1080,7 @@ int ci_putq (t_addr head, t_addr *entry)
         return 0;
 
     /* Increment lock here */
-#if 0
-    temp = M[head + 1];
-    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue prior to ci_putq()\n");
-    for (int i = 0; i < 20; i++) {
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
-        temp = M[temp];
-        if (temp == (head + 1))
-            break;
-        }
-#endif
+
     /* Hook entry into tail of queue */
     if (Mem_read_word (head + 2, &temp, 0)) {
         ci_error (EBSERR);
@@ -1144,17 +1117,7 @@ int ci_putq (t_addr head, t_addr *entry)
                 head, *entry, blink);
     *entry = 0;
     /* Decement lock here */
-#if 0
-    temp = M[head + 1];
-    sim_debug (DEBUG_DETAIL, &ci_dev, "Queue after ci_putq()\n");
-    for (int i = 0; i < 20; i++) {
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n", temp, M[temp]);
-        sim_debug (DEBUG_DETAIL, &ci_dev, "   %012llo: %012llo\n\n", temp + 1, M[temp + 1]);
-        temp = M[temp];
-        if (temp == (head + 1))
-            break;
-        }
-#endif
+
     /* Check if Queue was empty, and response queue */
     if (blink == (head+1) && head == (ci_data.pcb + PCB_RQI)) {
         ci_data.csr |= CI_RQA;
@@ -1397,6 +1360,7 @@ do {
         pkt_off = (seg >> 1) % CI_MAXDAT;
         if (mode == BSD_HD) {
             sa = sa + (so / 9);
+            sim_printf ("ci_receive_data() - %012llo, %o\n", sa, tl);
             ci_cpy_from_hd (sa, &pkt->data[CI_DATA + pkt_off], tl, (seg & 1));
             }
         else {
@@ -1421,8 +1385,11 @@ if (pkt->data[CI_FLAGS] & CI_LP) {                      /* last packet? */
     else if (opc == OPC_RETDAT) {
         pkt->length = LEN_DAT;
         r = ci_fmt_receive (uptr, pkt, &ppd);           /* convert to PPD format */
-        if (r == SCPE_OK)
+        if (r == SCPE_OK) {
             r = ci_receive_ppd (uptr, &ppd);            /* pass to system */
+            if (r == CISE_QERR)
+                r = SCPE_OK;
+            }
         }
     else
         r = SCPE_IERR;
@@ -1644,7 +1611,7 @@ t_stat ci_process_entry (UNIT *uptr, t_addr entry)
 {
 PPD_PKT pkt;
 uint8 opc, flags, type, port;
-uint32 i;
+uint32 i, queue;
 uint64 word;
 
 pkt.addr = entry;
@@ -1769,50 +1736,68 @@ switch (opc) {
         break;
 
     default:
+        sim_printf ("Unhandled opcode %o\n", opc);
         break;
     }
 
 ci_send_ppd (uptr, &pkt);                   /* process it */
 if ((opc == OPC_RDREG) || (flags & PPD_RSP) || (pkt.data[PPD_STATUS] & 0200)) {
     ci_cpy_from (pkt.addr + 3, &pkt.data[PPD_PORT], pkt.length - 12);
-    ci_putq (ci_data.pcb + PCB_RQI, &pkt.addr);
+    queue = PCB_RQI;
     }
 else if (type == PPD_MSG)
-    ci_putq (ci_data.pcb + PCB_MQI, &pkt.addr);
+    queue = PCB_MQI;
 else
-    ci_putq (ci_data.pcb + PCB_DQI, &pkt.addr);
+    queue = PCB_DQI;
+
+if (ci_putq (ci_data.pcb + queue, &pkt.addr) == 0) {
+    memcpy (&ci_data.ppd, &pkt, sizeof (PPD_PKT));
+    ci_data.ppdq = queue;
+    sim_activate (uptr, 5000);
+    return CISE_QERR;
+    }
+return SCPE_OK;
 }
 
 t_stat ci_port_command (UNIT *uptr)
 {
 t_addr entry = 0;
+t_stat r;
 
 do {
     ci_getq (ci_data.pcb + PCB_C3I, &entry);
     if (entry != 0) {
         sim_debug (DEBUG_DETAIL, &ci_dev, "Got packet from command queue 3: %o\n", entry);
-        ci_process_entry (uptr, entry);
+        r = ci_process_entry (uptr, entry);
+        if (r == CISE_QERR)
+            return SCPE_OK;
         }
 } while (entry != 0);
 do {
     ci_getq (ci_data.pcb + PCB_C2I, &entry);
     if (entry != 0) {
         sim_debug (DEBUG_DETAIL, &ci_dev, "Got packet from command queue 2: %o\n", entry);
-        ci_process_entry (uptr, entry);
+        r = ci_process_entry (uptr, entry);
+        if (r == CISE_QERR)
+            return SCPE_OK;
         }
 } while (entry != 0);
 do {
     ci_getq (ci_data.pcb + PCB_C1I, &entry);
     if (entry != 0) {
         sim_debug (DEBUG_DETAIL, &ci_dev, "Got packet from command queue 1: %o\n", entry);
-        ci_process_entry (uptr, entry);
+        r = ci_process_entry (uptr, entry);
+        if (r == CISE_QERR)
+            return SCPE_OK;
         }
 } while (entry != 0);
 do {
     ci_getq (ci_data.pcb + PCB_C0I, &entry);
     if (entry != 0) {
         sim_debug (DEBUG_DETAIL, &ci_dev, "Got packet from command queue 0: %o\n", entry);
-        ci_process_entry (uptr, entry);
+        r = ci_process_entry (uptr, entry);
+        if (r == CISE_QERR)
+            return SCPE_OK;
         }
 } while (entry != 0);
 ci_data.csr &= ~CI_CQA;                                 /* all commands processed */
@@ -1866,8 +1851,10 @@ if (r != SCPE_OK)
     return r;
 
 if (ppd->addr == 0) {
-    sim_printf ("ci_receive_ppd() - No free queue entry available\n");
-    return SCPE_IERR;
+    memcpy (&ci_data.ppd, ppd, sizeof (PPD_PKT));
+    ci_data.ppdq = PCB_RQI;
+    sim_activate (uptr, 5000);
+    return CISE_QERR;
     }
 switch (opc) {
     case OPC_DGREC:
@@ -1879,7 +1866,6 @@ switch (opc) {
             ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 0);
         else
             ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT + 2], PPD_TEXT + 4, ppd->length - 2);
-//        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
         break;
 
     case OPC_MSGREC:
@@ -1891,7 +1877,6 @@ switch (opc) {
             ci_cpy_from_hd (ppd->addr + 5, &ppd->data[PPD_TEXT + 2], (ppd->length - 2) * 2, 0);
         else
             ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT + 2], PPD_TEXT + 4, ppd->length - 2);
-//        ci_cpy_from_ind (ppd->addr, &ppd->data[PPD_TEXT], PPD_TEXT + 2, ppd->length);
         break;
 
     default:
@@ -1900,7 +1885,13 @@ switch (opc) {
     }
 for (uint32 i = 0; i < 20; i++)
     sim_debug (DEBUG_DETAIL, &ci_dev, "   WR: %012llo\n", M[ppd->addr + i]);
-ci_putq (ci_data.pcb + PCB_RQI, &ppd->addr);
+
+if (ci_putq (ci_data.pcb + PCB_RQI, &ppd->addr) == 0) {
+    memcpy (&ci_data.ppd, ppd, sizeof (PPD_PKT));
+    ci_data.ppdq = PCB_RQI;
+    sim_activate (uptr, 5000);
+    return CISE_QERR;
+    }
 return SCPE_OK;
 }
 
@@ -1909,6 +1900,12 @@ t_stat ci_cmd_svc (UNIT *uptr)
 return ci_port_command (&ci_unit[0]);
 }
 
+#include <sys/time.h>
+uint64 stod = 0;
+uint64 sbtim = 0;
+uint64 sbftmg = 0;
+struct timeval wtime;
+
 t_stat ci_svc (UNIT *uptr)
 {
 CI_PKT pkt;
@@ -1916,7 +1913,39 @@ PPD_PKT ppd;
 t_stat r;
 uint8 opc;
 
-//do {
+#if 0
+gettimeofday (&wtime, NULL);
+if (M[0247607] != stod) {
+    stod = M[0247607];
+    sim_printf ("%d.%d TODCLK = %llo\n", wtime.tv_sec, wtime.tv_usec, stod);
+    }
+
+if (M[01400142] != sbtim) {
+    sbtim = M[01400142];
+    sim_printf ("%d.%d SBTIM  = %llo\n", wtime.tv_sec, wtime.tv_usec, sbtim);
+    }
+
+if (M[01400143] != sbftmg) {
+    sbftmg = M[01400143];
+    sim_printf ("%d.%d SBFTMG  = %llo\n", wtime.tv_sec, wtime.tv_usec, sbftmg);
+    }
+#endif
+
+if (ci_data.ppdq != 0) {
+    if (ci_data.ppd.addr == 0) {
+        r = ci_receive_ppd (uptr, &ci_data.ppd);
+        if (r == CISE_QERR)
+            return SCPE_OK;
+        }
+    else if (ci_putq (ci_data.pcb + ci_data.ppdq, &ci_data.ppd.addr) == 0) {
+        sim_activate (uptr, 5000);
+        return SCPE_OK;
+        }
+    ci_data.ppdq = 0;
+    }
+if (ci_data.csr & CI_CQA)
+    sim_activate (&ci_unit[1], 5000);
+do {
     r = ci_receive (uptr, &pkt);                        /* try to receive another packet */
     if (r == SCPE_OK) {
         opc = CI_GETB (pkt.data, CI_OPC);
@@ -1937,7 +1966,9 @@ uint8 opc;
                 break;
             }
         }
-//} while (r == SCPE_OK);
+} while (r == SCPE_OK);
+if (r == CISE_QERR)
+    return SCPE_OK;
 if ((r != SCPE_OK) && (r != CISE_NOPKT))
     return r;
 return ci_port_svc (uptr);
@@ -1949,6 +1980,18 @@ uint32 i;
 
 for (i = 0; i < CI_MAX_NODES; i++)
     ci_data.vcd[i] = 0;
+ci_data.pcb = 0;
+ci_data.pia = 0;
+ci_data.rar = 0;
+ci_data.ebuf = 0;
+ci_data.csr = 0;
+ci_data.uver[0] = 0;
+ci_data.uver[1] = 0;
+ci_data.uver[2] = 0;
+ci_data.uver[3] = 0;
+ci_data.ppd.addr = 0;
+ci_data.ppd.length = 0;
+ci_data.ppdq = 0;
 return ci_port_reset (dptr);
 }
 

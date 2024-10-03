@@ -43,6 +43,8 @@
 #define DTYPE(x)        (((x) & UNIT_M_DTYPE) << UNIT_V_DTYPE)
 #define GET_DTYPE(x)    (((x) >> UNIT_V_DTYPE) & UNIT_M_DTYPE)
 
+#define serial          u3                              /* serial number */
+
 /* Parameters in the unit descriptor */
 #define RPCS1             00
 /* RPCS1 - 00 - control */
@@ -236,6 +238,8 @@ t_stat        rp_reset(DEVICE *);
 t_stat        rp_attach(UNIT *, CONST char *);
 t_stat        rp_detach(UNIT *);
 t_stat        rp_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat        rp_set_serial(UNIT *uptr, int32 val, CONST char *cptr, void *desc);
+t_stat        rp_show_serial(FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat        rp_help (FILE *st, DEVICE *dptr, UNIT *uptr, int32 flag,
                     const char *cptr);
 const char    *rp_description (DEVICE *dptr);
@@ -357,6 +361,8 @@ MTAB                rp_mod[] = {
         &set_writelock, &show_writelock,   NULL, "Write enable drive" },
     { MTAB_XTD|MTAB_VUN, 1, NULL, "LOCKED", 
         &set_writelock, NULL,   NULL, "Write lock drive" },
+    { MTAB_XTD|MTAB_VUN|MTAB_VALR, 0, "SERIAL", "SERIAL",
+        &rp_set_serial, &rp_show_serial, NULL, "Drive serial number" },
     {UNIT_DTYPE, (RP07_DTYPE << UNIT_V_DTYPE), "RP07", "RP07", &rp_set_type },
     {UNIT_DTYPE, (RP06_DTYPE << UNIT_V_DTYPE), "RP06", "RP06", &rp_set_type },
     {UNIT_DTYPE, (RP04_DTYPE << UNIT_V_DTYPE), "RP04", "RP04", &rp_set_type },
@@ -392,6 +398,7 @@ REG                 rpa_reg[] = {
     {ORDATA(CDA, rp_rh[0].cda, 18)},
     {ORDATA(BUF, rp_rh[0].buf, 36), REG_HRO},
     {BRDATA(BUFF, rp_buf[0], 16, 64, RP_NUMWD), REG_HRO},
+    {URDATAD(SERIAL, rp_unit[0].serial, 10, 16, 0, NUM_UNITS_RP, 0, "Drive serial number")},
     {0}
 };  
 
@@ -420,6 +427,7 @@ REG                 rpb_reg[] = {
     {ORDATA(CDA, rp_rh[1].cda, 18)},
     {ORDATA(BUF, rp_rh[1].buf, 36), REG_HRO},
     {BRDATA(BUFF, rp_buf[1], 16, 64, RP_NUMWD), REG_HRO},
+    {URDATAD(SERIAL, rp_unit[NUM_UNITS_RP].serial, 10, 16, 0, NUM_UNITS_RP, 0, "Drive serial number")},
     {0}
 };  
 
@@ -448,6 +456,7 @@ REG                 rpc_reg[] = {
     {ORDATA(CDA, rp_rh[2].cda, 18)},
     {ORDATA(BUF, rp_rh[2].buf, 36), REG_HRO},
     {BRDATA(BUFF, rp_buf[2], 16, 64, RP_NUMWD), REG_HRO},
+    {URDATAD(SERIAL, rp_unit[NUM_UNITS_RP * 2].serial, 10, 16, 0, NUM_UNITS_RP, 0, "Drive serial number")},
     {0}
 };  
 
@@ -476,6 +485,7 @@ REG                 rpd_reg[] = {
     {ORDATA(DEVNUM, rp_rh[3].devnum, 9), REG_HRO},
     {ORDATA(BUF, rp_rh[3].buf, 36), REG_HRO},
     {BRDATA(BUFF, rp_buf[3], 16, 64, RP_NUMWD), REG_HRO},
+    {URDATAD(SERIAL, rp_unit[NUM_UNITS_RP * 3].serial, 10, 16, 0, NUM_UNITS_RP, 0, "Drive serial number")},
     {0}
 };  
 
@@ -758,8 +768,7 @@ rp_read(DEVICE *dptr, struct rh_if *rhc, int reg, uint32 *data) {
         temp = uptr->CCYL;
         break;
     case  010:  /* serial no */
-        i = GET_CNTRL_RH(uptr->flags);
-        temp = (020 * i) + (unit + 1);
+        temp = uptr->serial;
         break;
     case  014:  /* error register 2 */
         temp = regs[RPER2];
@@ -1061,6 +1070,30 @@ rp_set_type(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
 
 
 t_stat
+rp_set_serial(UNIT *uptr, int32 val, CONST char *cptr, void *desc)
+{
+    int32 serial;
+    t_stat r;
+
+    if (cptr == NULL)
+        return SCPE_ARG;
+    serial = (int32) get_uint (cptr, 10, 0177777, &r);
+    if ((r != SCPE_OK) || (serial <= 0))
+        return SCPE_ARG;
+    uptr->serial = serial;
+    return SCPE_OK;
+}
+
+
+t_stat
+rp_show_serial(FILE *st, UNIT *uptr, int32 val, CONST void *desc)
+{
+    fprintf (st, "Serial: %d", uptr->serial);
+    return SCPE_OK;
+}
+
+
+t_stat
 rp_reset(DEVICE * rptr)
 {
     UNIT     *uptr = rptr->units;
@@ -1072,6 +1105,8 @@ rp_reset(DEVICE * rptr)
     for (i = 0; i < rptr->numunits; i++) {
         if (uptr->up7 == 0 && (uptr->up7 = calloc(16, sizeof(uint16))) == 0)
             return SCPE_IERR;
+        if (uptr->serial == 0)
+            uptr->serial = (020 * ctlr) + ((i % NUM_UNITS_RP) + 1);
         regs = (uint16 *)(uptr->up7);
         regs[RPDS] &= DS_VV;
         if ((uptr->flags & UNIT_ATT) != 0)                  /* attached? */

@@ -128,8 +128,8 @@ extern int32 MMR2;
 #define MICROVAX1       0
 #endif
 
-#include "pdp11_uqssp.h"
-#include "pdp11_mscp.h"
+#include "dec_uqssp.h"
+#include "dec_mscp.h"
 #include "sim_disk.h"
 
 #define UF_MSK          (UF_CMR|UF_CMW)                 /* settable flags */

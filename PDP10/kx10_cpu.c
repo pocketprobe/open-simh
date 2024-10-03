@@ -2405,8 +2405,11 @@ load_tlb(int uf, int page, int wr)
 #define PG_IDX   0000777
 
 #define PG_MASK  0000003777777LL
-#define PG_AGE   0770000000000LL
 #define PG_PAG   0017777
+
+#define CST_AGE  0770000000000LL
+#define CST_WRT  0000000400000LL                        /* writeable */
+#define CST_M    0000000000001LL                        /* modified */
     if (t20_page) { /* Start with full access */
          int acc_bits = PG_PUB|PG_WRT|PG_KEP|PG_CAC;
          uint64 cst_val = 0;
@@ -2474,7 +2477,7 @@ sect_loop:
         if ((cst & PG_MASK)) {
             sim_interval--;
             cst_val = M[(cst & PG_MASK) + pg];
-            if ((cst_val & PG_AGE) == 0) {
+            if ((cst_val & CST_AGE) == 0) {
                 fault_data = 0;
                 page_fault = 1;
                 return 0;
@@ -2535,14 +2538,14 @@ pg_loop:
         if ((cst & PG_MASK)) {
            sim_interval--;
            cst_val = M[(cst & PG_MASK) + pg];
-           if ((cst_val  & PG_AGE) == 0) {
+           if ((cst_val  & CST_AGE) == 0) {
                fault_data = 0;
                page_fault = 1;
                return 0;
            }
-           if (acc_bits & PG_WRT) {
+           if ((acc_bits & PG_WRT) && (cst_val & CST_WRT)) {
                if (wr)
-                  cst_val  |= 1;
+                  cst_val |= CST_M;
           } else if (wr) { /* Trying to write and not writable */
                fault_data = 0 /* Write fault */;
                page_fault = 1;
@@ -2551,7 +2554,7 @@ pg_loop:
            M[(cst & PG_MASK) + pg] = (cst_val  & cst_msk) | cst_dat;
         } else {
            if (acc_bits & PG_WRT) {
-               cst_val = 1;
+               cst_val = CST_M;
            }
         }
         /* Now construct a TBL entry */
@@ -2564,7 +2567,7 @@ pg_loop:
         if (acc_bits & PG_PUB)
            data |= KL_PAG_P;                /* P */
         if (acc_bits & PG_WRT) {
-           if (cst_val & 1)
+           if (cst_val & CST_M)
                data |= KL_PAG_W;   /* Set Modified page */
            data |= KL_PAG_S;      /* Set Writeable bit */
         }
