@@ -151,7 +151,7 @@ CI_PUTW (pkt->data, PPD_HWVER + 4, 0x0222);
 CI_PUTW (pkt->data, PPD_HWVER + 6, 0x0227);
 CI_PUTW (pkt->data, PPD_HWVER + 8, 0x0222);
 CI_PUTW (pkt->data, PPD_HWVER + 10, 0x0222);
-sprintf (&pkt->data[PPD_NODE], "CIPGA   ");             /* node name */
+sprintf (&pkt->data[PPD_NODE], "SIMH    ");             /* node name */
 memset (&pkt->data[PPD_TIME], 0, 8);                    /* current time */
 pkt->length = (dg_type == PPD_START) ? LEN_START : LEN_STACK;
 r = ppd_set_path (uptr, pkt);
@@ -193,7 +193,7 @@ switch (mtype) {
         if (pb->vc_state == START_SENT) {
             ppd_start (uptr, pkt, PPD_STACK);           /* send STACK */
             pb->vc_state = START_REC;
-            }                
+            }
         else if (pb->vc_state == START_REC) {
             ppd_start (uptr, pkt, PPD_STACK);           /* send STACK */
             }
