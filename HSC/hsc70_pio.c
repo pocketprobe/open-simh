@@ -499,6 +499,10 @@ uint8 *fbuf = uptr->filebuf;
 
 if (fl_csr & FLCSR_DIS)                                 /* disable DMA request? */
     return;
+if ((da < 0) || da >= FL_SIZE) {  /* no such sector (e.g. SREG=0 DMA test) */
+    sim_debug (DBG_REG, &fl_dev, "fl: invalid write da %d\n", da);
+    return;
+    }
 sim_debug (DBG_REG, &fl_dev, "Boot device write, %o -> %X, %d\n", ma, da, sz);
 if (mapen) {                                            /* use reloc? */
     for (i = 0; i < ln; i++)
@@ -519,6 +523,10 @@ uint8 *fbuf = uptr->filebuf;
 
 if (fl_csr & FLCSR_DIS)                                 /* disable DMA request? */
     return;
+if ((da < 0) || da >= FL_SIZE) {  /* no such sector (e.g. SREG=0 DMA test) */
+    sim_debug (DBG_REG, &fl_dev, "fl: invalid read da %d\n", da);
+    return;
+    }
 sim_debug (DBG_REG, &fl_dev, "Boot device read, %X, %d -> %o\n", da, sz, ma);
 if (mapen) {                                            /* use reloc? */
     for (i = 0; i < ln; i++)
@@ -578,12 +586,16 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
         sim_debug (DBG_REG, &fl_dev, "fl_csr wr: %o at %o\n", data, (uint16)inst_pc);
+        if ((data & FLCSR_ME) && ((fl_csr & FLCSR_ME) == 0))
+            fl_madr1 = (fl_madr1 & ~0377) | 0001;       /* ME 0->1 edge: SREG init 001 (TM 11.7.1.3.2) */
         fl_csr = data & FLCSR_RW;
         if (fl_csr & FLCSR_ME) {                        /* motor enabled */
             cmd = data & FLCSR_CS;
             if ((cmd >> 4) == 015) {                    /* force interrupt? */
                 sim_cancel (&fl_unit[unitno]);
                 fl_csr = fl_csr & ~FLSTS_BSY;           /* set not busy */
+                if (fl_unit[unitno].flags & UNIT_ATT)   /* force int leaves type I status in SR */
+                    fl_csr = fl_csr | FLSTS_NRDY;
                 if (cmd & 05) {                         /* I2 or I0 */
                     fl_unit[unitno].CMD = cmd;
                     fl_csr = fl_csr | FLSTS_BSY;        /* set busy */
@@ -630,7 +642,7 @@ t_stat fl_svc (UNIT *uptr)
 int32 ma, da, sec;
 
 if ((uptr->flags & UNIT_ATT) == 0) {
-    fl_csr = fl_csr | FLSTS_NRDY;                       /* not ready */
+    fl_csr = fl_csr & ~FLSTS_NRDY;                      /* 2797 type I S7 = inverted pin 34: not ready -> clear */
     fl_setint ();
     return SCPE_OK;
     }
@@ -647,6 +659,7 @@ switch (uptr->CMD >> 5) {
         fl_csr = fl_csr & ~FLSTS_TRK0;
         if (uptr->TRK == 0)                             /* now on track 0? */
             fl_csr = fl_csr | FLSTS_TRK0;               /* set flag */
+        fl_csr = fl_csr & ~FLSTS_NRDY;                  /* type I done: drive ready -> S7 clear (TM Table 11-10) */
         fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
@@ -686,7 +699,15 @@ switch (uptr->CMD >> 5) {
             ((fl_madr0 & FLMA0_A0) >> 8);
         sec = fl_madr1 & FLMA1_DS;
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
-        if (uptr->CMD & 020) {
+        if (fl_madr2 & FLMA2_DMA) {                     /* DMA test: no media; SREG byte doubled to memory */
+            sim_debug (DBG_REG, &fl_dev, "fl: DMA test read, %o -> %o\n", sec, ma);
+            if ((ma >= 0) && (ma < (FL_NUMTR * FL_NUMHD * FL_NUMSC * FL_NUMBY))) {
+                PWriteB (sec, ma);
+                PWriteB (sec, (ma + 1));
+                }
+            ma = ma + 2;                                /* one word transferred */
+            }
+        else if (uptr->CMD & 020) {
             sim_debug (DBG_REG, &fl_dev, "fl: read multi sector\n");
             fl_read (uptr, da, (FL_NUMSC - sec), ma, FALSE);
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
@@ -712,9 +733,11 @@ switch (uptr->CMD >> 5) {
             ((fl_madr0 & FLMA0_A0) >> 8);
         sec = fl_madr1 & FLMA1_DS;
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
-        if ((da * 512) > uptr->hwmark)                  /* update hwmark */
-            uptr->hwmark = (da * 512);
-        if (uptr->CMD & 020) {
+        if (fl_madr2 & FLMA2_DMA) {                     /* DMA test: no media, no memory data; one word */
+            sim_debug (DBG_REG, &fl_dev, "fl: DMA test write, %o <- word\n", ma);
+            ma = ma + 2;                                /* one word transferred */
+            }
+        else if (uptr->CMD & 020) {
             sim_debug (DBG_REG, &fl_dev, "fl: write multi sector\n");
             fl_write (uptr, da, (FL_NUMSC - sec), ma, FALSE);
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
@@ -722,6 +745,8 @@ switch (uptr->CMD >> 5) {
         else {
             sim_debug (DBG_REG, &fl_dev, "fl: write single sector\n");
             fl_write (uptr, da, 1, ma, FALSE);
+            if ((da * 512) > uptr->hwmark)              /* update hwmark */
+                uptr->hwmark = (da * 512);
             ma = ma + 512;
             }
         fl_madr0 = fl_madr0 & ~FLMA0_A0;
@@ -786,7 +811,7 @@ fl_unit[1].CMD = 0;
 fl_unit[1].DIR = 1;
 fl_csr = 0;
 fl_madr0 = 0;
-fl_madr1 = 0;
+fl_madr1 = 0001;                                        /* SREG init 001 on power up/BINIT (TM 11.7.1.3.2) */
 fl_madr2 = 0;
 return SCPE_OK;
 }
