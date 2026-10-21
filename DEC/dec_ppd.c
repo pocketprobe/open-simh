@@ -446,6 +446,21 @@ switch (opcode) {
 
     case OPC_CNF:
         return ppd_cnfrec (uptr, pkt);
+
+    case OPC_RST:                                       /* reset */
+        if (pkt->node < CI_MAX_NODES) {
+            SCA_CTX *ctx = uptr->sca_ctx;
+            if (ctx) {
+                SCA_PB *pb = &ctx->sb[pkt->node].pb;
+                scs_fail_vc (uptr, pkt->node);          /* notify SCS */
+                ci_close_vc (uptr, pkt->node);          /* close VC */
+                pb->vc_state = VC_CLOSED;               /* re-establish on next START */
+                }
+            }
+        return SCPE_OK;                                 /* fallthrough would be IERR */
+
+    case OPC_STRT:                                      /* start - ignored like host side */
+        return SCPE_OK;                                 /* for enabled port */
         }
 return SCPE_IERR;
 }
