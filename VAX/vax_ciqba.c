@@ -684,7 +684,7 @@ t_stat cq_read_packet (CQ_PKT *pkt, size_t length)
 {
 uint32 i;
 memset (pkt->data, 0, PPD_TYPE);
-sim_debug (DBG_TRC, &cq_dev, "cq_read_packet (%d bytes):\n", length);
+sim_debug (DBG_TRC, &cq_dev, "cq_read_packet (%ld bytes):\n", length);
 if (Map_ReadB (pkt->addr + PPD_TYPE, length - PPD_TYPE, &pkt->data[PPD_TYPE])) {
     sim_debug (DBG_TRC, &cq_dev, "read failed\n");
     return CISE_MEMERR;
@@ -701,7 +701,7 @@ return SCPE_OK;
 t_stat cq_write_packet (CQ_PKT *pkt, size_t length)
 {
 uint32 i;
-sim_debug (DBG_TRC, &cq_dev, "cq_write_packet (%d bytes):\n", length);
+sim_debug (DBG_TRC, &cq_dev, "cq_write_packet (%ld bytes):\n", length);
 if (Map_WriteB (pkt->addr + PPD_TYPE, length - PPD_TYPE, &pkt->data[PPD_TYPE])) {
     sim_debug (DBG_TRC, &cq_dev, "write failed\n");
     return CISE_MEMERR;
@@ -729,7 +729,7 @@ if (entry & RENT_CIQBA_OWNED) {
         pkt->type = 1;
     else
         pkt->type = 0;
-    sim_debug (DBG_TRC, &cq_dev, "cq_dequeue: entry = %d, addr = %X, size = %X\n", i, pkt->addr, pkt->size);
+    sim_debug (DBG_TRC, &cq_dev, "cq_dequeue: entry = %u, addr = %X, size = %lX\n", i, pkt->addr, pkt->size);
     if (keep)
         entry = RENT_CIQBA_OWNED;
     else
@@ -754,7 +754,7 @@ uint32 size;
 i = queue->ptr;
 entry = queue->ring[i*2] | (queue->ring[i*2+1] << 16);  // May need a macro?
 if (entry == RENT_CIQBA_OWNED) {                    /* owned, empty? */
-    sim_debug (DBG_TRC, &cq_dev, "cq_enqueue: entry = %d, addr = %X, size = %X\n", i, pkt->addr, pkt->size);
+    sim_debug (DBG_TRC, &cq_dev, "cq_enqueue: entry = %u, addr = %X, size = %lX\n", i, pkt->addr, pkt->size);
     entry = pkt->addr & RENT_ADDR;
     size = pkt->size >> 2;
     entry = entry | (size << RENT_V_LENGTH);

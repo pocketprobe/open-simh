@@ -286,7 +286,7 @@ t_stat r = SCPE_OK;
 if (pkt->node >= CI_MAX_NODES)                          /* port valid? */
     return SCPE_OK;
 if (pkt->length > CI_MAXFR) {                           /* check length */
-    sim_printf ("CI packet length error in ci_send: %d\n", pkt->length);
+    sim_printf ("CI packet length error in ci_send: %ld\n", pkt->length);
     return SCPE_IERR;
     }
 
@@ -610,7 +610,7 @@ while (cp->tx_queue.count > 0) {                        /* process transmit queu
         }
     item->pkt.offset = item->pkt.offset + r;
     if (item->pkt.offset < item->pkt.length) {
-        sim_debug_unit (DBG_CONN, uptr, "Sent %d of %d bytes, still queued\n", item->pkt.offset, item->pkt.length);
+        sim_debug_unit (DBG_CONN, uptr, "Sent %lld of %ld bytes, still queued\n", item->pkt.offset, item->pkt.length);
         break;                                          /* try later - FIXME: This will block other queued packets */
         }
     ciq_remove (&cp->tx_queue);                         /* remove processed packet from queue */
@@ -652,7 +652,7 @@ for (i = 0; i < CI_MAX_NODES; i++) {
             pkt->length = ((pkt->data[CI_LEN_HI] & 0xF) << 8);
             pkt->length |= pkt->data[CI_LEN_LO];        /* get total packet length */
             if (pkt->length > CI_MAXFR) {               /* check length is valid */
-                sim_printf ("Received packet with invalid length %d, socket: %d\n", pkt->length, link->socket);
+                sim_printf ("Received packet with invalid length %ld, socket: %d\n", pkt->length, link->socket);
                 ci_link_fail (uptr, link);              /* close the VC */
                 break;
                 }

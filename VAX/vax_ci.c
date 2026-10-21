@@ -244,7 +244,7 @@ else if ((type == PPD_MSG) && (pkt->length > ci_max_msg)) { /* message too big? 
     sts = STS_PSV;                                      /* packet size violation */
     }
 if (pkt->length > CI_MAXFR) {                           /* apply safe limit */
-    sim_printf ("packet length %d limited to %d\n", pkt->length, CI_MAXFR);
+    sim_printf ("packet length %ld limited to %d\n", pkt->length, CI_MAXFR);
     pkt->length = CI_MAXFR;
     }
 return sts;
@@ -727,7 +727,7 @@ void ci_read_packet (UNIT *uptr, PPD_PKT *pkt, size_t length)
 {
 int32 i;
 
-sim_debug_unit (DBG_TRC, uptr, "ci_read_packet: addr: %08X, pkt->length: %d, length: %d\n", pkt->addr, pkt->length, length);
+sim_debug_unit (DBG_TRC, uptr, "ci_read_packet: addr: %08X, pkt->length: %ld, length: %ld\n", pkt->addr, pkt->length, length);
 for (i = PPD_SIZE; i < length; i++)                     /* skip the queue pointers */
     pkt->data[i] = GVP_Read (&ci_mmu, (pkt->addr + i), L_BYTE);
 }
@@ -738,7 +738,7 @@ void ci_write_packet (UNIT *uptr, PPD_PKT *pkt, size_t length)
 {
 int32 i;
 
-sim_debug_unit (DBG_TRC, uptr, "ci_write_packet: addr: %08X, pkt->length: %d, length: %d\n", pkt->addr, pkt->length, length);
+sim_debug_unit (DBG_TRC, uptr, "ci_write_packet: addr: %08X, pkt->length: %ld, length: %ld\n", pkt->addr, pkt->length, length);
 for (i = PPD_PORT; i < length; i++)                     /* don't overwrite the header */
     GVP_Write (&ci_mmu, (pkt->addr + i), pkt->data[i], L_BYTE);
 }
