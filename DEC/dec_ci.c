@@ -417,7 +417,7 @@ CI_LINK *link = NULL;
 SOCKET newsock;
 uint32 i;
 
-if (port > CI_MAX_NODES)
+if (port >= CI_MAX_NODES)
     return SCPE_ARG;
 node = &cp->nodes[port];
 sim_debug_unit (DBG_CONN, uptr, "VC Open: Link in state %d\n", node->conn);
@@ -466,7 +466,7 @@ CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
 CI_NODE *node;
 CI_LINK *link;
 
-if (port > CI_MAX_NODES)
+if (port >= CI_MAX_NODES)
     return SCPE_ARG;
 node = &cp->nodes[port];
 sim_debug_unit (DBG_CONN, uptr, "VC Close: Link in state %d\n", node->conn);
@@ -494,7 +494,7 @@ t_stat ci_check_vc (UNIT *uptr, uint8 port)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
 CI_NODE *node;
-if (port > CI_MAX_NODES)
+if (port >= CI_MAX_NODES)
     return SCPE_ARG;
 node = &cp->nodes[port];
 return (node->conn > LINK_CLOSED) ? SCPE_OK : CISE_VCERR;
