@@ -363,6 +363,12 @@ pkt->data[CI_LEN_HI] &= ~CI_M_PATH;                     /* clear reserved bits *
 pkt->node = pkt->data[CI_SRC];
 opcode = pkt->data[CI_OPC];
 
+/* Hardware filters arriving packets whose Source Node ID matches own node */
+/* before they reach a host response queue (evil twin/own echo). The LB     */
+/* family is the port's own loopback machinery and must still come through. */
+if ((opcode != OPC_LB) && (pkt->node == (uint32)ci_get_node (uptr)))
+    return SCPE_OK;
+
 switch (opcode) {
 
     case OPC_DG:                                        /* datagram */
