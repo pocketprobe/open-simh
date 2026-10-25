@@ -445,6 +445,8 @@ uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags
 uint8  kh_closed[CI_MAX_NODES];                         /* VC explicitly closed via set-vc */
 uint8  kh_rstnode;
 t_bool kh_consume_item;                                 /* work item consumed with no completion */
+static CI_PKT kh_hold_pkt;                              /* held incoming SCS message */
+static t_bool kh_hold_valid;                            /* a message is parked for re-delivery */
 
 #define KH_VCD_CST      0100000                         /* circuit state bit (VAXport VCD_CST) */
 
@@ -696,9 +698,17 @@ hm = kh_get_srr (len);
 lof = 0 | len;
 
 if (hm == 0) {
-    sim_printf ("No buffer for incoming packet\n");
+    /* CIPA 2.1: when the sequenced free queue is empty the port HOLDS
+       the packet and delivers a MSGREC later - dropping an SCS message
+       loses a dress/enumerate step forever (one lost message wedges the
+       peer's state machine).  Park it; kh_svc re-delivers when a buffer
+       frees, ahead of any newer arrivals, preserving order. */
+    kh_hold_pkt = *pkt;
+    kh_hold_valid = TRUE;
+    sim_debug (DBG_WRN, &kh_dev, "holding incoming SCS message, SRR empty\n");
     return SCPE_OK;
     }
+kh_hold_valid = FALSE;                                  /* (re)delivery succeeded */
 
 rcc = GETW (cb + CB_RCC);
 rcc = rcc + CI_GETW (pkt->data, SCS_CREDIT);
@@ -765,7 +775,13 @@ else {
     }
 
 if (hm == 0) {
-    sim_printf ("No buffer for incoming packet\n");
+    if (opc == OPC_MSG) {                               /* sequenced: HOLD (CIPA 2.1) */
+        kh_hold_pkt = *pkt;                             /* park for re-delivery when a */
+        kh_hold_valid = TRUE;                           /* buffer frees - never drop */
+        sim_debug (DBG_WRN, &kh_dev, "holding incoming message, SRR empty\n");
+        return SCPE_OK;
+        }
+    sim_printf ("No buffer for incoming packet\n");     /* datagram: discard (CIPA 2.1) */
     return SCPE_OK;
     }
 
@@ -1265,6 +1281,12 @@ if (r != SCPE_OK)
     return r;
 
 for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
+    if (kh_hold_valid) {                                /* held SCS message pending? */
+        r = kh_receive_int (&kh_hold_pkt);              /* re-deliver it first (order) */
+        if (kh_hold_valid)
+            break;                                      /* still no buffer: stop consuming */
+        continue;                                       /* delivered: pull more */
+        }
     r = ci_receive (uptr, &pkt);                        /* get next packet */
     // TODO: handle errors from ci_receive
     if (r != SCPE_OK)
