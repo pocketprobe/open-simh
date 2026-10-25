@@ -940,7 +940,19 @@ switch (opc) {
             sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "node death marker (NACK) consumed (type %06o dma %08o)\n", p1, (p2 << 6));
             break;
             }
-        PUTW (hm + HM_LOF, 060077);
+        /* Buffer-post transform: the item IS the pool buffer, but as
+           posted its LOF is 060000 (local-command class, size bits 0)
+           and CN is 1 - kh_get_srr would classify it as a small buffer
+           and never match it against a large (DMA-class, len>=077)
+           request, so the offered buffers rot in the pool while large
+           requests starve (gen 16/17: 135 posted, pool empty).  The
+           firmware stamped HM$BMB itself (p2 duplicates it); rewrite
+           the class fields so the pool sees a large buffer:
+           LOF size class 077, CN=2 (kh_get_srr's large marker). */
+        PUTW (hm + HM_LOF, (opc == 003) ? 040077 : 044077);
+        PUTW (hm + HM_CN, 2);
+        if (p3 != 0)                                    /* FW-passed stamp? */
+            PUTW (hm + HM_BMB, p3);
         break;
     default:
         sim_printf ("unknown local cmd\n");
