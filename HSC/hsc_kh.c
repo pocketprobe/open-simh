@@ -1276,19 +1276,19 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
 else {
-        /* No completion queue: the firmware gave no return path for this
-           item (observed: a foreign-class LOF 013400 work item on 3WK).
-           Dropping it leaks the lease - the FW's buffer pool drains until
-           "No buffer for incoming packet" storms and K.ci halts.  Return
-           it to the SRR pool with HME$VC ("not transmitted") instead -
-           unless it is itself a death marker, which must never pool. */
-        if (kh_is_nack (rsc)) {
+        /* No completion queue: the firmware gave no return path, which
+           means the firmware is managing this item on its own lists -
+           it posted it cq-less deliberately (observed: buffer-family
+           items during abort churn, the foreign LOF 013400 artifact).
+           Re-pooling such an item DOUBLE-LINKS it: on the kh's SRR
+           chain and on whatever firmware list still holds it, and the
+           firmware's later walks follow the zombie link into repurposed
+           memory (the deterministic 007007 at CM word 007250).  The
+           FW's own LCMD buffer posts refill the pool; the kh invents
+           no returns of its own.  The item vanishes. */
+        sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o vanished (firmware-managed)\n", rsc);
+        if (kh_is_nack (rsc))
             sim_debug (DBG_WRN, &kh_dev, "cq-less NACK item %07o dropped (not pooled)\n", rsc);
-            }
-        else {
-            sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o returned to SRR (HME$VC)\n", rsc);
-            kh_hm_return (rsc);
-            }
         }
     }
 return SCPE_OK;
