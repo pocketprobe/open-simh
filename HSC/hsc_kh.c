@@ -1195,9 +1195,12 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         default:
             sim_printf ("K.ci unknown opcode: %o\n", opc);
-            sim_debug (DBG_WRN, &kh_dev, "K.ci unknown opcode %o, hm %07o LOF %06o CTX %06o CN %06o, cq %06o%s\n",
-                opc, rsc, GETW (rsc + HM_LOF), GETW (rsc + HM_CTX), GETW (rsc + HM_CN), cq,
+            sim_debug (DBG_WRN, &kh_dev, "K.ci unknown opcode %o, wq %07o hm %07o LOF %06o CTX %06o CN %06o, cq %06o%s\n",
+                opc, wq, rsc, GETW (rsc + HM_LOF), GETW (rsc + HM_CTX), GETW (rsc + HM_CN), cq,
                 cq ? "" : " (no cq: HM leaked)");
+            sim_debug (DBG_WRN, &kh_dev, "  hm neighborhood: %06o %06o %06o %06o | %06o %06o %06o %06o\n",
+                GETW (rsc - 010), GETW (rsc - 006), GETW (rsc - 004), GETW (rsc - 002),
+                GETW (rsc), GETW (rsc + 002), GETW (rsc + 004), GETW (rsc + 006));
             break;
         }
 
