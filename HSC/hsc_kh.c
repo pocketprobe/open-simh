@@ -896,16 +896,17 @@ switch (opc) {
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
-        if ((p1 == 0177776) || (p2 == 0)) {             /* degenerate post: no buffer attached */
-            /* type -2 = the firmware's no-circuit MARKER, not a trans-     */
-            /* action.  Completing it in any form (success ack or HME$VC    */
-            /* error) sends the firmware into its retrieve-with-degenerate- */
-            /* args path: 007020 "Failure to retrieve SCS resources" with   */
-            /* the post's (type,dma) on the stack - observed for BOTH       */
-            /* completion styles.  Consume it silently instead: the marker  */
-            /* carries no lease to return and expects no reply.             */
+        if ((p1 == 0177776) || (p2 == 0)) {             /* NODE DEATH MARKER (NACK) */
+            /* type -2 = the firmware's NACK for a dead node's circuit -    */
+            /* a notification, not a transaction.  Completing it in any     */
+            /* form (success ack or HME$VC error) makes the firmware run    */
+            /* its retrieve-with-marker-args path: 007020 "Failure to       */
+            /* retrieve SCS resources" with the marker's (type,dma) on the  */
+            /* stack - observed for BOTH completion styles.  Consume it:    */
+            /* no completion, shell back to the pool; the firmware tracks   */
+            /* ACKs/NAKs itself (KH$ABQ).                                   */
             kh_consume_item = TRUE;
-            sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "degenerate buffer-post (type %06o dma %08o) consumed silently\n", p1, (p2 << 6));
+            sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "node death marker (NACK) consumed (type %06o dma %08o)\n", p1, (p2 << 6));
             break;
             }
         PUTW (hm + HM_LOF, 060077);
@@ -1160,26 +1161,6 @@ else
     sim_printf ("Unknown route opcode for K.ci: %o\n", opc);
 }
 
-/* Process resources from a work queue */
-
-/* The firmware's resource collector validates HM$BMB (offset 0020) in
-   [140000,160000) - the M.DAT band - on every HM that reaches it
-   (disassembled raise site 13544/13552 -> 007022 "Invalid BMB address",
-   HSC SV-002).  Work-queue items that carry no data buffer (local
-   commands, degenerate buffer posts, gated send completions) never had
-   a stamp there: hand the collector a harmless in-band value instead of
-   the zero the firmware left in the field.  Real data-carrying stamps
-   are never touched. */
-
-void kh_bmb_sanitize (uint32 hm)
-{
-uint32 bmb = GETW (hm + HM_BMB);
-if ((bmb < 0140000) || (bmb >= 0160000)) {
-    PUTW (hm + HM_BMB, 0150000);                        /* mid M.DAT band, like real stamps */
-    sim_debug (DBG_WRN, &kh_dev, "BMB sanitize: hm %07o field %06o -> 0150000\n", hm, bmb);
-    }
-}
-
 t_stat kh_process_queue (uint32 kh, uint32 wq)
 {
 uint32 cq, rsc, opc, i;
@@ -1233,11 +1214,9 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
            (-2,dma) arguments), but the marker HM's shell still rejoins
            the SRR free pool - the firmware tracks ACKs/NAKs itself
            (KH$ABQ), while the buffer economy stays balanced. */
-        kh_bmb_sanitize (rsc);
         kg_send (kh + KH_SRR, rsc);
         }
     else if (cq) {
-        kh_bmb_sanitize (rsc);
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
 else {
