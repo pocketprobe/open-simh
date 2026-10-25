@@ -985,6 +985,11 @@ else
 pkt.length = len;
 r = ci_send (&kh_unit, &pkt);
 
+if (r != SCPE_OK) {                                     /* send failed - report status */
+    sim_debug (DBG_TRC, &kh_dev, "Send failed: HM %07o, node %d, status %d\n", hm, node, r);
+    PUTW (hm + HM_ERR, 004000);                         /* HME$VC - transmission not attempted */
+    }
+
 done:
 if (opc == 020000)                                      /* FIXME: APPMSG always goes to SRR? */
     *cq = kh + KH_SRR;
