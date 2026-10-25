@@ -455,6 +455,7 @@ t_stat kh_reset (DEVICE *dptr);
 t_stat kh_init (uint16 req, uint16 act);
 t_stat kh_poll (DEVICE *dptr, uint32 addr, int32 interval);
 static void kh_hm_return (uint32 hm);
+static t_bool kh_is_nack (uint32 hm);
 t_stat kh_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
@@ -1254,12 +1255,14 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         }
 
     if (kh_consume_item) {
-        /* Node-death marker consumed: no completion is sent (any
-           completion gets misread as a resource operation on the
-           (-2,dma) arguments), but the marker HM's shell still rejoins
-           the SRR free pool - the firmware tracks ACKs/NAKs itself
-           (KH$ABQ), while the buffer economy stays balanced. */
-        kg_send (kh + KH_SRR, rsc);
+        /* Node-death marker consumed: vanish.  No completion (any
+           completion misreads as a resource operation on the marker's
+           arguments) and NO shell return - the firmware wrote the
+           shell off in its ABQ ledger when posting the marker, and
+           re-entering it into the free pool presents the pool walker
+           with a CN=-2 buffer (007007).  The buffer's absence is the
+           firmware's own accounting, not a kh-side leak. */
+        sim_debug (DBG_WRN, &kh_dev, "NACK shell %07o vanished\n", rsc);
         }
     else if (cq) {
         kg_send (cq, rsc);                              /* put resource to completion queue */
@@ -1269,9 +1272,15 @@ else {
            item (observed: a foreign-class LOF 013400 work item on 3WK).
            Dropping it leaks the lease - the FW's buffer pool drains until
            "No buffer for incoming packet" storms and K.ci halts.  Return
-           it to the SRR pool with HME$VC ("not transmitted") instead. */
-        sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o returned to SRR (HME$VC)\n", rsc);
-        kh_hm_return (rsc);
+           it to the SRR pool with HME$VC ("not transmitted") instead -
+           unless it is itself a death marker, which must never pool. */
+        if (kh_is_nack (rsc)) {
+            sim_debug (DBG_WRN, &kh_dev, "cq-less NACK item %07o dropped (not pooled)\n", rsc);
+            }
+        else {
+            sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o returned to SRR (HME$VC)\n", rsc);
+            kh_hm_return (rsc);
+            }
         }
     }
 return SCPE_OK;
@@ -1422,6 +1431,17 @@ return SCPE_OK;
    SRR queue.  Without this the firmware's waiter count drifts (007021)
    and its HMB pool drains until "Resource lost to K.ci -- N HMBs". */
 
+/* The -2 sentinel in the BMB-count field marks a node death marker.    */
+/* Markers are never completed and never pooled, whatever path they     */
+/* arrive by: the firmware's ABQ ledger tracks them and has written     */
+/* their shells off - re-entering one into the free pool presents the   */
+/* pool walker with a buffer claiming minus-two BMBs (007007).          */
+
+static t_bool kh_is_nack (uint32 hm)
+{
+return (GETW (hm + HM_CN) == 0177776);
+}
+
 static void kh_hm_return (uint32 hm)
 {
 uint32 kh = kh_dib.cma;
@@ -1433,6 +1453,10 @@ for (i = 0; i < CI_MAX_NODES; i++) {
         kh_req[i] = 0;                                  /* stop matching responses to it */
         sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "hm return: dropped parked request for node %d\n", i);
         }
+    }
+if (kh_is_nack (hm)) {                                  /* death marker: never pool */
+    sim_debug (DBG_WRN, &kh_dev, "NACK hm %07o dropped (not pooled)\n", hm);
+    return;
     }
 PUTW (hm + HM_ERR, 004000);                             /* HME$VC - not transmitted */
 kg_send (kh + KH_SRR, hm);                              /* return lease to SRR */
