@@ -668,6 +668,8 @@ for (; n > 0; n--) {
     hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
     if (hm == 0)
         return 0;                                       /* no buffers available */
+    sim_debug (DBG_WRN, &kh_dev, "SRR walk: hm %07o LOF %06o CN %06o BMB %06o (need len %o)\n",
+        hm, GETW (hm + HM_LOF), GETW (hm + HM_CN), GETW (hm + HM_BMB), len);
     /* Classify by capability, not by the LOF size label: pool entries
        arrive in the firmware's own posting format (LOF 060000, CN =
        BMB count, HM$BMB stamped) - an HM$BMB stamp means the buffer
