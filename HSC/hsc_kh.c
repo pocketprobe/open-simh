@@ -1253,6 +1253,12 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             sim_debug (DBG_WRN, &kh_dev, "  hm neighborhood: %06o %06o %06o %06o | %06o %06o %06o %06o\n",
                 GETW (rsc - 010), GETW (rsc - 006), GETW (rsc - 004), GETW (rsc - 002),
                 GETW (rsc), GETW (rsc + 002), GETW (rsc + 004), GETW (rsc + 006));
+            kh_consume_item = TRUE;             /* misread artifact (e.g. a descriptor
+                                                   pair's second word): no valid HM
+                                                   class, so never complete and never
+                                                   pool - vanish like a NACK (gen 23:
+                                                   the pooled LOF 013400 item got the
+                                                   pool walker to convict it) */
             break;
         }
 
