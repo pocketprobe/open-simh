@@ -886,6 +886,15 @@ switch (opc) {
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
+        if ((p1 == 0177776) || (p2 == 0)) {             /* degenerate post: no buffer attached */
+            /* type -2 = the firmware's no-circuit marker.  A success ack   */
+            /* (LOF 060077 alone) tells the FW a resource was registered    */
+            /* that does not exist; it later fails to retrieve it (007020   */
+            /* "Failure to retrieve SCS resources from K.ci").  Complete    */
+            /* with HME$VC instead: crisp status, nothing registered.       */
+            PUTW (hm + HM_ERR, 004000);                 /* HME$VC */
+            sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "degenerate buffer-post (type %06o dma %08o) completed with HME$VC\n", p1, (p2 << 6));
+            }
         PUTW (hm + HM_LOF, 060077);
         break;
     default:
