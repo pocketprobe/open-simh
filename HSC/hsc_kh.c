@@ -925,6 +925,8 @@ switch (opc) {
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
+        sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "  item as posted: LOF %06o CTX %06o CN %06o BMB %06o BC %06o\n",
+            GETW (hm + HM_LOF), GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_BMB), GETW (hm + HM_BC));
         if ((p1 == 0177776) || (p2 == 0)) {             /* NODE DEATH MARKER (NACK) */
             /* type -2 = the firmware's NACK for a dead node's circuit -    */
             /* a notification, not a transaction.  Completing it in any     */
