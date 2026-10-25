@@ -586,6 +586,7 @@ switch (rg) {                                           /* decode pa<2:1> */
 
     case 000:                                           /* CSR */
         sim_debug (DBG_REG, &fl_dev, "fl_csr wr: %o at %o\n", data, (uint16)inst_pc);
+        unitno = (data & FLCSR_SEL) >> FLCSR_V_SEL;     /* select changes with this write */
         if ((data & FLCSR_ME) && ((fl_csr & FLCSR_ME) == 0))
             fl_madr1 = (fl_madr1 & ~0377) | 0001;       /* ME 0->1 edge: SREG init 001 (TM 11.7.1.3.2) */
         fl_csr = data & FLCSR_RW;
@@ -594,8 +595,12 @@ switch (rg) {                                           /* decode pa<2:1> */
             if ((cmd >> 4) == 015) {                    /* force interrupt? */
                 sim_cancel (&fl_unit[unitno]);
                 fl_csr = fl_csr & ~FLSTS_BSY;           /* set not busy */
-                if (fl_unit[unitno].flags & UNIT_ATT)   /* force int leaves type I status in SR */
-                    fl_csr = fl_csr | FLSTS_NRDY;
+                if ((cmd & 05) == 0) {                  /* bare force int: ensure type I status */
+                    if (fl_unit[unitno].flags & UNIT_ATT)
+                        fl_csr = fl_csr | FLSTS_NRDY;   /* ROM DMA-test probe polls S7 here */
+                    }
+                else if ((fl_unit[unitno].flags & UNIT_ATT) == 0)
+                    fl_csr = fl_csr | FLSTS_NRDY;       /* no diskette installed (TM Table 11-10) */
                 if (cmd & 05) {                         /* I2 or I0 */
                     fl_unit[unitno].CMD = cmd;
                     fl_csr = fl_csr | FLSTS_BSY;        /* set busy */
@@ -642,7 +647,7 @@ t_stat fl_svc (UNIT *uptr)
 int32 ma, da, sec;
 
 if ((uptr->flags & UNIT_ATT) == 0) {
-    fl_csr = fl_csr & ~FLSTS_NRDY;                      /* 2797 type I S7 = inverted pin 34: not ready -> clear */
+    fl_csr = fl_csr | FLSTS_NRDY;                       /* no diskette: drive not ready (TM Table 11-10) */
     fl_setint ();
     return SCPE_OK;
     }
@@ -659,7 +664,7 @@ switch (uptr->CMD >> 5) {
         fl_csr = fl_csr & ~FLSTS_TRK0;
         if (uptr->TRK == 0)                             /* now on track 0? */
             fl_csr = fl_csr | FLSTS_TRK0;               /* set flag */
-        fl_csr = fl_csr & ~FLSTS_NRDY;                  /* type I done: drive ready -> S7 clear (TM Table 11-10) */
+        fl_csr = fl_csr & ~FLSTS_NRDY;                  /* type I complete: drive ready (TM Table 11-10) */
         fl_csr = fl_csr & ~FLSTS_BSY;                   /* set not busy */
         fl_setint ();
         break;
