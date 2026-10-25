@@ -1359,8 +1359,15 @@ return SCPE_OK;
 static void kh_hm_return (uint32 hm)
 {
 uint32 kh = kh_dib.cma;
+int32 i;
 if (kh == 0)
     return;                                             /* port not initialized */
+for (i = 0; i < CI_MAX_NODES; i++) {
+    if (kh_req[i] == hm) {                              /* parked request lease? */
+        kh_req[i] = 0;                                  /* stop matching responses to it */
+        sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "hm return: dropped parked request for node %d\n", i);
+        }
+    }
 PUTW (hm + HM_ERR, 004000);                             /* HME$VC - not transmitted */
 kg_send (kh + KH_SRR, hm);                              /* return lease to SRR */
 }
