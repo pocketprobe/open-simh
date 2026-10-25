@@ -873,14 +873,7 @@ return 050;
 uint16 ks_getsts (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
 sim_debug_unit (DBG_SDI, uptr, "GET STATUS\n");
-PUTW (rsp + 000, 0x76);                                 /* response opcode - report status,
-                                                           same 0x7x report family as the
-                                                           characteristics responses the
-                                                           firmware accepted (0x78/0x77); the
-                                                           old 0xF6 was the one response
-                                                           outside the family and the only
-                                                           command the firmware silently
-                                                           rejected */
+PUTW (rsp + 000, 0xF6);                                 /* response opcode */
 PUTW (rsp + 002, uptr->unit_plug);                      /* unit number (low) */
 PUTW (rsp + 004, UMSK_U1 | ((uptr->unit_plug >> 8) & 0xF)); /* unit number (high) / subunit mask */
 if (uptr->flags & UNIT_ATT)                             /* attached? */
