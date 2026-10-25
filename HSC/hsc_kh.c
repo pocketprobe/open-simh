@@ -1228,7 +1228,13 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         }
 
     if (kh_consume_item) {
-        /* marker consumed: no completion, no return - the item vanishes */
+        /* Node-death marker consumed: no completion is sent (any
+           completion gets misread as a resource operation on the
+           (-2,dma) arguments), but the marker HM's shell still rejoins
+           the SRR free pool - the firmware tracks ACKs/NAKs itself
+           (KH$ABQ), while the buffer economy stays balanced. */
+        kh_bmb_sanitize (rsc);
+        kg_send (kh + KH_SRR, rsc);
         }
     else if (cq) {
         kh_bmb_sanitize (rsc);
