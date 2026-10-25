@@ -829,13 +829,19 @@ else {
     }
 
 if (hm == 0) {
-    if (opc == OPC_MSG) {                               /* sequenced: HOLD (CIPA 2.1) */
-        kh_hold_pkt = *pkt;                             /* park for re-delivery when a */
-        kh_hold_valid = TRUE;                           /* buffer frees - never drop */
-        sim_debug (DBG_WRN, &kh_dev, "holding incoming message, SRR empty\n");
+    uint16 mt = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
+    if ((opc == OPC_MSG) || (mt == PPD_START) || (mt == PPD_STACK)) {
+        kh_hold_pkt = *pkt;                             /* sequenced messages AND the revival
+                                                           handshake datagrams (START/STACK):
+                                                           park for re-delivery when a buffer
+                                                           frees - the firmware posts DRR buffers
+                                                           as its boot progresses, and a dropped
+                                                           STACK loses the handshake leg */
+        kh_hold_valid = TRUE;
+        sim_debug (DBG_WRN, &kh_dev, "holding incoming packet (opc %o mt %04x), buffer pool empty\n", opc, mt);
         return SCPE_OK;
         }
-    sim_printf ("No buffer for incoming packet\n");     /* datagram: discard (CIPA 2.1) */
+    sim_printf ("No buffer for incoming packet\n");     /* other datagrams: discard (CIPA 2.1) */
     return SCPE_OK;
     }
 
