@@ -497,6 +497,8 @@ int32 ln = sz * 512;
 int32 i;
 uint8 *fbuf = uptr->filebuf;
 
+if ((uptr->flags & UNIT_ATT) == 0)                      /* no media connected */
+    return;
 if (fl_csr & FLCSR_DIS)                                 /* disable DMA request? */
     return;
 if ((da < 0) || da >= FL_SIZE) {  /* no such sector (e.g. SREG=0 DMA test) */
@@ -521,6 +523,8 @@ int32 ln = sz * 512;
 int32 i;
 uint8 *fbuf = uptr->filebuf;
 
+if ((uptr->flags & UNIT_ATT) == 0)                      /* no media connected */
+    return;
 if (fl_csr & FLCSR_DIS)                                 /* disable DMA request? */
     return;
 if ((da < 0) || da >= FL_SIZE) {  /* no such sector (e.g. SREG=0 DMA test) */
@@ -589,21 +593,31 @@ switch (rg) {                                           /* decode pa<2:1> */
         unitno = (data & FLCSR_SEL) >> FLCSR_V_SEL;     /* select changes with this write */
         if ((data & FLCSR_ME) && ((fl_csr & FLCSR_ME) == 0))
             fl_madr1 = (fl_madr1 & ~0377) | 0001;       /* ME 0->1 edge: SREG init 001 (TM 11.7.1.3.2) */
+        if ((fl_csr & FLCSR_ME) && ((data & FLCSR_ME) == 0)) {
+            sim_cancel (&fl_unit[0]);                   /* ME clear = internal reset like BINIT */
+            sim_cancel (&fl_unit[1]);                   /* (TM Table 11-3 bit 9): terminate */
+            }                                           /* any in-flight service event */
         fl_csr = data & FLCSR_RW;
         if (fl_csr & FLCSR_ME) {                        /* motor enabled */
             cmd = data & FLCSR_CS;
             if ((cmd >> 4) == 015) {                    /* force interrupt? */
-                sim_cancel (&fl_unit[unitno]);
+                sim_cancel (&fl_unit[0]);               /* terminate any commands in the */
+                sim_cancel (&fl_unit[1]);               /* controller's busy domain (TM 11.7.4.4) */
                 fl_csr = fl_csr & ~FLSTS_BSY;           /* set not busy */
                 if ((cmd & 05) == 0) {                  /* bare force int: ensure type I status */
                     if (fl_unit[unitno].flags & UNIT_ATT)
-                        fl_csr = fl_csr | FLSTS_NRDY;   /* ROM DMA-test probe polls S7 here */
+                        fl_csr = fl_csr | FLSTS_NRDY;   /* ROM DMA-test probe polls S7 here. S7 set
+                                                           matches spin-up-in-progress on real drives
+                                                           (probes run right after ME 0->1); emulated
+                                                           drives settle instantly, POST does not */
                     }
                 else if ((fl_unit[unitno].flags & UNIT_ATT) == 0)
                     fl_csr = fl_csr | FLSTS_NRDY;       /* no diskette installed (TM Table 11-10) */
-                if (cmd & 05) {                         /* I2 or I0 */
+                if (cmd & 07) {                         /* I0/I1/I2 conditions armed */
                     fl_unit[unitno].CMD = cmd;
-                    fl_csr = fl_csr | FLSTS_BSY;        /* set busy */
+                    fl_csr = fl_csr | FLSTS_BSY;        /* BUSY retained as event-slot lock only
+                                                           (TM says type IV resets busy; nothing
+                                                           polls BSY in these windows) */
                     sim_activate (&fl_unit[unitno], FL_WAIT);
                     }
                 if (cmd & 010)                          /* I3 */
@@ -646,11 +660,12 @@ t_stat fl_svc (UNIT *uptr)
 {
 int32 ma, da, sec;
 
-if ((uptr->flags & UNIT_ATT) == 0) {
+if (((uptr->flags & UNIT_ATT) == 0) && ((fl_madr2 & FLMA2_DMA) == 0)) {
     fl_csr = fl_csr | FLSTS_NRDY;                       /* no diskette: drive not ready (TM Table 11-10) */
+    fl_csr = fl_csr & ~FLSTS_BSY;                       /* type commands complete; busy reset (TM 11.7.4) */
     fl_setint ();
     return SCPE_OK;
-    }
+    }                                                  /* but DMA test runs without media (TM 11.7.1.4.3) */
 switch (uptr->CMD >> 5) {
     case 0:
         if (uptr->CMD & 020) {                          /* seek */
@@ -714,7 +729,7 @@ switch (uptr->CMD >> 5) {
             }
         else if (uptr->CMD & 020) {
             sim_debug (DBG_REG, &fl_dev, "fl: read multi sector\n");
-            fl_read (uptr, da, (FL_NUMSC - sec), ma, FALSE);
+            fl_read (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);       /* sectors x through end (TM 11.7.4.2.1) */
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
             }
         else {
@@ -744,7 +759,7 @@ switch (uptr->CMD >> 5) {
             }
         else if (uptr->CMD & 020) {
             sim_debug (DBG_REG, &fl_dev, "fl: write multi sector\n");
-            fl_write (uptr, da, (FL_NUMSC - sec), ma, FALSE);
+            fl_write (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);      /* sectors x through end (TM 11.7.4.2.1) */
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
             }
         else {
@@ -782,7 +797,15 @@ switch (uptr->CMD >> 5) {
             (fl_madr1 & FLMA1_A8) | \
             ((fl_madr0 & FLMA0_A0) >> 8);
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), 1);
-        if (uptr->CMD & 020) {                          /* write track */
+        if (fl_madr2 & FLMA2_DMA) {                     /* DMA test: no media, no memory data; one word */
+            sim_debug (DBG_REG, &fl_dev, "fl: DMA test track op, %o <- word\n", ma);
+            if ((ma >= 0) && (ma < (FL_NUMTR * FL_NUMHD * FL_NUMSC * FL_NUMBY))) {
+                PWriteB (fl_madr1 & FLMA1_DS, ma);
+                PWriteB (fl_madr1 & FLMA1_DS, (ma + 1));
+                }
+            ma = ma + 2;                                /* one word transferred */
+            }
+        else if (uptr->CMD & 020) {                     /* write track */
             sim_debug (DBG_REG, &fl_dev, "fl: write track\n");
             if ((da * 512) > uptr->hwmark)              /* update hwmark */
                 uptr->hwmark = (da * 512);
