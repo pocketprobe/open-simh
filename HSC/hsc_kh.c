@@ -691,6 +691,15 @@ int32 n;
 sb = GETP (kh - (32 * 2) + (pkt->node * 2));            /* get system block for source node */
 if (sb == 0)
     return SCPE_OK;
+if (kh_closed[pkt->node]) {                             /* the firmware marked this node's circuit
+                                                           dead (NACK / abort re-post): the CBs are
+                                                           torn down - delivering into their server
+                                                           queues writes links into corpse memory.
+                                                           The FW's re-dress (set-vc CST open) clears
+                                                           kh_closed and deliveries resume. */
+    sim_debug (DBG_TRC, &kh_dev, "holding/ignoring SCS message for closed node %d\n", pkt->node);
+    return SCPE_OK;
+    }
 cb = GETP (sb + SB_NCB) - CB_TLK;                       /* get connection block */
 for (n = 0; n < 64; n++) {                              /* CB$TLK chain - KH$MXD is 5/node */
     if (cb == 0)                                        /* end of list? */
@@ -1307,8 +1316,12 @@ else {
         for (i = 0; i < CI_MAX_NODES; i++) {
             if (kh_req[i] == rsc) {                     /* the kh's own parked lease */
                 kh_req[i] = 0;
+                kh_closed[i] = 1;                       /* the node's circuit died (the FW
+                                                           re-posts the lease when aborting
+                                                           it) - stop deliveries until the FW
+                                                           re-dresses the circuit via set-vc */
                 kh_hm_return (rsc);                     /* release through the waiter contract */
-                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released\n", i, rsc);
+                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released, node marked closed\n", i, rsc);
                 break;
                 }
             }
