@@ -643,7 +643,7 @@ for (; n > 0; n--) {
         return 0;                                       /* no buffers available */
     sz = GETW (hm + HM_LOF) & 077;                      /* get buffer size */
     cn = GETW (hm + HM_CN);                             /* FIXME */
-    if (((sz == 077) && (len >= 077)) && (cn == 2))
+    if (((sz == 077) && (len >= 077)) && (cn != 0))
         return hm;                                      /* found buffer for large packet */
     if ((sz != 077) && (len < 077))
         return hm;                                      /* found buffer for small packet */
@@ -941,16 +941,16 @@ switch (opc) {
             break;
             }
         /* Buffer-post transform: the item IS the pool buffer, but as
-           posted its LOF is 060000 (local-command class, size bits 0)
-           and CN is 1 - kh_get_srr would classify it as a small buffer
-           and never match it against a large (DMA-class, len>=077)
-           request, so the offered buffers rot in the pool while large
-           requests starve (gen 16/17: 135 posted, pool empty).  The
-           firmware stamped HM$BMB itself (p2 duplicates it); rewrite
-           the class fields so the pool sees a large buffer:
-           LOF size class 077, CN=2 (kh_get_srr's large marker). */
+           posted its LOF is 060000 (local-command class, size bits 0),
+           so kh_get_srr classifies it as a small buffer and never
+           matches it against a large (DMA-class, len>=077) request.
+           The firmware stamped HM$BMB itself (p2 duplicates it); fix
+           ONLY the size class - CN is the BMB count and must stay as
+           posted (writing 2 onto a one-BMB buffer raised 007007 "HMB
+           received with wrong number of BMBs", counts (1,2) on the
+           stack).  A nonzero p3 (the type-2 post variant) is written
+           to HM$BMB when the item's own stamp is absent. */
         PUTW (hm + HM_LOF, (opc == 003) ? 040077 : 044077);
-        PUTW (hm + HM_CN, 2);
         if (p3 != 0)                                    /* FW-passed stamp? */
             PUTW (hm + HM_BMB, p3);
         break;
