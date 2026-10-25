@@ -442,7 +442,6 @@ extern int32 tmxr_poll;                                 /* calibrated delay */
 
 uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
-uint8  kh_closed[CI_MAX_NODES];                         /* VC explicitly closed via set-vc */
 uint8  kh_rstnode;
 t_bool kh_consume_item;                                 /* work item consumed with no completion */
 static CI_PKT kh_hold_pkt;                              /* held incoming SCS message */
@@ -707,28 +706,6 @@ int32 n;
 sb = GETP (kh - (32 * 2) + (pkt->node * 2));            /* get system block for source node */
 if (sb == 0)
     return SCPE_OK;
-if (kh_closed[pkt->node]) {                             /* the firmware marked this node's circuit
-                                                           dead (NACK / abort re-post): the CBs are
-                                                           torn down - delivering into their server
-                                                           queues writes links into corpse memory.
-                                                           REVIVAL TRAFFIC passes and reopens: the
-                                                           connect-family messages re-dress the
-                                                           circuit, so without this carve-out the
-                                                           gate deadlocks (the re-dress cannot be
-                                                           delivered to a node we refuse to deliver
-                                                           to).  The FW's set-vc CST open also
-                                                           clears kh_closed when it arrives. */
-    uint16 st = CI_GETW (pkt->data, SCS_MTYPE);
-    if ((st == SCS_CONREQ) || (st == SCS_CONRSP) ||
-        (st == SCS_ACCREQ) || (st == SCS_ACCRSP)) {
-        kh_closed[pkt->node] = 0;                       /* the circuit re-dresses */
-        sim_debug (DBG_WRN, &kh_dev, "node %d re-dressing (SCS type %02x), deliveries resume\n", pkt->node, st);
-        }
-    else {
-        sim_debug (DBG_TRC, &kh_dev, "ignoring SCS message type %02x for closed node %d\n", st, pkt->node);
-        return SCPE_OK;
-        }
-    }
 cb = GETP (sb + SB_NCB) - CB_TLK;                       /* get connection block */
 for (n = 0; n < 64; n++) {                              /* CB$TLK chain - KH$MXD is 5/node */
     if (cb == 0)                                        /* end of list? */
@@ -803,21 +780,6 @@ if (node >= CI_MAX_NODES) {                             /* invalid source - drop
     return SCPE_OK;
     }
 len = pkt->length - LEN_HEADER;
-
-if (kh_closed[node] && (opc != OPC_MSG)) {              /* VC closed for raw packet families? */
-    uint16 mt = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
-    if ((mt == PPD_START) || (mt == PPD_STACK)) {       /* REVIVAL: the peer's port-to-port
-                                                           re-dress broadcast - delivering it lets
-                                                           the firmware re-open the circuit; the
-                                                           SCS-side carve-out (kh_appmsg connect
-                                                           family) only covers the message layer */
-        sim_debug (DBG_WRN, &kh_dev, "revival packet (mt %04x) delivered to closed node %d\n", mt, node);
-        }
-    else {
-        sim_debug (DBG_TRC, &kh_dev, "Ignore incoming packet %d from node %d, VC closed\n", opc, node);
-        return SCPE_OK;                                 /* port delivers nothing but SCS and revival through closed VC */
-        }
-    }
 
 if (opc == OPC_MSG) {
     if ((dg_type == PPD_SCSMSG) && (scs_type == SCS_APPMSG))
@@ -968,11 +930,9 @@ newv = (kh_vcf[node] & ~mask) | (vcf & mask);
 if ((newv ^ kh_vcf[node]) & KH_VCD_CST) {               /* circuit state changed */
     if (newv & KH_VCD_CST) {                            /* opening VC */
         ci_open_vc (&kh_unit, node);
-        kh_closed[node] = 0;                            /* VC usable again */
         }
 else {                                                  /* closing VC */
         ci_close_vc (&kh_unit, node);
-        kh_closed[node] = 1;                            /* stop all traffic to/from this node */
         if (kh_req[node] != 0) {                        /* pending request lease outstanding? */
             /* A real FW close kills the request: no response will ever    */
             /* arrive. Return the hm lease or the FW's SRR waiter count    */
@@ -1075,17 +1035,6 @@ if (node >= CI_MAX_NODES) {                             /* degenerate node - com
     goto done;
     }
 
-if (kh_closed[node] && ((opc == 020000) || (opc == 040000))) {  /* sequenced SCS on a dead circuit:
-    CIPA: datagrams are connectionless and need no VC - they are exactly how a
-    dead circuit gets revived, so the gate must never hold them.  Gating all
-    classes (the FIX-4 port) ate the firmware's START responses (LOF 054012
-    datagrams) to the peer's revival broadcast: the VAX knocked, the firmware
-    answered, the kh refused to carry the answer - the deadlock's third lock. */
-    sim_debug (DBG_TRC, &kh_dev, "Send on closed VC node %d: HM %07o CTX %06o CN %06o LOF %06o\n", node, hm, GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_LOF));
-    PUTW (hm + HM_ERR, 004000);                         /* HME$VC - transmission not attempted */
-    pkt.data[CI_OPC] = (opc == 020000 || opc == 040000) ? OPC_MSG : OPC_DG;
-    goto done;
-    }
 
 if ((opc == 020000) || (opc == 040000)) {               /* SCS application message */
     cb = GETP (hm + HM_CB);                             /* get connection block */
@@ -1374,10 +1323,9 @@ else {
         for (i = 0; i < CI_MAX_NODES; i++) {
             if (kh_req[i] == rsc) {                     /* the kh's own parked lease */
                 kh_req[i] = 0;
-                /* NOTE: no kh_closed here.  The re-post means the firmware
+                /* NOTE: the re-post means the firmware
                    aborted THIS REQUEST (the circuit is alive - its PPD layer
-                   keeps answering STARTs).  kh_closed tracks circuit state
-                   and is set only by the firmware's own set-vc CST close;
+                   keeps answering STARTs).  Circuit state is the firmware's;
                    marking the node closed on a request abort deadlocked the
                    re-dress (the gate held the firmware's own CONNECT sends,
                    gen 35: zero re-dressings with the PPD handshake fully
@@ -1597,7 +1545,6 @@ for (int i = 0; i < CI_MAX_NODES; i++) {
         kh_req[i] = 0;
         }
     kh_vcf[i] = 0;
-    kh_closed[i] = 0;
     }
 return ci_port_reset (dptr);
 }
