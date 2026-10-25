@@ -584,12 +584,24 @@ while (cp->tx_queue.count > 0) {                        /* process transmit queu
     port = item->pkt.data[CI_DEST];
     link = cp->nodes[port].link;
     if (link == NULL) {
-        sim_debug_unit (DBG_CONN, uptr, "Unable to send queued packet to node %d, link: closed\n", port);
+        if (cp->nodes[port].conn == LINK_STARTING) {    /* waiting for remote connection? */
+            break;                                      /* keep packet queued for now - don't stall others */
+            }
+        /* On real hardware a send on a closed VC fails with VC-closed     */
+        /* status. The async link-layer queue has no way to map that back   */
+        /* to the originating port command, so count and be loud about it.  */
+        cp->tx_queue.loss = cp->tx_queue.loss + 1;
+        if ((cp->tx_queue.loss & 07777) == 1)           /* rate-limited loudness */
+            sim_debug_unit (DBG_WRN, uptr, "Warning: CI dropping queued packet to node %d on closed link (loss %d)\n",
+                        port, cp->tx_queue.loss);
         ciq_remove (&cp->tx_queue);                     /* drop packet */
         continue;
         }
     if (link->socket == 0) {
-        sim_debug_unit (DBG_CONN, uptr, "Unable to send queued packet to node %d, socket: closed\n", port);
+        cp->tx_queue.loss = cp->tx_queue.loss + 1;
+        if ((cp->tx_queue.loss & 07777) == 1)
+            sim_debug_unit (DBG_WRN, uptr, "Warning: CI dropping queued packet to node %d, socket closed (loss %d)\n",
+                        port, cp->tx_queue.loss);
         ciq_remove (&cp->tx_queue);                     /* drop packet */
         continue;
         }
@@ -714,12 +726,28 @@ tpkt.offset = 0;                                        /* initial send offset *
 
 if (node->conn > LINK_STARTING) {                       /* link established? */
     sim_debug_unit (DBG_CONN, uptr, "using TCP/IP link\n");
+    if (cp->tx_queue.count == CI_QUE_MAX) {             /* queue full? */
+        /* Spec: VCs are loss-free; wire congestion must surface as NAK/    */
+        /* retry, never silent overwrite of the queue head.                 */
+        cp->tx_queue.loss = cp->tx_queue.loss + 1;
+        if ((cp->tx_queue.loss & 07777) == 1)           /* rate-limited loudness */
+            sim_debug_unit (DBG_WRN, uptr, "Warning: CI tx queue full, packet to node %d dropped (loss %d)\n",
+                        pkt->node, cp->tx_queue.loss);
+        return CISE_QFULL;
+        }
     ciq_insert (&cp->tx_queue, &tpkt);
     ci_poll_tx (uptr);
     return SCPE_OK;
     }
 else if ((node->conn == LINK_STARTING) && (opcode == OPC_MSG)) {
     sim_debug_unit (DBG_CONN, uptr, "TCPIP link pending, queued\n");
+    if (cp->tx_queue.count == CI_QUE_MAX) {
+        cp->tx_queue.loss = cp->tx_queue.loss + 1;
+        if ((cp->tx_queue.loss & 07777) == 1)
+            sim_debug_unit (DBG_WRN, uptr, "Warning: CI tx queue full, packet to node %d dropped pending connect (loss %d)\n",
+                        pkt->node, cp->tx_queue.loss);
+        return CISE_QFULL;
+        }
     ciq_insert (&cp->tx_queue, &tpkt);
     return SCPE_OK;
     }
