@@ -505,14 +505,14 @@ node = &cp->nodes[port];
 return (node->conn > LINK_CLOSED) ? SCPE_OK : CISE_VCERR;
 }
 
-/* Closes the virtual circuit associated with a lost connection.  The *
- * loss is signaled to the SCS layer through error completions        *
- * (CISE_NOPATH) on its next send over the dead VC - not by forging   *
- * datagrams, which derail the peer into a re-handshake with a ghost  */
+/* Notifies the operating system that the connection with the *
+ * remote node has been lost by inserting a START datagram on *
+ * the response queue in order to trigger VC failure          */
 
 t_stat ci_link_fail (UNIT *uptr, CI_LINK *link)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+CI_PKT pkt;
 int32 i, port = -1;
 
 for (i = 0; i < CI_MAX_NODES; i++) {                    /* find link owner */
@@ -530,6 +530,19 @@ if (port < 0) {                                         /* no owner? */
     }
 
 ci_close_vc (uptr, port);                               /* close the VC */
+
+pkt.length = LEN_START;
+pkt.path = CI_PATH_A;
+pkt.data[CI_LEN_HI] = ((pkt.length >> 8) & 0xF);        /* packet length high */
+pkt.data[CI_LEN_HI] |= (pkt.path << CI_V_PATH);         /* use the reserved bits to store the send path */
+pkt.data[CI_LEN_LO] = pkt.length & 0xFF;                /* packet length low */
+CI_PUTB (pkt.data, CI_DEST, uptr->ci_node);             /* destination node */
+CI_PUTB (pkt.data, CI_NOT_DEST, ~uptr->ci_node);
+CI_PUTB (pkt.data, CI_SRC, port);                       /* source node */
+CI_PUTB (pkt.data, CI_OPC, OPC_DG);                     /* opcode */
+CI_PUTB (pkt.data, CI_FLAGS, 0);                        /* flags */
+CI_PUTW (pkt.data, PPD_MTYPE, PPD_START);               /* message type: START */
+ciq_insert (&cp->rx_queue, &pkt);                       /* add to receive queue */
 
 return SCPE_OK;
 }
