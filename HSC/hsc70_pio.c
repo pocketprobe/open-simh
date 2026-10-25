@@ -578,7 +578,7 @@ if ((fl_csr & FLCSR_ME) == 0) {                         /* motor not enabled? */
         if (CPUT (CPUT_HSC60|CPUT_HSC90))               /* HSC60 or HSC90? */
             *data = 2;                                  /* M.std4 present */
         }
-    sim_debug (DBG_REG, &fl_dev, "fl_madr2 rd: %o\n", *data);
+    sim_debug (DBG_REG, &fl_dev, "fl rd (reset): rg %o = %o\n", rg, *data);
     return SCPE_OK;
     }
 switch (rg) {                                           /* decode pa<2:1> */
