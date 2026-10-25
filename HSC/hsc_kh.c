@@ -535,13 +535,15 @@ if (act == K_RUN) {
     sim_debug (DBG_TRC, &kh_dev, "K.ci startup: KH = %06o at %o\n", kh_dib.cma, (uint16)inst_pc);
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
-    /* Port-owned queue state: the work queues and the EQ queue are the
-       port's side of the contract (kg_01:554-557, kg_07:1509/1918 read
-       them at startup) - clear them so the firmware's walks never
-       anchor on stale cross-boot links.  KH$SRR/KH$DRR are firmware-
-       populated buffer queues (bit-tested and counter-tracked by the
-       firmware itself) and are NOT cleared; the D?T/VA/CVS/CIM fields
-       have no port-owned evidence and are left untouched. */
+    /* Port-owned queue state: the work queues, the event queue, AND the
+       SRR/DRR buffer queues' HEAD/TAIL MECHANICS are the port's side of
+       the contract (kg_01:554-557, kg_07:1509/1918 read them at
+       startup; kg_receive/kg_send manipulate head/tail on every
+       operation) - clear them so the firmware's walks and pops never
+       anchor on stale cross-boot chains.  The BUFFERS the firmware
+       posts onto SRR/DRR are firmware state (bit-tested, counter-
+       tracked) and arrive fresh after startup via the LCMD posts;
+       clearing the queue mechanics does not touch them. */
     PUTP (kh_dib.cma + KH_0WK + Q_HEAD, 0);             /* work queues: empty */
     PUTP (kh_dib.cma + KH_0WK + Q_TAIL, 0);
     PUTP (kh_dib.cma + KH_1WK + Q_HEAD, 0);
@@ -552,6 +554,13 @@ if (act == K_RUN) {
     PUTP (kh_dib.cma + KH_3WK + Q_TAIL, 0);
     PUTP (kh_dib.cma + KH_EQ + Q_HEAD, 0);              /* event queue: empty */
     PUTP (kh_dib.cma + KH_EQ + Q_TAIL, 0);
+    PUTP (kh_dib.cma + KH_SRR + Q_HEAD, 0);             /* buffer-queue mechanics: the port
+                                                           owns head/tail; the firmware posts
+                                                           fresh buffers onto the emptied queues
+                                                           via its LCMD 003/004 posts */
+    PUTP (kh_dib.cma + KH_SRR + Q_TAIL, 0);
+    PUTP (kh_dib.cma + KH_DRR + Q_HEAD, 0);
+    PUTP (kh_dib.cma + KH_DRR + Q_TAIL, 0);
     if (!run)
         return SCPE_OK;
     ci_rx_enable (&kh_unit, (CI_PATH_A | CI_PATH_B));
