@@ -476,18 +476,13 @@ if (port >= CI_MAX_NODES)
     return SCPE_ARG;
 node = &cp->nodes[port];
 sim_debug_unit (DBG_CONN, uptr, "VC Close: Link in state %d\n", node->conn);
-if (node->conn == LINK_CLOSED)                          /* already closed? */
-    return SCPE_OK;                                     /* yes, done */
 sim_debug_unit (DBG_CONN, uptr, "Closing VC with node %d...\n", port);
-if (node->uptr) {                                       /* local port? */
-    node->conn = LINK_CLOSED;
-    return SCPE_OK;                                     /* yes, done */
-    }
 link = node->link;
 if (link) {
-    if (link->socket != 0)
-        sim_close_sock (link->socket);
-    link->socket = 0;
+    if (link->socket != 0) {
+        sim_close_sock (link->socket);                  /* close socket */
+        }
+    link->socket = 0;                                   /* clear socket */
     link->rx_pkt.length = 0;
     link->rx_pkt.offset = 0;
     }
@@ -902,19 +897,25 @@ UNIT *ruptr;
 DEVICE *rdptr;
 CI_PORT *cp, *rcp;
 t_stat r;
+t_bool fresh;
 int32 i;
 
 uptr->dptr = dptr;
+fresh = (uptr->port_ctx == NULL);
 uptr->port_ctx = (void *) realloc (uptr->port_ctx, sizeof (CI_PORT));
 cp = (CI_PORT *)uptr->port_ctx;
+if (fresh)                                              /* first allocation needs clearing */
+    memset (cp, 0, sizeof (CI_PORT));                   /* (realloc contents undefined) */
 
 for (i = 0; i < CI_MAX_NODES; i++) {
-    if (cp->links[i].socket)                            /* reset links */
-        sim_close_sock (cp->links[i].socket);
+    if (cp->links[i].socket) {                          /* reset links */
+        sim_close_sock (cp->links[i].socket);           /* close socket */
+        cp->links[i].socket = 0;                        /* clear socket */
+        }
     cp->links[i].rx_pkt.offset = 0;
     cp->links[i].rx_pkt.length = 0;
     cp->nodes[i].conn = LINK_CLOSED;                    /* reset node context */
-    cp->nodes[i].host[0] = '\0';
+    /* Preserve learned peer endpoints: a reboot needs them to reopen the VC. */
     cp->nodes[i].vcd = 0;
     cp->nodes[i].uptr = NULL;
     cp->nodes[i].link = NULL;
@@ -978,9 +979,20 @@ if (multi_sock == INVALID_SOCKET)
 sim_printf ("Listening on multicast address %s (socket %d)\n", cp->group, multi_sock);
 
 sim_parse_addr (cptr, NULL, 0, NULL, cp->tcp_port, sizeof (cp->tcp_port), NULL, NULL);
-tcp_sock = sim_master_sock (cptr, NULL);                /* make tcp socket */
-if (tcp_sock == INVALID_SOCKET)
+for (r = 0; r < 10; r++) {                              /* retry bind - listener may be held by */
+    tcp_sock = sim_master_sock (cptr, NULL);            /* a defunct simulator's lingering socket */
+    if (tcp_sock != INVALID_SOCKET)
+        break;
+    sim_os_ms_sleep (1000);                             /* wait before retrying */
+    }
+if ((multi_sock == INVALID_SOCKET) || (tcp_sock == INVALID_SOCKET)) {
+    if (multi_sock != INVALID_SOCKET)
+        sim_close_sock (multi_sock);                    /* clean up partial bind */
+    if (tcp_sock != INVALID_SOCKET)
+        sim_close_sock (tcp_sock);
     return SCPE_OPENERR;                                /* open error */
+    }
+sim_printf ("Listening on multicast address %s (socket %d)\n", cp->group, multi_sock);
 sim_printf ("Listening on TCP address %s (socket %d)\n", cptr, tcp_sock);
 
 tptr = (char *) malloc (strlen (cptr) + 1);             /* get string buf */
@@ -998,11 +1010,26 @@ return SCPE_OK;
 t_stat ci_detach (UNIT *uptr)
 {
 CI_PORT *cp = (CI_PORT *)uptr->port_ctx;
+uint32 i;
 
 if (!(uptr->flags & UNIT_ATT))                          /* attached? */
     return SCPE_OK;
-sim_close_sock (cp->multi_sock);                        /* close master socket */
-sim_close_sock (cp->tcp_sock);                          /* close master socket */
+for (i = 0; i < CI_MAX_NODES; i++) {                    /* close all links */
+    if (cp->links[i].socket) {
+        sim_close_sock (cp->links[i].socket);
+        cp->links[i].socket = 0;
+        cp->links[i].rx_pkt.length = 0;
+        cp->links[i].rx_pkt.offset = 0;
+        }
+    cp->nodes[i].conn = LINK_CLOSED;
+    cp->nodes[i].link = NULL;
+    }
+if (cp->multi_sock)                                     /* close master socket */
+    sim_close_sock (cp->multi_sock);
+if (cp->tcp_sock)
+    sim_close_sock (cp->tcp_sock);
+cp->multi_sock = 0;                                     /* clear master sockets */
+cp->tcp_sock = 0;
 free (uptr->filename);                                  /* free port string */
 uptr->filename = NULL;
 uptr->flags = uptr->flags & ~UNIT_ATT;                  /* not attached */
