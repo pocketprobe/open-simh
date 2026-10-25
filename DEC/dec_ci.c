@@ -996,7 +996,6 @@ multi_sock = sim_master_sock_ex (cp->group, NULL,
     (SIM_SOCK_OPT_REUSEADDR | SIM_SOCK_OPT_MULTICAST)); /* make multicast socket */
 if (multi_sock == INVALID_SOCKET)
     return SCPE_OPENERR;                                /* open error */
-sim_printf ("Listening on multicast address %s (socket %d)\n", cp->group, multi_sock);
 
 sim_parse_addr (cptr, NULL, 0, NULL, cp->tcp_port, sizeof (cp->tcp_port), NULL, NULL);
 for (r = 0; r < 10; r++) {                              /* retry bind - listener may be held by */
