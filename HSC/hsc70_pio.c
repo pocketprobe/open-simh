@@ -608,6 +608,7 @@ return SCPE_NXM;
 t_stat fl_wr (int32 data, int32 pa, int32 access)
 {
 int32 cmd;
+int32 me_prev;
 int32 rg = (pa >> 1) & 03;
 int32 unitno = (fl_csr >> FLCSR_V_SEL) & 1;             /* get drive select */
 switch (rg) {                                           /* decode pa<2:1> */
@@ -615,14 +616,22 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 000:                                           /* CSR */
         sim_debug (DBG_REG, &fl_dev, "fl_csr wr: %o at %o\n", data, (uint16)inst_pc);
         unitno = (data & FLCSR_SEL) >> FLCSR_V_SEL;     /* select changes with this write */
-        if ((data & FLCSR_ME) && ((fl_csr & FLCSR_ME) == 0))
-            fl_madr1 = (fl_madr1 & ~0377) | 0001;       /* ME 0->1 edge: SREG init 001 (TM 11.7.1.3.2) */
-        if ((fl_csr & FLCSR_ME) && ((data & FLCSR_ME) == 0)) {
+        me_prev = fl_csr & FLCSR_ME;
+        if ((data & FLCSR_ME) && (me_prev == 0))
+            fl_madr1 = (fl_madr1 & ~0377) | 0001;       /* SREG init 001 (TM 11.7.1.3.2) */
+        if (me_prev && ((data & FLCSR_ME) == 0)) {
             sim_cancel (&fl_unit[0]);                   /* ME clear = internal reset like BINIT */
             sim_cancel (&fl_unit[1]);                   /* (TM Table 11-3 bit 9): terminate */
             }                                           /* any in-flight service event */
         fl_csr = data & FLCSR_RW;
         if (fl_csr & FLCSR_ME) {                        /* motor enabled */
+            if (me_prev == 0) {                         /* ME 0->1 edge */
+                if ((fl_madr2 & FLMA2_DMA) == 0) {      /* DMA test spins motors down (TM 11.7.1.4.3) */
+                    fl_unit[unitno].CMD = 0;            /* auto-restore (TM 11.7.4.1.1) */
+                    fl_csr = fl_csr | FLSTS_BSY;        /* restore in progress */
+                    sim_activate (&fl_unit[unitno], FL_WAIT);
+                    }
+                }
             cmd = data & FLCSR_CS;
             if ((cmd >> 4) == 015) {                    /* force interrupt? */
                 sim_cancel (&fl_unit[0]);               /* terminate any commands in the */
