@@ -97,15 +97,25 @@ extern int32 calc_ints (int32 nipl, int32 trq);
 uint32 kg_init (t_bool *run)
 {
 uint32 ki, kg = 0, chk;
+*run = FALSE;
 
 for (ki = 0; ki < 20; ki = ki + 2) {                    /* search for KI structure */
     if ((GETW (ki) == 0125252) && (GETW (ki + 2) == 052525)) {
+        sim_printf ("K.ci kg_init: KI signature at ki = %o, KIA = %o, CHK = %o\n", ki, GETW (ki + KI_KIA), GETW (ki + KI_CHK));
         kg = GETW (ki + KI_KIA);                        /* get offset to KG structure */
         if (GETW (ki + KI_CHK) != (kg - 1))             /* verify offset */
             break;                                      /* failed */
         PUTW (ki + KI_KIA, -kg);
         kg = kg << 2;                                   /* convert to byte offset */
-        *run = (ki == 4);                               /* run if not diagnostic startup */
+        *run = TRUE;                                    /* verified KI = production run.
+                                                           V8.30's INIPIO builds the KI table
+                                                           at ki = 0 (witnessed: signature at
+                                                           ki 0, KIA 2, CHK 1), so the old
+                                                           ki == 4 "not diagnostic" check
+                                                           failed on EVERY boot and the kh's
+                                                           receiver never enabled - the port
+                                                           sat deaf and the VAX's CI handshake
+                                                           wedged in the tx queue forever. */
         break;
         }
     }

@@ -536,13 +536,25 @@ if (act == K_RUN) {
     sim_debug (DBG_TRC, &kh_dev, "K.ci startup: KH = %06o at %o\n", kh_dib.cma, (uint16)inst_pc);
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
-    if (!run)
-        return SCPE_OK;
+    /* Enable the receiver on EVERY K_RUN - including INIPIO's
+       "diagnostic"-classified passes (kg_init's ki == 4 check is a
+       V6.5-ism: V8.30 builds the production KI table elsewhere, so
+       run = FALSE on V8.30 boots and the old early-return left the
+       transport deaf.  The FW's CI init then timed out waiting for
+       its ID exchange on a receiver that was never listening, and
+       disabled K.ci permanently ("K.ci disabled" - no enumeration). */
     ci_rx_enable (&kh_unit, (CI_PATH_A | CI_PATH_B));
     }
 else {
     sim_debug (DBG_TRC, &kh_dev, "K.ci halt at %o\n", (uint16)inst_pc);
-    ci_rx_enable (&kh_unit, 0);
+    /* Keep the receiver enabled: the physical K.ci's CI listener is
+       always on, independent of the FW driver's state.  Disabling it
+   here deadlocks the cluster after any FW reboot: the FW's crash
+   handler halts K.ci, INIPIO's re-run takes the diagnostic path
+   (kg_init's ki == 4 check fails - CM[4] is wiped), so ci_rx_enable
+   is never called again and the kh stops reading TCP/multicast.
+   The VAX's port then fills the socket buffer with its queued
+   packets and its START/IDREQ handshake wedges forever. */
     kh_dib.cma = 0;
     }
 return SCPE_OK;
@@ -1303,8 +1315,14 @@ else if (opc == 4) {                                    /* just allocate buffers
         kg_route_frb (&kh_unit, kh, frb, TRUE);
         }
     }
-else
-    sim_printf ("Unknown route opcode for K.ci: %o\n", opc);
+else {
+    /* Diagnostic-phase route probes (blank FRBs, opcodes 7/15 seen):
+       the FW's CI self-test sends no-op routes to verify the port's
+       router.  Complete them - dropping one stalls the diagnostic
+       phase (and spammed the console once per probe). */
+    sim_debug (DBG_WRN, &kh_dev, "K.ci route opcode %o (diagnostic): completing FRB %o\n", opc, frb);
+    kg_route_frb (&kh_unit, kh, frb, TRUE);
+    }
 }
 
 t_stat kh_process_queue (uint32 kh, uint32 wq)
@@ -1422,6 +1440,15 @@ uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
+if (kh == 0) {                                          /* FW halted: drain the transport,
+                                                           drop inbound (the sender's port
+                                                           retries; the next K_RUN resumes) */
+    for (int i = 0; i < 20; i++) {
+        if (ci_receive (uptr, &pkt) != SCPE_OK)
+            break;
+        }
+    return ci_port_svc (uptr);                          /* keep the transport alive */
+    }
 r = kh_process_queue (kh, kh + KH_0WK);                 /* process work queues */
 if (r != SCPE_OK)
     return r;
