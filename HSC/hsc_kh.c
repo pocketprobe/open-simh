@@ -1150,8 +1150,11 @@ else
 
 void kh_bmb_sanitize (uint32 hm)
 {
-if ((GETW (hm + HM_BMB) < 0140000) || (GETW (hm + HM_BMB) >= 0160000))
-    PUTW (hm + HM_BMB, 0140000);                        /* start of M.DAT band */
+uint32 bmb = GETW (hm + HM_BMB);
+if ((bmb < 0140000) || (bmb >= 0160000)) {
+    PUTW (hm + HM_BMB, 0150000);                        /* mid M.DAT band, like real stamps */
+    sim_debug (DBG_WRN, &kh_dev, "BMB sanitize: hm %07o field %06o -> 0150000\n", hm, bmb);
+    }
 }
 
 t_stat kh_process_queue (uint32 kh, uint32 wq)
@@ -1191,6 +1194,9 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         default:
             sim_printf ("K.ci unknown opcode: %o\n", opc);
+            sim_debug (DBG_WRN, &kh_dev, "K.ci unknown opcode %o, hm %07o LOF %06o CTX %06o CN %06o, cq %06o%s\n",
+                opc, rsc, GETW (rsc + HM_LOF), GETW (rsc + HM_CTX), GETW (rsc + HM_CN), cq,
+                cq ? "" : " (no cq: HM leaked)");
             break;
         }
 
