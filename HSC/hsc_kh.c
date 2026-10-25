@@ -703,7 +703,16 @@ uint16 scs_type = CI_GETW (pkt->data, SCS_MTYPE);
 
 opc = pkt->data[CI_OPC];
 node = pkt->node;
+if (node >= CI_MAX_NODES) {                             /* invalid source - drop */
+    sim_debug (DBG_WRN, &kh_dev, "Drop packet from invalid node %d\n", node);
+    return SCPE_OK;
+    }
 len = pkt->length - LEN_HEADER;
+
+if (kh_closed[node] && (opc != OPC_MSG)) {              /* VC closed for raw packet families? */
+    sim_debug (DBG_TRC, &kh_dev, "Ignore incoming packet %d from node %d, VC closed\n", opc, node);
+    return SCPE_OK;                                     /* port delivers nothing but SCS through closed VC */
+    }
 
 if (opc == OPC_MSG) {
     if ((dg_type == PPD_SCSMSG) && (scs_type == SCS_APPMSG))
@@ -896,11 +905,31 @@ t_stat r = SCPE_OK;
 opc = GETW (hm + HM_LOF) & 074000;
 flgs = GETW (hm + HM_LOF) & 03700;
 len = GETW (hm + HM_LOF) & 077;
-node = GETB (hm + HM_CB);                               /* destination node */
+node = GETB (hm + HM_CB);                               /* destination node (datagram/plain hms) */
 
-pkt.node = GETB (hm + HM_CB);
+pkt.node = node;
 
 sim_debug (DBG_TRC, &kh_dev, "Host message: %07o\n", hm);
+
+if ((opc == 020000) || (opc == 040000)) {               /* SCS application message */
+    cb = GETP (hm + HM_CB);                             /* HM$CB = connection block pointer */
+    node = GETB (cb + CB_NOD);                          /* destination node from connection block */
+    pkt.node = node;
+    }
+
+if (node >= CI_MAX_NODES) {                             /* degenerate node - complete w/ error */
+    sim_debug (DBG_WRN, &kh_dev, "Host message %07o has invalid node %d\n", hm, node);
+    PUTW (hm + HM_ERR, 004000);                         /* HME$VC - transmission not attempted */
+    pkt.data[CI_OPC] = (opc == 020000 || opc == 040000) ? OPC_MSG : OPC_DG;
+    goto done;
+    }
+
+if (kh_closed[node]) {                                  /* VC closed - no transmission */
+    sim_debug (DBG_TRC, &kh_dev, "Send on closed VC node %d: HM %07o CTX %06o CN %06o LOF %06o\n", node, hm, GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_LOF));
+    PUTW (hm + HM_ERR, 004000);                         /* HME$VC - transmission not attempted */
+    pkt.data[CI_OPC] = (opc == 020000 || opc == 040000) ? OPC_MSG : OPC_DG;
+    goto done;
+    }
 
 if ((opc == 020000) || (opc == 040000)) {               /* SCS application message */
     cb = GETP (hm + HM_CB);                             /* get connection block */
@@ -956,6 +985,7 @@ else
 pkt.length = len;
 r = ci_send (&kh_unit, &pkt);
 
+done:
 if (opc == 020000)                                      /* FIXME: APPMSG always goes to SRR? */
     *cq = kh + KH_SRR;
 if (opc == 040000) {
@@ -971,6 +1001,9 @@ if (*cq == 0) {
             *cq = kh + KH_DRR;
         }
     else {
+        if (kh_req[node] != 0)                          /* previous request never completed? */
+            sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "Pending request %07o for node %d ORPHANED by %07o\n",
+                kh_req[node], node, hm);
         kh_req[node] = hm;
         sim_debug (DBG_TRC, &kh_dev, "Start pending request for %07o\n", hm);
         }
