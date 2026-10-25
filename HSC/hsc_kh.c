@@ -619,26 +619,35 @@ return SCPE_OK;
 uint32 kh_get_srr (uint32 len)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, last, sz, cn;
+uint32 hm, sz, cn;
+int32 n, p;
 
-last = GETP (kh + KH_SRR + Q_TAIL);                     /* save last buffer address */
-for (;;) {
+/* Bound the walk by the current queue depth.  The firmware mutates its
+   queues concurrently (the node-death-marker era aborts and re-posts
+   buffers), so a once-saved tail sentinel can go stale and the old
+   pop/repush/compare loop would rotate forever - a guest-triggered
+   simh hang. */
+
+for (n = 0, p = GETP (kh + KH_SRR + Q_HEAD); p != 0; p = GETP (p))
+    n++;                                                /* count queued buffers */
+
+for (; n > 0; n--) {
     hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
     if (hm == 0)
-        break;                                          /* no buffers available */
+        return 0;                                       /* no buffers available */
     sz = GETW (hm + HM_LOF) & 077;                      /* get buffer size */
     cn = GETW (hm + HM_CN);                             /* FIXME */
     if (((sz == 077) && (len >= 077)) && (cn == 2))
-        break;                                          /* found buffer for large packet */
+        return hm;                                      /* found buffer for large packet */
     if ((sz != 077) && (len < 077))
-        break;                                          /* found buffer for small packet */
-    if (hm == last) {                                   /* reached last buffer? */
-        hm = 0;
-        break;                                          /* no buffers available */
+        return hm;                                      /* found buffer for small packet */
+    if (n == 1) {
+        kg_send (kh + KH_SRR, hm);                      /* walked all: put last back */
+        return 0;                                       /* no buffers available */
         }
     kg_send (kh + KH_SRR, hm);                          /* put to back of queue */
     }
-return hm;
+return 0;
 }
 
 /* Application sequenced message received */
