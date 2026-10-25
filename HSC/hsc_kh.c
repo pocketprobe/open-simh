@@ -626,10 +626,14 @@ int32 n, p;
    queues concurrently (the node-death-marker era aborts and re-posts
    buffers), so a once-saved tail sentinel can go stale and the old
    pop/repush/compare loop would rotate forever - a guest-triggered
-   simh hang. */
+   simh hang.  The depth count itself is hard-capped: a corrupted chain
+   with a cycle (a buffer linked on two queues) would otherwise spin
+   the count loop endlessly. */
 
-for (n = 0, p = GETP (kh + KH_SRR + Q_HEAD); p != 0; p = GETP (p))
+for (n = 0, p = GETP (kh + KH_SRR + Q_HEAD); p != 0 && n < 02000; p = GETP (p))
     n++;                                                /* count queued buffers */
+if (p != 0)
+    sim_printf ("KH: SRR free chain longer than %d or cyclic - queue corruption?\n", 02000);
 
 for (; n > 0; n--) {
     hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
