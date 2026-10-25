@@ -1162,6 +1162,7 @@ typedef struct {
 #define DBG_REQ  0x0008                                 /* display transfer requests */
 #define DBG_DSK  0x0010                                 /* display sim_disk activities */
 #define DBG_DAT  0x0020                                 /* display transfer data */
+#define DBG_STAL 0x0040                                 /* stranded/stalled packet notices */
 
 DEBTAB rf_debug[] = {
   {"TRACE",  DBG_TRC, "trace routine calls"},
@@ -1170,6 +1171,7 @@ DEBTAB rf_debug[] = {
   {"REQ",    DBG_REQ, "display transfer requests"},
   {"DISK",   DBG_DSK, "display sim_disk activities"},
   {"DATA",   DBG_DAT, "display transfer data"},
+  {"STALL",  DBG_STAL, "stranded/stalled packet notices"},
   {0}
 };
 
@@ -2129,9 +2131,27 @@ uint32 err = 0;
 int32 pkt = uptr->cpkt;                                 /* get packet */
 uint32 cmd, ba, bc, bl, ma;
 uint32 bd[3];
+static double rf_leak_last = 0;
 
-if ((cp == NULL) || (pkt == 0))                         /* what??? */
-    return STOP_RQ;
+if (cp && (rf_devmap[uptr->cnum]->dctrl & DBG_STAL)) {
+    uint32 cnt = 0;
+    uint16 p = cp->freq;
+    while ((p != 0) && (cnt < RF_NPKTS + 2)) {          /* walk free list */
+        cnt++;
+        p = cp->pak[p & RF_M_NPKTS].link;
+        }
+    if ((cnt < RF_NPKTS) && (sim_grtime () - rf_leak_last > 1000000.0)) {
+        rf_leak_last = sim_grtime ();
+        sim_debug (DBG_STAL, rf_devmap[uptr->cnum], "packet pool deficit free=%u/%u\n", cnt, RF_NPKTS);
+        }
+    }
+
+if (cp == NULL)
+    return SCPE_OK;
+if (pkt == 0) {                                         /* stray callback - no cmd */
+    sim_cancel (uptr);
+    return SCPE_OK;
+    }
 cmd = GETP (pkt, CMD_OPC, OPC);                         /* get cmd */
 //FIXME ba = GETP32 (pkt, RW_WBAL);                             /* buf addr */
 bc = GETP32 (pkt, RW_WBCL);                             /* byte count */
@@ -2180,6 +2200,7 @@ if (!uptr->io_complete) { /* Top End (I/O Initiation) Processing */
         t = rf_readw (cp, bd, tbc, (uint16 *)uptr->rfxb, uptr);   /* fetch buffer */
         if (t < 0) {
             // TODO: Wait until reactivated
+            sim_debug (DBG_STAL, rf_devmap[cp->cnum], "stalled write - unit=%d lbn=%X bc=%X\n", uptr->unit_plug, bl, bc);
             return SCPE_OK;
             }
         uptr->hwmark = (uint32)t;
@@ -2221,6 +2242,7 @@ else { /* Bottom End (After I/O processing) */
             t = rf_writew (cp, bd, tbc, (uint16 *)uptr->rfxb, uptr);
             if (t < 0) {
                 uptr->io_complete = 1;
+                sim_debug (DBG_STAL, rf_devmap[cp->cnum], "stalled read - unit=%d lbn=%X bc=%X\n", uptr->unit_plug, bl, bc);
                 return SCPE_OK;
                 }
             else if (t) {                               /* store, nxm? */
@@ -2273,6 +2295,26 @@ if (bc)                                                 /* more? resched */
     sim_activate (uptr, 0);
 else rf_rw_end (cp, uptr, 0, ST_SUC);                   /* done! */
 return SCPE_OK;
+}
+
+/* Abandon in-flight work on a unit whose connection was lost */
+
+void rf_abandon (UNIT *uptr)
+{
+MSC *cp = rf_ctxmap[uptr->cnum];
+uint16 pkt;
+
+if ((cp == NULL) || (uptr->cpkt == 0))
+    return;
+pkt = uptr->cpkt;
+uptr->cpkt = 0;
+uptr->io_complete = 0;
+sim_debug (DBG_STAL, rf_devmap[cp->cnum], "abandoned packet - unit=%d pkt=%d\n", uptr->unit_plug, pkt);
+rf_enqh (cp, &cp->freq, pkt);                           /* pkt is free */
+cp->pbsy = cp->pbsy - 1;                                /* decr busy cnt */
+if (cp->pbsy == 0)                                      /* idle? strt hst tmr */
+    cp->hat = cp->htmo;
+sim_cancel (uptr);
 }
 
 /* Transfer command complete */

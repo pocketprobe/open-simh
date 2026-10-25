@@ -71,6 +71,7 @@ t_bool rf_mscp (MSC *cp, uint16 pkt, t_bool q);
 t_bool rf_deqf (MSC *cp, uint16 *pkt);
 void rf_enqh (MSC *cp, uint16 *lh, uint16 pkt);
 extern t_stat app_mscp_done (MSC *cp, uint16 rf_pkt);
+extern void rf_abandon (UNIT *uptr);
 extern int32 scs_write (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr);
 extern int32 scs_read (UNIT *uptr, uint32 *bd, uint8 *buf, size_t xfrsz, UNIT *aptr);
 
