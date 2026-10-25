@@ -63,6 +63,7 @@
 #define FLCSR_CS        0000377                         /* command/status */
 #define FLCSR_RW        0037400
 #define FLSTS_NRDY      0000200                         /* not ready */
+#define FLSTS_RNF       0000020                         /* seek error (type I) / rec not found (II/III) */
 #define FLSTS_TRK0      0000004                         /* track 0 */
 #define FLSTS_BSY       0000001                         /* busy */
 
@@ -702,8 +703,15 @@ if (((uptr->flags & UNIT_ATT) == 0) && ((fl_madr2 & FLMA2_DMA) == 0)) {
 switch (uptr->CMD >> 5) {
     case 0:
         if (uptr->CMD & 020) {                          /* seek */
-            uptr->TRK = fl_madr2 & FLMA2_DT;
-            sim_debug (DBG_REG, &fl_dev, "fl: seek track %d\n", uptr->TRK);
+            int32 ntk = fl_madr2 & FLMA2_DT;
+            if (ntk >= FL_NUMTR) {                      /* target past end of media */
+                fl_csr = fl_csr | FLSTS_RNF;            /* seek error (TM Table 11-10 S4) */
+                sim_debug (DBG_REG, &fl_dev, "fl: seek error, track %d\n", ntk);
+                }
+            else {
+                uptr->TRK = ntk;
+                sim_debug (DBG_REG, &fl_dev, "fl: seek track %d\n", uptr->TRK);
+                }
             }
         else {                                          /* restore */
             uptr->TRK = 0;
@@ -760,16 +768,25 @@ switch (uptr->CMD >> 5) {
                 }
             ma = ma + 2;                                /* one word transferred */
             }
-        else if (uptr->CMD & 020) {
-            sim_debug (DBG_REG, &fl_dev, "fl: read multi sector\n");
-            fl_read (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);       /* sectors x through end (TM 11.7.4.2.1) */
-            ma = ma + ((FL_NUMSC - sec + 1) * 512);
-            fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (FL_NUMSC + 1);        /* SREG: one past last sector (TM 11.7.1.3.2) */
-            }
         else {
-            sim_debug (DBG_REG, &fl_dev, "fl: read single sector\n");
-            fl_read (uptr, da, 1, ma, FALSE);
-            ma = ma + 512;
+            if ((sec < 1) || (sec > FL_NUMSC) ||
+                (da >= (FL_NUMTR * FL_NUMHD * FL_NUMSC))) {     /* no such record */
+                fl_csr = (fl_csr & ~FLSTS_BSY) | FLSTS_RNF;     /* record not found (TM Table 11-10 S4) */
+                sim_debug (DBG_REG, &fl_dev, "fl: read sector RNF, sec %o trk %d\n", sec, uptr->TRK);
+                fl_setint ();
+                break;
+                }
+            if (uptr->CMD & 020) {
+                sim_debug (DBG_REG, &fl_dev, "fl: read multi sector\n");
+                fl_read (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);   /* sectors x through end (TM 11.7.4.2.1) */
+                ma = ma + ((FL_NUMSC - sec + 1) * 512);
+                fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (FL_NUMSC + 1);    /* SREG: one past last sector (TM 11.7.1.3.2) */
+                }
+            else {
+                sim_debug (DBG_REG, &fl_dev, "fl: read single sector\n");
+                fl_read (uptr, da, 1, ma, FALSE);
+                ma = ma + 512;
+                }
             }
         fl_madr0 = fl_madr0 & ~FLMA0_A0;
         fl_madr0 = fl_madr0 | ((ma << 8) & FLMA0_A0);
@@ -792,18 +809,27 @@ switch (uptr->CMD >> 5) {
             fl_dma_check (ma, 2);                       /* program-bus window? */
             ma = ma + 2;                                /* one word transferred */
             }
-        else if (uptr->CMD & 020) {
-            sim_debug (DBG_REG, &fl_dev, "fl: write multi sector\n");
-            fl_write (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);      /* sectors x through end (TM 11.7.4.2.1) */
-            ma = ma + ((FL_NUMSC - sec + 1) * 512);
-            fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (FL_NUMSC + 1);        /* SREG: one past last sector (TM 11.7.1.3.2) */
-            }
         else {
-            sim_debug (DBG_REG, &fl_dev, "fl: write single sector\n");
-            fl_write (uptr, da, 1, ma, FALSE);
-            if ((da * 512) > uptr->hwmark)              /* update hwmark */
-                uptr->hwmark = (da * 512);
-            ma = ma + 512;
+            if ((sec < 1) || (sec > FL_NUMSC) ||
+                (da >= (FL_NUMTR * FL_NUMHD * FL_NUMSC))) {     /* no such record */
+                fl_csr = (fl_csr & ~FLSTS_BSY) | FLSTS_RNF;     /* record not found (TM Table 11-10 S4) */
+                sim_debug (DBG_REG, &fl_dev, "fl: write sector RNF, sec %o trk %d\n", sec, uptr->TRK);
+                fl_setint ();
+                break;
+                }
+            if (uptr->CMD & 020) {
+                sim_debug (DBG_REG, &fl_dev, "fl: write multi sector\n");
+                fl_write (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);  /* sectors x through end (TM 11.7.4.2.1) */
+                ma = ma + ((FL_NUMSC - sec + 1) * 512);
+                fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (FL_NUMSC + 1);    /* SREG: one past last sector (TM 11.7.1.3.2) */
+                }
+            else {
+                sim_debug (DBG_REG, &fl_dev, "fl: write single sector\n");
+                fl_write (uptr, da, 1, ma, FALSE);
+                if ((da * 512) > uptr->hwmark)             /* update hwmark */
+                    uptr->hwmark = (da * 512);
+                ma = ma + 512;
+                }
             }
         fl_madr0 = fl_madr0 & ~FLMA0_A0;
         fl_madr0 = fl_madr0 | ((ma << 8) & FLMA0_A0);
@@ -824,6 +850,7 @@ switch (uptr->CMD >> 5) {
             }
         else {                                          /* read address */
             sim_debug (DBG_REG, &fl_dev, "fl: read address\n");
+            fl_csr = fl_csr & ~FLSTS_BSY;               /* completes with busy reset (TM 11.7.4.3.1) */
             fl_setint ();
             }
         break;
@@ -840,6 +867,12 @@ switch (uptr->CMD >> 5) {
                 PWriteB (fl_madr1 & FLMA1_DS, (ma + 1));
                 }
             ma = ma + 2;                                /* one word transferred */
+            }
+        else if (da >= (FL_NUMTR * FL_NUMHD * FL_NUMSC)) {      /* no such track on media */
+            fl_csr = (fl_csr & ~FLSTS_BSY) | FLSTS_RNF; /* record not found (TM Table 11-10 S4) */
+            sim_debug (DBG_REG, &fl_dev, "fl: track op RNF, trk %d\n", uptr->TRK);
+            fl_setint ();
+            break;
             }
         else if (uptr->CMD & 020) {                     /* write track */
             sim_debug (DBG_REG, &fl_dev, "fl: write track\n");
