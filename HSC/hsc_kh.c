@@ -774,6 +774,7 @@ PUTW (hm + HM_LOF, lof);
 memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
 
+sim_debug (DBG_WRN, &kh_dev, "deliver appmsg hm %07o to server queue %06o (cb %06o)\n", hm, cq, cb);
 kg_send (cq, hm);
 
 return SCPE_OK;
