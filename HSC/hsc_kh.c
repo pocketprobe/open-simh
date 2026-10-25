@@ -664,13 +664,16 @@ for (; n > 0; n--) {
        can carry DMA data, an unstamped one carries inline data only.
        Rewriting LOF classes to fit the old label-based matcher was
        forgery the pool walker convicts (007007). */
-    /* Capability = a VALID stamp: HM$BMB in the M.DAT band [140000,160000),
-   the same check the firmware's collector makes.  A nonzero-but-garbage
-   stamp (observed live: BMB 0001100) is not DMA-capable and previously
-   passed the != 0 test, poisoning the DMA path with a wild address. */
-    if ((len >= 077) && (GETW (hm + HM_CN) != 0) &&
-        (GETW (hm + HM_BMB) >= 0140000) && (GETW (hm + HM_BMB) < 0160000))
-        return hm;                                      /* DMA-capable buffer for large packet */
+    /* Capability = the firmware posted the buffer: CN != 0 and an HM$BMB
+   stamp present.  The V6.5-era M.DAT band check [140000,160000) rejected
+   every V8.30 posting (live stamps 051515, 000011, 000007 - a different
+   posting dialect), starving the SRR pool: inbound host packets held
+   ("buffer pool empty"), the installer's SCS messages never delivered,
+   no $5$DUA enumeration.  The kh never dereferences HM$BMB - the stamp
+   is the firmware's own metadata; refusing the firmware's own postings
+   was the port second-guessing its poster. */
+    if ((len >= 077) && (GETW (hm + HM_CN) != 0) && (GETW (hm + HM_BMB) != 0))
+        return hm;                                      /* posted buffer for large packet */
     if (len < 077)
         return hm;                                      /* small packet: any buffer */
     if (n == 1) {
@@ -742,7 +745,11 @@ PUTW (cb + CB_RCC, rcc);
 PUTW (hm + HM_CTX, GETW (cb + CB_CTX));
 PUTP (hm + HM_CB, cb);                                  /* save connection block */
 PUTP (hm + HM_CQ, 0);
-PUTW (hm + HM_LOF, lof);
+/* Preserve the posted LOF's format/flag byte (V8.30 posts flags 020/030,
+   capacity in the low byte): zeroing it made the FW parse the delivered
+   message bytes as a DATA descriptor (BC/CN/BMB) - "Invalid data memory
+   address 5151500 in packet 40120".  The FW's parser follows these bits. */
+PUTW (hm + HM_LOF, (GETW (hm + HM_LOF) & 0177400) | (lof & 0377));
 
 memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
