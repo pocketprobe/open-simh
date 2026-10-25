@@ -1276,19 +1276,30 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
 else {
-        /* No completion queue: the firmware gave no return path, which
-           means the firmware is managing this item on its own lists -
-           it posted it cq-less deliberately (observed: buffer-family
-           items during abort churn, the foreign LOF 013400 artifact).
-           Re-pooling such an item DOUBLE-LINKS it: on the kh's SRR
-           chain and on whatever firmware list still holds it, and the
-           firmware's later walks follow the zombie link into repurposed
-           memory (the deterministic 007007 at CM word 007250).  The
-           FW's own LCMD buffer posts refill the pool; the kh invents
-           no returns of its own.  The item vanishes. */
-        sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o vanished (firmware-managed)\n", rsc);
-        if (kh_is_nack (rsc))
-            sim_debug (DBG_WRN, &kh_dev, "cq-less NACK item %07o dropped (not pooled)\n", rsc);
+        /* No completion queue: two species with different owners.
+           Species B: the item is the kh's OWN parked request lease
+           (kh_req) that the firmware re-posts cq-less when the
+           request's circuit dies (gen 27: hm 0035240 re-posted four
+           times) - the kh holds that lease, so releasing it through
+           the waiter contract is the kh's own accounting, and it also
+           stops a later response from completing into a vanished HM.
+           Species A: anything else is firmware-managed (posted
+           deliberately without a return path, or a misread artifact);
+           re-pooling would double-link it - the item vanishes. */
+        int32 i;
+        for (i = 0; i < CI_MAX_NODES; i++) {
+            if (kh_req[i] == rsc) {                     /* the kh's own parked lease */
+                kh_req[i] = 0;
+                kh_hm_return (rsc);                     /* release through the waiter contract */
+                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released\n", i, rsc);
+                break;
+                }
+            }
+        if (i == CI_MAX_NODES) {
+            sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o vanished (firmware-managed)\n", rsc);
+            if (kh_is_nack (rsc))
+                sim_debug (DBG_WRN, &kh_dev, "cq-less NACK item %07o dropped (not pooled)\n", rsc);
+            }
         }
     }
 return SCPE_OK;
