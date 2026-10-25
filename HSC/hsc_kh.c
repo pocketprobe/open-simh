@@ -618,12 +618,53 @@ kg_route_frb (&kh_unit, kh, frb, TRUE);
 return SCPE_OK;
 }
 
+/* Last in-band BMB stamp seen per buffer.  The FW loads HM$BMB raw
+   into a UDPA register (NXM from M.std, UDPA(4) = 051515, error reg
+   151500): only [140000,160000) maps to data memory.  When the kh
+   delivers M.DAT on a buffer whose current stamp is stale
+   (051515/000011/000007 completion metadata), it substitutes the
+   stamp the FW itself posted for that buffer. */
+
+#define KH_NSTAMP 8
+uint32 kh_stamp_hm[KH_NSTAMP];                          /* buffer CM address */
+uint32 kh_stamp_val[KH_NSTAMP];                         /* last in-band stamp */
+
+void kh_stamp_remember (uint32 hm, uint32 bmb)
+{
+int32 i;
+for (i = 0; i < KH_NSTAMP; i++) {
+    if (kh_stamp_hm[i] == hm) {
+        kh_stamp_val[i] = bmb;
+        return;
+        }
+    }
+for (i = 0; i < KH_NSTAMP; i++) {
+    if (kh_stamp_hm[i] == 0) {
+        kh_stamp_hm[i] = hm;
+        kh_stamp_val[i] = bmb;
+        return;
+        }
+    }
+kh_stamp_hm[0] = hm;                                    /* evict oldest slot */
+kh_stamp_val[0] = bmb;
+}
+
+uint32 kh_stamp_lookup (uint32 hm)
+{
+int32 i;
+for (i = 0; i < KH_NSTAMP; i++) {
+    if (kh_stamp_hm[i] == hm)
+        return kh_stamp_val[i];
+    }
+return 0;
+}
+
 /* Get a free message buffer */
 
 uint32 kh_get_srr (uint32 len)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, cn;
+uint32 hm, cn, bmb;
 int32 n, p;
 
 /* Bound the walk by the current queue depth.  The firmware mutates its
@@ -664,19 +705,30 @@ for (; n > 0; n--) {
        can carry DMA data, an unstamped one carries inline data only.
        Rewriting LOF classes to fit the old label-based matcher was
        forgery the pool walker convicts (007007). */
-    /* Capability = the firmware posted the buffer: CN != 0 and an HM$BMB
-   stamp present.  The V6.5-era M.DAT band check [140000,160000) rejected
-   every V8.30 posting (live stamps 051515, 000011, 000007 - a different
-   posting dialect), starving the SRR pool: inbound host packets held
-   ("buffer pool empty"), the installer's SCS messages never delivered,
-   no $5$DUA enumeration.  The kh never dereferences HM$BMB - the stamp
-   is the firmware's own metadata; refusing the firmware's own postings
-   was the port second-guessing its poster. */
-    if ((len >= 077) && (GETW (hm + HM_CN) != 0) && (GETW (hm + HM_BMB) != 0))
-        return hm;                                      /* posted buffer for large packet */
+    /* BMB stamp contract (V6.5 AND V8.30, witnessed): a non-zero HM$BMB
+   is a data-memory page descriptor - the FW loads it raw into a UDPA
+   (user-D PAR) and only [140000,160000) maps to data memory.  Large
+   packets (>= 0100) go M.DAT-style: label 077, HM$BC = length, the
+   payload chunked per descending block stamp (see below); small
+   packets go inline at HM$MSG.  Either way the kh must overwrite the
+   buffer's CN/BMB/BC with values matching ITS delivery - see the
+   delivery paths. */
+    bmb = GETW (hm + HM_BMB);
+    /* The FW requeues processed buffers with its completion metadata in
+       HM$LOF/CN/BMB (LOF 020244/030220, CN 2-4, BMB 051515/000011/000007
+       - witness: the fill-pattern CM pool, no live chain).  These are
+       STALE, not reservations: the real K.ci port overwrites them when
+       it reuses the buffer.  The kh does the same - see the delivery
+       paths.  Remember the last in-band stamp per buffer for M.DAT
+       delivery (the FW DMAs via UDPA = HM$BMB; only [140000,160000)
+       maps to data memory - NXM from M.std, UDPA(4) = 051515). */
+    if ((bmb >= 0140000) && (bmb < 0160000))
+        kh_stamp_remember (hm, bmb);
+    if ((len >= 077) && (bmb != 0))
+        return hm;              /* large: M.DAT label 077, copy to BMB<<6 */
     if (len < 077)
-        return hm;                                      /* small packet: any buffer */
-    if (n == 1) {
+        return hm;              /* small: inline on any buffer */
+    if (n == 1) {               /* large, zero-stamped buffer: nothing else */
         kg_send (kh + KH_SRR, hm);                      /* walked all: put last back */
         return 0;                                       /* no buffers available */
         }
@@ -750,6 +802,11 @@ PUTP (hm + HM_CQ, 0);
    message bytes as a DATA descriptor (BC/CN/BMB) - "Invalid data memory
    address 5151500 in packet 40120".  The FW's parser follows these bits. */
 PUTW (hm + HM_LOF, (GETW (hm + HM_LOF) & 0177400) | (lof & 0377));
+PUTW (hm + HM_CN, 0);                                   /* inline: no data blocks.
+   The FW requeues processed buffers with its own completion metadata
+   in CN/BMB (LOF 020244 CN 3 BMB 051515 etc.); delivering with the
+   stale CN/BMB = "wrong number of BMBs" bugcheck 007007 (R0 = HMB). */
+PUTW (hm + HM_BMB, 0);
 
 memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
@@ -765,7 +822,8 @@ return SCPE_OK;
 t_stat kh_receive_int (CI_PKT *pkt)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, dma, opc, lof, len, sb, node, cq;
+uint32 hm, dma, opc, lof, len, sb, node, cq, bmb, nb;
+int32 i;
 uint16 dg_type = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
 uint16 scs_type = CI_GETW (pkt->data, SCS_MTYPE);
 
@@ -827,29 +885,40 @@ PUTB (hm + HM_CB + 01, ~node);                          /* complement */
 
 if (((lof & 077) != 077) && (opc == OPC_MSG)) {
 //    sim_printf ("Receive packet to control memory\n");
+    PUTW (hm + HM_CN, 0);                               /* inline: no data blocks */
+    PUTW (hm + HM_BMB, 0);                              /* (stale metadata = 007007) */
     memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[CI_OPC], (pkt->length - CI_OPC));
     kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
     }
 else {
     PUTW (hm + HM_BC, len);
-    dma = GETW (hm + HM_BMB);                           /* data mem addr */
-    dma = (dma << 6);
-
-    if (!ADDR_IS_DMEM (dma)) {
-        /* Device-level anomaly: never fatal.  The old SCPE_IERR return
-           propagated through kh_svc into simh's event machinery and
-           killed the whole simulator ("Unexpected internal error ...
-           returned 101") over one bad stamp.  Complete the HM with an
-           error and drop the packet; the port and firmware both live. */
-        sim_printf ("Invalid data memory address %o in packet %o\n", dma, hm);
-        PUTW (hm + HM_ERR, 004000);                     /* HME$VC - packet not delivered */
-        kg_send (kh + KH_SRR, hm);                      /* return the lease */
-        return SCPE_OK;
+    bmb = GETW (hm + HM_BMB);                           /* UDPA DM descriptor */
+    if ((bmb != 0) && ((bmb < 0140000) || (bmb >= 0160000))) {
+        bmb = kh_stamp_lookup (hm);                     /* stale: use the FW's own */
+        if (bmb == 0) {                                 /* never posted in-band? */
+            PUTW (hm + HM_ERR, 004000);                 /* HME$VC - not deliverable */
+            kg_send (kh + KH_SRR, hm);                  /* return the lease */
+            return SCPE_OK;
+            }
+        PUTW (hm + HM_BMB, bmb);                        /* valid UDPA stamp */
         }
-    dma = dma & DMEMMASK;
-//    sim_printf ("Receive packet to data memory: %o\n", dma);
-
-    memcpy (&DM[dma >> 1], &pkt->data[CI_OPC], (pkt->length - CI_OPC));
+    /* HM$CN must equal the blocks the kh actually filled, and the BMB
+       stamp ARRAY (HM$BMB + 2*i) must list them in the FW's order:
+       descending [s, s-1, ...] (witnessed: the FW's own 2-block post =
+       dma 15517700 + p3 155176; delivered HM$BMB = 155177 155176).
+       Chunk i of the payload goes at (bmb0 - i) << 6.  A stale CN=3
+       with a 2-block payload bugchecks HOST at 020076 (007007); a
+       contiguous payload clobbers the FW's walk (NXM at M.std). */
+    nb = (len + 077) >> 6;
+    PUTW (hm + HM_CN, nb);
+    for (i = 0; i < nb; i++) {
+        int32 chunk = len - (i << 6);
+        if (chunk > 0100)
+            chunk = 0100;
+        dma = ((bmb - i) << 6) & DMEMMASK;
+        memcpy (&DM[dma >> 1], &pkt->data[CI_OPC + (i << 6)], chunk);
+        PUTW (hm + HM_BMB + (i << 1), bmb - i);
+        }
     kg_print_struct (NULL, &kh_unit, hm, hmd_stc);
     }
 
