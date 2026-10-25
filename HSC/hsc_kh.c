@@ -444,6 +444,7 @@ uint32 kh_req[CI_MAX_NODES];                            /* pending request buffe
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
 uint8  kh_closed[CI_MAX_NODES];                         /* VC explicitly closed via set-vc */
 uint8  kh_rstnode;
+t_bool kh_consume_item;                                 /* work item consumed with no completion */
 
 #define KH_VCD_CST      0100000                         /* circuit state bit (VAXport VCD_CST) */
 
@@ -887,13 +888,16 @@ switch (opc) {
     case 004:                                           /* enqueue datagram buffer (DRR) */
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
         if ((p1 == 0177776) || (p2 == 0)) {             /* degenerate post: no buffer attached */
-            /* type -2 = the firmware's no-circuit marker.  A success ack   */
-            /* (LOF 060077 alone) tells the FW a resource was registered    */
-            /* that does not exist; it later fails to retrieve it (007020   */
-            /* "Failure to retrieve SCS resources from K.ci").  Complete    */
-            /* with HME$VC instead: crisp status, nothing registered.       */
-            PUTW (hm + HM_ERR, 004000);                 /* HME$VC */
-            sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "degenerate buffer-post (type %06o dma %08o) completed with HME$VC\n", p1, (p2 << 6));
+            /* type -2 = the firmware's no-circuit MARKER, not a trans-     */
+            /* action.  Completing it in any form (success ack or HME$VC    */
+            /* error) sends the firmware into its retrieve-with-degenerate- */
+            /* args path: 007020 "Failure to retrieve SCS resources" with   */
+            /* the post's (type,dma) on the stack - observed for BOTH       */
+            /* completion styles.  Consume it silently instead: the marker  */
+            /* carries no lease to return and expects no reply.             */
+            kh_consume_item = TRUE;
+            sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "degenerate buffer-post (type %06o dma %08o) consumed silently\n", p1, (p2 << 6));
+            break;
             }
         PUTW (hm + HM_LOF, 060077);
         break;
@@ -1185,6 +1189,7 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
 
     rsc = kg_receive (wq);                              /* get resource from work queue */
     opc = GETW (rsc + HM_LOF) & 074000;
+    kh_consume_item = FALSE;
 
     switch (opc) {
         case 060000:                                    /* local command */
@@ -1213,7 +1218,10 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         }
 
-    if (cq) {
+    if (kh_consume_item) {
+        /* marker consumed: no completion, no return - the item vanishes */
+        }
+    else if (cq) {
         kh_bmb_sanitize (rsc);
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
