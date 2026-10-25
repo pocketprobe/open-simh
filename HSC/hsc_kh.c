@@ -695,10 +695,23 @@ if (kh_closed[pkt->node]) {                             /* the firmware marked t
                                                            dead (NACK / abort re-post): the CBs are
                                                            torn down - delivering into their server
                                                            queues writes links into corpse memory.
-                                                           The FW's re-dress (set-vc CST open) clears
-                                                           kh_closed and deliveries resume. */
-    sim_debug (DBG_TRC, &kh_dev, "holding/ignoring SCS message for closed node %d\n", pkt->node);
-    return SCPE_OK;
+                                                           REVIVAL TRAFFIC passes and reopens: the
+                                                           connect-family messages re-dress the
+                                                           circuit, so without this carve-out the
+                                                           gate deadlocks (the re-dress cannot be
+                                                           delivered to a node we refuse to deliver
+                                                           to).  The FW's set-vc CST open also
+                                                           clears kh_closed when it arrives. */
+    uint16 st = CI_GETW (pkt->data, SCS_MTYPE);
+    if ((st == SCS_CONREQ) || (st == SCS_CONRSP) ||
+        (st == SCS_ACCREQ) || (st == SCS_ACCRSP)) {
+        kh_closed[pkt->node] = 0;                       /* the circuit re-dresses */
+        sim_debug (DBG_WRN, &kh_dev, "node %d re-dressing (SCS type %02x), deliveries resume\n", pkt->node, st);
+        }
+    else {
+        sim_debug (DBG_TRC, &kh_dev, "ignoring SCS message type %02x for closed node %d\n", st, pkt->node);
+        return SCPE_OK;
+        }
     }
 cb = GETP (sb + SB_NCB) - CB_TLK;                       /* get connection block */
 for (n = 0; n < 64; n++) {                              /* CB$TLK chain - KH$MXD is 5/node */
