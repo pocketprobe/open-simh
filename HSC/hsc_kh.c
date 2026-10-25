@@ -1045,7 +1045,12 @@ if (node >= CI_MAX_NODES) {                             /* degenerate node - com
     goto done;
     }
 
-if (kh_closed[node]) {                                  /* VC closed - no transmission */
+if (kh_closed[node] && ((opc == 020000) || (opc == 040000))) {  /* sequenced SCS on a dead circuit:
+    CIPA: datagrams are connectionless and need no VC - they are exactly how a
+    dead circuit gets revived, so the gate must never hold them.  Gating all
+    classes (the FIX-4 port) ate the firmware's START responses (LOF 054012
+    datagrams) to the peer's revival broadcast: the VAX knocked, the firmware
+    answered, the kh refused to carry the answer - the deadlock's third lock. */
     sim_debug (DBG_TRC, &kh_dev, "Send on closed VC node %d: HM %07o CTX %06o CN %06o LOF %06o\n", node, hm, GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_LOF));
     PUTW (hm + HM_ERR, 004000);                         /* HME$VC - transmission not attempted */
     pkt.data[CI_OPC] = (opc == 020000 || opc == 040000) ? OPC_MSG : OPC_DG;
