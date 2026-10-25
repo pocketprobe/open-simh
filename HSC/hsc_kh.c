@@ -1139,6 +1139,21 @@ else
 
 /* Process resources from a work queue */
 
+/* The firmware's resource collector validates HM$BMB (offset 0020) in
+   [140000,160000) - the M.DAT band - on every HM that reaches it
+   (disassembled raise site 13544/13552 -> 007022 "Invalid BMB address",
+   HSC SV-002).  Work-queue items that carry no data buffer (local
+   commands, degenerate buffer posts, gated send completions) never had
+   a stamp there: hand the collector a harmless in-band value instead of
+   the zero the firmware left in the field.  Real data-carrying stamps
+   are never touched. */
+
+void kh_bmb_sanitize (uint32 hm)
+{
+if ((GETW (hm + HM_BMB) < 0140000) || (GETW (hm + HM_BMB) >= 0160000))
+    PUTW (hm + HM_BMB, 0140000);                        /* start of M.DAT band */
+}
+
 t_stat kh_process_queue (uint32 kh, uint32 wq)
 {
 uint32 cq, rsc, opc, i;
@@ -1179,8 +1194,10 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         }
 
-    if (cq)
+    if (cq) {
+        kh_bmb_sanitize (rsc);
         kg_send (cq, rsc);                              /* put resource to completion queue */
+        }
     }
 return SCPE_OK;
 }
