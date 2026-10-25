@@ -441,6 +441,8 @@ static STDEF frb_stc[] = {
 extern int32 tmxr_poll;                                 /* calibrated delay */
 
 uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
+static uint32 kh_quar[CI_MAX_NODES];                    /* released leases awaiting the FW's
+                                                           resource audit - never re-delivered */
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
 uint8  kh_rstnode;
 t_bool kh_consume_item;                                 /* work item consumed with no completion */
@@ -641,6 +643,19 @@ for (; n > 0; n--) {
     hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
     if (hm == 0)
         return 0;                                       /* no buffers available */
+    {                                                   /* skip released leases in quarantine */
+        int32 q;
+        for (q = 0; q < CI_MAX_NODES; q++) {
+            if (kh_quar[q] == hm)
+                break;
+            }
+        if (q < CI_MAX_NODES) {                         /* quarantined: requeue at tail */
+            kg_send (kh + KH_SRR, hm);
+            if (n == 1)
+                return 0;                               /* walked all, nothing else available */
+            continue;
+            }
+        }
     sim_debug (DBG_WRN, &kh_dev, "SRR walk: hm %07o LOF %06o CN %06o BMB %06o (need len %o)\n",
         hm, GETW (hm + HM_LOF), GETW (hm + HM_CN), GETW (hm + HM_BMB), len);
     /* Classify by capability, not by the LOF size label: pool entries
@@ -1304,8 +1319,14 @@ else {
                    re-dress (the gate held the firmware's own CONNECT sends,
                    gen 35: zero re-dressings with the PPD handshake fully
                    bilateral). */
-                kh_hm_return (rsc);                     /* release through the waiter contract */
-                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released\n", i, rsc);
+                kh_quar[i] = rsc;                       /* quarantine: the released lease
+                                                           never re-enters kh_get_srr's reach -
+                                                           the FW's resource audit counts it as
+                                                           the port's custody, and re-delivering
+                                                           it as new traffic unbalanced the audit
+                                                           ("Resource lost to K.ci -- 1. HMBs")
+                                                           and stalled the disk server */
+                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released, quarantined\n", i, rsc);
                 break;
                 }
             }
