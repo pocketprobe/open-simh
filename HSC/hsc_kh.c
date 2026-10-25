@@ -458,6 +458,7 @@ t_stat kh_show_ctype (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 DEBTAB kh_debug[] = {
     { "REG",   DBG_REG },
     { "WARN",  DBG_WRN },
+    { "WRN",   DBG_WRN },                               /* alias - dec_ci.c spells it WRN */
     { "DIAG",  DBG_DIAG },
     { "CONF",  DBG_CONF },
     { "PPD",   DBG_PPD },
