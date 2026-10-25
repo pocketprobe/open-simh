@@ -490,6 +490,8 @@ else {
 return SCPE_OK;
 }
 
+int32 fl_dma_check (int32 ma, int32 ln);
+
 void fl_write (UNIT *uptr, int32 blk, int32 sz, int32 ma, t_bool mapen)
 {
 int32 da = blk * 512;
@@ -505,6 +507,8 @@ if ((da < 0) || da >= FL_SIZE) {  /* no such sector (e.g. SREG=0 DMA test) */
     sim_debug (DBG_REG, &fl_dev, "fl: invalid write da %d\n", da);
     return;
     }
+if (fl_dma_check (ma, ln))                              /* program-bus window? */
+    return;
 sim_debug (DBG_REG, &fl_dev, "Boot device write, %o -> %X, %d\n", ma, da, sz);
 if (mapen) {                                            /* use reloc? */
     for (i = 0; i < ln; i++)
@@ -532,6 +536,8 @@ if ((da < 0) || da >= FL_SIZE) {  /* no such sector (e.g. SREG=0 DMA test) */
     return;
     }
 sim_debug (DBG_REG, &fl_dev, "Boot device read, %X, %d -> %o\n", da, sz, ma);
+if (fl_dma_check (ma, ln))                              /* program-bus window? */
+    return;
 if (mapen) {                                            /* use reloc? */
     for (i = 0; i < ln; i++)
         WriteB (fbuf[(da + i)], (ma + i));
@@ -540,6 +546,24 @@ else {
     for (i = 0; i < ln; i++)
         PWriteB (fbuf[(da + i)], (ma + i));
     }
+}
+
+/* K.rx DMA runs on the program bus only (TM 11.7.3.8): an address with
+   no memory attached gets no reply within 10us, and the controller
+   latches NXM into the CSR (Table 11-3 bit 14).  Anything else on the
+   HSC's other bus windows (DMEM/CMEM via NMA) is out of window for the
+   K.rx.  Without this gate a wild MAR could otherwise reach data or
+   control memory or trip a CPU NXM trap from inside the device service.
+   Returns non-zero if NXM was latched (transfer stops at the window). */
+
+int32 fl_dma_check (int32 ma, int32 ln)
+{
+if ((ma < 0) || ((ma + ln - 1) >= INIMEMSIZE)) {        /* program memory window? */
+    fl_csr = fl_csr | FLCSR_NXM;                        /* set non-existent memory (TM Table 11-3) */
+    sim_debug (DBG_REG, &fl_dev, "fl: DMA NXM at %o\n", ma);
+    return 1;
+    }
+return 0;
 }
 
 t_stat fl_rd (int32 *data, int32 pa, int32 access)
@@ -721,7 +745,7 @@ switch (uptr->CMD >> 5) {
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
         if (fl_madr2 & FLMA2_DMA) {                     /* DMA test: no media; SREG byte doubled to memory */
             sim_debug (DBG_REG, &fl_dev, "fl: DMA test read, %o -> %o\n", sec, ma);
-            if ((ma >= 0) && (ma < (FL_NUMTR * FL_NUMHD * FL_NUMSC * FL_NUMBY))) {
+            if (fl_dma_check (ma, 2) == 0) {            /* program-bus window? */
                 PWriteB (sec, ma);
                 PWriteB (sec, (ma + 1));
                 }
@@ -755,6 +779,7 @@ switch (uptr->CMD >> 5) {
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), sec);
         if (fl_madr2 & FLMA2_DMA) {                     /* DMA test: no media, no memory data; one word */
             sim_debug (DBG_REG, &fl_dev, "fl: DMA test write, %o <- word\n", ma);
+            fl_dma_check (ma, 2);                       /* program-bus window? */
             ma = ma + 2;                                /* one word transferred */
             }
         else if (uptr->CMD & 020) {
@@ -799,7 +824,7 @@ switch (uptr->CMD >> 5) {
         da = GET_DA (uptr->TRK, (uptr->CMD & 02 ? 1 : 0), 1);
         if (fl_madr2 & FLMA2_DMA) {                     /* DMA test: no media, no memory data; one word */
             sim_debug (DBG_REG, &fl_dev, "fl: DMA test track op, %o <- word\n", ma);
-            if ((ma >= 0) && (ma < (FL_NUMTR * FL_NUMHD * FL_NUMSC * FL_NUMBY))) {
+            if (fl_dma_check (ma, 2) == 0) {            /* program-bus window? */
                 PWriteB (fl_madr1 & FLMA1_DS, ma);
                 PWriteB (fl_madr1 & FLMA1_DS, (ma + 1));
                 }
