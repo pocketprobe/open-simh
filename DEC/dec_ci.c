@@ -284,7 +284,7 @@ uint8 path_flags;
 t_stat r = SCPE_OK;
 
 if (pkt->node >= CI_MAX_NODES)                          /* port valid? */
-    return SCPE_OK;
+    return CISE_NOPATH;                                 /* no path to invalid port */
 if (pkt->length > CI_MAXFR) {                           /* check length */
     sim_printf ("CI packet length error in ci_send: %ld\n", pkt->length);
     return SCPE_IERR;
@@ -440,6 +440,10 @@ if (uptr->ci_node > port) {                             /* are we the server? */
     node->conn = LINK_STARTING;                         /* wait for client */
     return SCPE_OK;
     }
+if (node->host[0] == '\0') {                            /* no learned peer endpoint */
+    sim_debug_unit (DBG_CONN, uptr, "No remote address for node %d\n", port);
+    return CISE_VCERR;
+    }
 for (i = 0; i < CI_MAX_NODES; i++) {                    /* find free entry */
     if (cp->links[i].socket == 0) {
         sim_debug_unit (DBG_CONN, uptr, "New connection setup at link %d\n", i);
@@ -550,7 +554,8 @@ for (;;) {
     src = rcv_pkt.data[CI_SRC];
     dst = rcv_pkt.data[CI_DEST];
     opc = rcv_pkt.data[CI_OPC];
-    if (dst == uptr->ci_node) {
+    if ((src < CI_MAX_NODES) &&                         /* valid source? */
+        (dst == uptr->ci_node)) {
         rcv_pkt.length = ((rcv_pkt.data[CI_LEN_HI] & 0xF) << 8);
         rcv_pkt.length |= rcv_pkt.data[CI_LEN_LO];
         if (opc == OPC_IDREQ) {
@@ -665,6 +670,11 @@ for (i = 0; i < CI_MAX_NODES; i++) {
         pkt->offset = 0;                                /* got whole packet now */
         src = pkt->data[CI_SRC];
         dst = pkt->data[CI_DEST];
+        if (src >= CI_MAX_NODES) {                      /* invalid source - drop link */
+            sim_debug_unit (DBG_WRN, uptr, "Received packet with invalid source node %d\n", src);
+            ci_link_fail (uptr, link);
+            break;
+            }
         if (dst != uptr->ci_node) {                     /* not for this node? */
             sim_printf ("Received packet not destined for this node: %d\n", dst);
             ci_dump_pkt (DBG_PKT, uptr, pkt->data, pkt->length);
@@ -747,6 +757,13 @@ else if ((node->conn == LINK_STARTING) && (opcode == OPC_MSG)) {
     return SCPE_OK;
     }
 else if (uptr->flags & UNIT_ATT) {                      /* use multicast */
+    if (node->conn == LINK_CLOSED) {                    /* VC closed? */
+        uint16 mt = CI_GETW (tpkt.data, PPD_MTYPE);     /* packet type */
+        if ((mt == PPD_SCSDG) || (mt == PPD_SCSMSG)) {  /* SCS data needs a VC */
+            sim_debug_unit (DBG_CONN, uptr, "no path to node %d, send failed\n", pkt->node);
+            return CISE_NOPATH;
+            }
+        }
     /* FIXME: This should be for datagrams only */
     sim_debug_unit (DBG_CONN, uptr, "using UDP multicast link\n");
     r = sim_write_sock_ex (cp->multi_sock, tpkt.data, tpkt.length, cp->group, SIM_SOCK_OPT_DATAGRAM);
