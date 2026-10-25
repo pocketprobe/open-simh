@@ -1208,6 +1208,15 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         kh_bmb_sanitize (rsc);
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
+else {
+        /* No completion queue: the firmware gave no return path for this
+           item (observed: a foreign-class LOF 013400 work item on 3WK).
+           Dropping it leaks the lease - the FW's buffer pool drains until
+           "No buffer for incoming packet" storms and K.ci halts.  Return
+           it to the SRR pool with HME$VC ("not transmitted") instead. */
+        sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o returned to SRR (HME$VC)\n", rsc);
+        kh_hm_return (rsc);
+        }
     }
 return SCPE_OK;
 }
