@@ -1466,7 +1466,12 @@ if (kh_is_nack (hm)) {                                  /* death marker: never p
     sim_debug (DBG_WRN, &kh_dev, "NACK hm %07o dropped (not pooled)\n", hm);
     return;
     }
-PUTW (hm + HM_ERR, 004000);                             /* HME$VC - not transmitted */
+/* Return the lease WITHOUT writing any field: a free-pool buffer's
+   contract is clean fields as the firmware stamped them at allocation.
+   The old HME$VC write flagged the returned buffer with an error code
+   while it sat in the free pool, and the firmware's pool walker
+   convicted the chain tail (007007, R0 = WADR[0] -> the SRR tail
+   buffer) every boot.  The kh's pool returns carry no paperwork. */
 kg_send (kh + KH_SRR, hm);                              /* return lease to SRR */
 }
 
