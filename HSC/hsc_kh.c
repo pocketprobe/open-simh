@@ -788,8 +788,18 @@ if (node >= CI_MAX_NODES) {                             /* invalid source - drop
 len = pkt->length - LEN_HEADER;
 
 if (kh_closed[node] && (opc != OPC_MSG)) {              /* VC closed for raw packet families? */
-    sim_debug (DBG_TRC, &kh_dev, "Ignore incoming packet %d from node %d, VC closed\n", opc, node);
-    return SCPE_OK;                                     /* port delivers nothing but SCS through closed VC */
+    uint16 mt = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
+    if ((mt == PPD_START) || (mt == PPD_STACK)) {       /* REVIVAL: the peer's port-to-port
+                                                           re-dress broadcast - delivering it lets
+                                                           the firmware re-open the circuit; the
+                                                           SCS-side carve-out (kh_appmsg connect
+                                                           family) only covers the message layer */
+        sim_debug (DBG_WRN, &kh_dev, "revival packet (mt %04x) delivered to closed node %d\n", mt, node);
+        }
+    else {
+        sim_debug (DBG_TRC, &kh_dev, "Ignore incoming packet %d from node %d, VC closed\n", opc, node);
+        return SCPE_OK;                                 /* port delivers nothing but SCS and revival through closed VC */
+        }
     }
 
 if (opc == OPC_MSG) {
