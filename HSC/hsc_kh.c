@@ -442,7 +442,10 @@ extern int32 tmxr_poll;                                 /* calibrated delay */
 
 uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
+uint8  kh_closed[CI_MAX_NODES];                         /* VC explicitly closed via set-vc */
 uint8  kh_rstnode;
+
+#define KH_VCD_CST      0100000                         /* circuit state bit (VAXport VCD_CST) */
 
 t_stat kh_svc (UNIT *uptr);
 t_stat kh_reset (DEVICE *dptr);
@@ -810,18 +813,35 @@ kg_print_struct (NULL, &kh_unit, hm, hmct_stc);
 
 void kh_set_vc (uint32 hm)
 {
-uint32 node, vcf, mask;
+uint32 node, vcf, mask, newv;
 
 kg_print_struct (NULL, &kh_unit, hm, hmvc_stc);
 node = GETW (hm + HM_CN);                               /* node */
+if (node >= CI_MAX_NODES) {                             /* invalid node - nothing to do */
+    sim_debug (DBG_WRN, &kh_dev, "set-vc: invalid node %d, ignored\n", node);
+    return;
+    }
 vcf = GETW (hm + HM_VCF);                               /* new flags */
 mask = GETW (hm + HM_MK);                               /* mask */
 
-if (vcf && mask)                                        /* opening VC? */
-    ci_open_vc (&kh_unit, node);
-else if (mask)                                          /* closing VC? */
-    ci_close_vc (&kh_unit, node);
-kh_vcf[node] = (kh_vcf[node] & ~mask) | (vcf & mask);   /* update flags */
+/* Set-ckt semantics - same as the VAXport ci_setckt: the mask/modify is   */
+/* always applied to the shadow, but the circuit opens/closes ONLY on a    */
+/* circuit-state bit transition. The FW uses set-vc with small masks to    */
+/* clear sequence numbers etc. during VC re-establishment; treating any    */
+/* clear as a close rejects the FW's very next send (HME$VC), which drives */
+/* the FW HOST process to its 007022 "Invalid BMB address" bugcheck.       */
+newv = (kh_vcf[node] & ~mask) | (vcf & mask);
+if ((newv ^ kh_vcf[node]) & KH_VCD_CST) {               /* circuit state changed */
+    if (newv & KH_VCD_CST) {                            /* opening VC */
+        ci_open_vc (&kh_unit, node);
+        kh_closed[node] = 0;                            /* VC usable again */
+        }
+    else {                                              /* closing VC */
+        ci_close_vc (&kh_unit, node);
+        kh_closed[node] = 1;                            /* stop all traffic to/from this node */
+        }
+    }
+kh_vcf[node] = newv;                                    /* update shadow */
 PUTW (hm + HM_VCF, kh_vcf[node]);                       /* return updated value */
 }
 
