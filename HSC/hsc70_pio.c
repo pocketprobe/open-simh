@@ -755,6 +755,7 @@ switch (uptr->CMD >> 5) {
             sim_debug (DBG_REG, &fl_dev, "fl: read multi sector\n");
             fl_read (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);       /* sectors x through end (TM 11.7.4.2.1) */
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
+            fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (FL_NUMSC + 1);        /* SREG: one past last sector (TM 11.7.1.3.2) */
             }
         else {
             sim_debug (DBG_REG, &fl_dev, "fl: read single sector\n");
@@ -786,6 +787,7 @@ switch (uptr->CMD >> 5) {
             sim_debug (DBG_REG, &fl_dev, "fl: write multi sector\n");
             fl_write (uptr, da, (FL_NUMSC - sec + 1), ma, FALSE);      /* sectors x through end (TM 11.7.4.2.1) */
             ma = ma + ((FL_NUMSC - sec + 1) * 512);
+            fl_madr1 = (fl_madr1 & ~FLMA1_DS) | (FL_NUMSC + 1);        /* SREG: one past last sector (TM 11.7.1.3.2) */
             }
         else {
             sim_debug (DBG_REG, &fl_dev, "fl: write single sector\n");
