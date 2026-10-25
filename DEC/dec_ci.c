@@ -286,7 +286,7 @@ t_stat r = SCPE_OK;
 if (pkt->node >= CI_MAX_NODES)                          /* port valid? */
     return CISE_NOPATH;                                 /* no path to invalid port */
 if (pkt->length > CI_MAXFR) {                           /* check length */
-    sim_printf ("CI packet length error in ci_send: %ld\n", pkt->length);
+    sim_debug_unit (DBG_WRN, uptr, "CI packet length error in ci_send: %ld\n", pkt->length);
     return SCPE_IERR;
     }
 
@@ -340,7 +340,7 @@ switch (opcode) {
         break;
 
     default:
-        sim_printf ("Invalid opcode %d in ci_send()\n", opcode);
+        sim_debug_unit (DBG_WRN, uptr, "Invalid opcode %d in ci_send()\n", opcode);
         r = CISE_INVOPC;
         }
 if (r == SCPE_OK)
@@ -407,7 +407,7 @@ switch (opcode) {
         break;
 
     default:
-        sim_printf ("CI: unimplemented opcode (receive) %02X\n", opcode);
+        sim_debug_unit (DBG_WRN, uptr, "CI: unimplemented opcode (receive) %02X\n", opcode);
         return CISE_INVOPC;
         }
 return SCPE_OK;
@@ -546,7 +546,7 @@ for (;;) {
         break;                                          /* yes, done */
     r = sim_read_sock_ex (cp->multi_sock, rcv_pkt.data, CI_MAXFR, &src_addr);
     if (r < 0) {
-        sim_printf ("CI: multicast socket read error\n");
+        sim_debug_unit (DBG_WRN, uptr, "CI: multicast socket read error\n");
         return SCPE_IOERR;
         }
     if (r == 0)                                         /* no packet? */
@@ -578,7 +578,7 @@ uint8  port;
 t_stat r;
 
 if (cp->tx_queue.loss > 0)
-    sim_printf ("Warning: CI queue packet loss is %d\n", cp->tx_queue.loss);
+    sim_debug_unit (DBG_WRN, uptr, "Warning: CI queue packet loss is %d\n", cp->tx_queue.loss);
 while (cp->tx_queue.count > 0) {                        /* process transmit queue */
     item = &cp->tx_queue.item[cp->tx_queue.head];
     port = item->pkt.data[CI_DEST];
@@ -657,7 +657,7 @@ for (i = 0; i < CI_MAX_NODES; i++) {
             pkt->length = ((pkt->data[CI_LEN_HI] & 0xF) << 8);
             pkt->length |= pkt->data[CI_LEN_LO];        /* get total packet length */
             if (pkt->length > CI_MAXFR) {               /* check length is valid */
-                sim_printf ("Received packet with invalid length %ld, socket: %d\n", pkt->length, link->socket);
+                sim_debug_unit (DBG_WRN, uptr, "Received packet with invalid length %ld, socket: %d\n", pkt->length, link->socket);
                 ci_link_fail (uptr, link);              /* close the VC */
                 break;
                 }
@@ -676,7 +676,7 @@ for (i = 0; i < CI_MAX_NODES; i++) {
             break;
             }
         if (dst != uptr->ci_node) {                     /* not for this node? */
-            sim_printf ("Received packet not destined for this node: %d\n", dst);
+            sim_debug_unit (DBG_WRN, uptr, "Received packet not destined for this node: %d\n", dst);
             ci_dump_pkt (DBG_PKT, uptr, pkt->data, pkt->length);
             return SCPE_IERR;                           /* should not happen */
             }
@@ -765,6 +765,9 @@ else if (uptr->flags & UNIT_ATT) {                      /* use multicast */
             }
         }
     /* FIXME: This should be for datagrams only */
+    sim_debug_unit (DBG_CONN, uptr, "multicast pkt: opc=%d flg=%02x w5=%04x mt=%04x len=%d\n",
+        tpkt.data[CI_OPC], tpkt.data[CI_FLAGS], CI_GETW (tpkt.data, 5),
+        CI_GETW (tpkt.data, PPD_MTYPE), (uint32) tpkt.length);
     sim_debug_unit (DBG_CONN, uptr, "using UDP multicast link\n");
     r = sim_write_sock_ex (cp->multi_sock, tpkt.data, tpkt.length, cp->group, SIM_SOCK_OPT_DATAGRAM);
     return SCPE_OK;
@@ -793,7 +796,7 @@ if (cp->rx_queue.count == 0) {                          /* receive queue empty? 
     }
 if (cp->rx_queue.count > 0) {                           /* process receive queue */
     if (cp->rx_queue.loss > 0)
-        sim_printf ("Warning: CI queue packet loss is %d\n", cp->rx_queue.loss);
+        sim_debug_unit (DBG_WRN, uptr, "Warning: CI queue packet loss is %d\n", cp->rx_queue.loss);
     item = &cp->rx_queue.item[cp->rx_queue.head];
     memcpy (pkt, &item->pkt, sizeof (CI_PKT));          /* copy to output packet */
     ciq_remove (&cp->rx_queue);                         /* remove processed packet from queue */
