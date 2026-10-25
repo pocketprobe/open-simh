@@ -1350,12 +1350,16 @@ else {
         for (i = 0; i < CI_MAX_NODES; i++) {
             if (kh_req[i] == rsc) {                     /* the kh's own parked lease */
                 kh_req[i] = 0;
-                kh_closed[i] = 1;                       /* the node's circuit died (the FW
-                                                           re-posts the lease when aborting
-                                                           it) - stop deliveries until the FW
-                                                           re-dresses the circuit via set-vc */
+                /* NOTE: no kh_closed here.  The re-post means the firmware
+                   aborted THIS REQUEST (the circuit is alive - its PPD layer
+                   keeps answering STARTs).  kh_closed tracks circuit state
+                   and is set only by the firmware's own set-vc CST close;
+                   marking the node closed on a request abort deadlocked the
+                   re-dress (the gate held the firmware's own CONNECT sends,
+                   gen 35: zero re-dressings with the PPD handshake fully
+                   bilateral). */
                 kh_hm_return (rsc);                     /* release through the waiter contract */
-                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released, node marked closed\n", i, rsc);
+                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released\n", i, rsc);
                 break;
                 }
             }
