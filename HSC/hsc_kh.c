@@ -662,12 +662,13 @@ uint32 srccon, dstcon;
 uint32 kh = kh_dib.cma;
 uint32 sb, cb, cq;
 uint32 hm, dma, lof, len, rcc;
+int32 n;
 
 sb = GETP (kh - (32 * 2) + (pkt->node * 2));            /* get system block for source node */
 if (sb == 0)
     return SCPE_OK;
 cb = GETP (sb + SB_NCB) - CB_TLK;                       /* get connection block */
-for (;;) {
+for (n = 0; n < 64; n++) {                              /* CB$TLK chain - KH$MXD is 5/node */
     if (cb == 0)                                        /* end of list? */
         return SCPE_OK;                                 /* no valid connection */
     srccon = GETW (cb + CB_CID);
@@ -677,6 +678,14 @@ for (;;) {
         (dstcon == CI_GETL (pkt->data, SCS_DSTCON)))
         break;                                          /* valid connection found */
     cb = GETP (cb + CB_TLK) - CB_TLK;                   /* try next connection */
+    }
+if (n == 64) {                                          /* chain never ended: cyclic or corrupt */
+    /* Chaos-era teardowns can leave the kh walking from a stale CB the
+       firmware freed and relinked onto its own list; a cycle spins the
+       walk forever (simh hang, 100% CPU).  KH$MXD caps real chains at
+       a handful of entries. */
+    sim_debug (DBG_WRN, &kh_dev, "CB chain exceeds 64 entries or is cyclic - corruption?\n");
+    return SCPE_OK;
     }
 cq = GETP (cb + CB_SVR);                                /* get server queue */
 if (cq == 0)  
@@ -1335,13 +1344,17 @@ if (cb == 0) {
     return SCPE_OK;
     }
 
-while (cb != 0) {
+int32 n;
+
+for (n = 0; (cb != 0) && (n < 64); n++) {
     cb = cb - CB_TLK;                                   /* offset to start of CB$ */
     kg_print_struct (st, uptr, cb, cb_stc);
     fprintf (st, "---\n");
 
     cb = GETP (cb + CB_TLK);                            /* get next connection */
     }
+if (n == 64)
+    fprintf (st, "CB chain exceeds 64 entries or is cyclic\n");
 
 return SCPE_OK;
 }
