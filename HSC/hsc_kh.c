@@ -622,7 +622,7 @@ return SCPE_OK;
 uint32 kh_get_srr (uint32 len)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, sz, cn;
+uint32 hm, cn;
 int32 n, p;
 
 /* Bound the walk by the current queue depth.  The firmware mutates its
@@ -642,12 +642,16 @@ for (; n > 0; n--) {
     hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
     if (hm == 0)
         return 0;                                       /* no buffers available */
-    sz = GETW (hm + HM_LOF) & 077;                      /* get buffer size */
-    cn = GETW (hm + HM_CN);                             /* FIXME */
-    if (((sz == 077) && (len >= 077)) && (cn != 0))
-        return hm;                                      /* found buffer for large packet */
-    if ((sz != 077) && (len < 077))
-        return hm;                                      /* found buffer for small packet */
+    /* Classify by capability, not by the LOF size label: pool entries
+       arrive in the firmware's own posting format (LOF 060000, CN =
+       BMB count, HM$BMB stamped) - an HM$BMB stamp means the buffer
+       can carry DMA data, an unstamped one carries inline data only.
+       Rewriting LOF classes to fit the old label-based matcher was
+       forgery the pool walker convicts (007007). */
+    if ((len >= 077) && (GETW (hm + HM_BMB) != 0) && (GETW (hm + HM_CN) != 0))
+        return hm;                                      /* DMA-capable buffer for large packet */
+    if (len < 077)
+        return hm;                                      /* small packet: any buffer */
     if (n == 1) {
         kg_send (kh + KH_SRR, hm);                      /* walked all: put last back */
         return 0;                                       /* no buffers available */
@@ -943,18 +947,16 @@ switch (opc) {
             sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "node death marker (NACK) consumed (type %06o dma %08o)\n", p1, (p2 << 6));
             break;
             }
-        /* Buffer-post transform: the item IS the pool buffer, but as
-           posted its LOF is 060000 (local-command class, size bits 0),
-           so kh_get_srr classifies it as a small buffer and never
-           matches it against a large (DMA-class, len>=077) request.
-           The firmware stamped HM$BMB itself (p2 duplicates it); fix
-           ONLY the size class - CN is the BMB count and must stay as
-           posted (writing 2 onto a one-BMB buffer raised 007007 "HMB
-           received with wrong number of BMBs", counts (1,2) on the
-           stack).  A nonzero p3 (the type-2 post variant) is written
-           to HM$BMB when the item's own stamp is absent. */
-        PUTW (hm + HM_LOF, (opc == 003) ? 040077 : 044077);
-        if (p3 != 0)                                    /* FW-passed stamp? */
+        /* Buffer posts enqueue UNTOUCHED (the firmware posts them pool-ready
+           in its own format: LOF 060000, CN = BMB count, HM$BMB stamped).
+           Rewriting classification fields is forgery - the CN=2 write
+           raised 007007, and the LOF=040077 rewrite convicts the pool
+           walker too (gen 22, R0 shifted to 160240).  Matching by the
+           buffer's actual capability (kh_get_srr) replaces matching by
+           the LOF size label.  Only a type-2 post's p3 stamp fills an
+           empty HM$BMB, and only because the firmware passes it as an
+           argument for exactly that purpose. */
+        if ((p3 != 0) && (GETW (hm + HM_BMB) == 0))
             PUTW (hm + HM_BMB, p3);
         break;
     default:
