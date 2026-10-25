@@ -795,25 +795,15 @@ return kh_receive_int (pkt);
 
 void kh_counters (uint32 hm, uint8 node)
 {
+if ((GETW (hm + HM_BMB) < 0140000) || (GETW (hm + HM_BMB) >= 0160000))
+    sim_debug (DBG_WRN, &kh_dev, "COUNTERS: hm %o HM$BMB %o out of M.DAT band\n", hm, GETW (hm + HM_BMB));
 kg_print_struct (NULL, &kh_unit, hm, hmct_stc);
-PUTW (hm + HM_AKA + 000, 0);                            /* ACKs path A - low word */
-PUTW (hm + HM_AKA + 002, 0);                            /* ACKs path A - high word */
-PUTW (hm + HM_NKA + 000, 0);                            /* NAKs path A - low word */
-PUTW (hm + HM_NKA + 002, 0);                            /* NAKs path A - high word */
-PUTW (hm + HM_NRA + 000, 0);                            /* No response path A - low word */
-PUTW (hm + HM_NRA + 002, 0);                            /* No response path A - high word */
-
-PUTW (hm + HM_AKB + 000, 0);                            /* ACKs path B - low word */
-PUTW (hm + HM_AKB + 002, 0);                            /* ACKs path B - high word */
-PUTW (hm + HM_NKB + 000, 0);                            /* NAKs path B - low word */
-PUTW (hm + HM_NKB + 002, 0);                            /* NAKs path B - high word */
-PUTW (hm + HM_NRB + 000, 0);                            /* No response path B - low word */
-PUTW (hm + HM_NRB + 002, 0);                            /* No response path B - high word */
-
-PUTW (hm + HM_DGD + 000, 0);                            /* Discarded Datagrams - low word */
-PUTW (hm + HM_DGD + 002, 0);                            /* Discarded Datagrams - high word */
-PUTW (hm + HM_RDR + 000, 0);                            /* Discarded RTNDATs - low word */
-PUTW (hm + HM_RDR + 002, 0);                            /* Discarded RTNDATs - high word */
+/* No counter data is written into the hm.  HM_AKA aliases HM_BMB (+0020):
+   the firmware's resource collector validates HM$BMB in [140000,160000)
+   (M.DAT band; HSC SV-002 code 007022), and the upstream zero-fill of
+   AKA/NKA/NRA/AKB/NKB/NRB/DGD/RDR (+0020..+0054) wiped the BMB stamp on
+   firmware-allocated SRR buffers.  Counters stay zero - the sim has no
+   real counter source yet, so the SHOW CI readback is unchanged. */
 }
 
 /* Local command to get/set virtual circuit flags */
