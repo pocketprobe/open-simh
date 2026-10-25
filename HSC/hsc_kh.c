@@ -451,6 +451,7 @@ t_stat kh_svc (UNIT *uptr);
 t_stat kh_reset (DEVICE *dptr);
 t_stat kh_init (uint16 req, uint16 act);
 t_stat kh_poll (DEVICE *dptr, uint32 addr, int32 interval);
+static void kh_hm_return (uint32 hm);
 t_stat kh_show_ctrl (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_sb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
 t_stat kh_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc);
@@ -836,9 +837,18 @@ if ((newv ^ kh_vcf[node]) & KH_VCD_CST) {               /* circuit state changed
         ci_open_vc (&kh_unit, node);
         kh_closed[node] = 0;                            /* VC usable again */
         }
-    else {                                              /* closing VC */
+else {                                                  /* closing VC */
         ci_close_vc (&kh_unit, node);
         kh_closed[node] = 1;                            /* stop all traffic to/from this node */
+        if (kh_req[node] != 0) {                        /* pending request lease outstanding? */
+            /* A real FW close kills the request: no response will ever    */
+            /* arrive. Return the hm lease or the FW's SRR waiter count    */
+            /* drifts (007021) and the parked hm points at a CB the FW has */
+            /* already torn down (007022-class on next use).               */
+            sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "vc close: returning parked request hm %07o for node %d\n", kh_req[node], node);
+            kh_hm_return (kh_req[node]);
+            kh_req[node] = 0;
+            }
         }
     }
 kh_vcf[node] = newv;                                    /* update shadow */
@@ -1267,12 +1277,31 @@ switch (dibp->sts) {
 return SCPE_OK;
 }
 
+/* Return an HM lease to the firmware: the send never happened (circuit
+   died / port reset), so complete it with HME$VC and hand it back to the
+   SRR queue.  Without this the firmware's waiter count drifts (007021)
+   and its HMB pool drains until "Resource lost to K.ci -- N HMBs". */
+
+static void kh_hm_return (uint32 hm)
+{
+uint32 kh = kh_dib.cma;
+if (kh == 0)
+    return;                                             /* port not initialized */
+PUTW (hm + HM_ERR, 004000);                             /* HME$VC - not transmitted */
+kg_send (kh + KH_SRR, hm);                              /* return lease to SRR */
+}
+
 t_stat kh_reset (DEVICE *dptr)
 {
 kh_rstnode = 0;
 for (int i = 0; i < CI_MAX_NODES; i++) {
-    kh_req[i] = 0;
+    if (kh_req[i] != 0) {                               /* pending request held */
+        kh_hm_return (kh_req[i]);                       /* give its hm lease back */
+        sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "reset: returned parked request hm %07o\n", kh_req[i]);
+        kh_req[i] = 0;
+        }
     kh_vcf[i] = 0;
+    kh_closed[i] = 0;
     }
 return ci_port_reset (dptr);
 }
