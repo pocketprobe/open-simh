@@ -1480,8 +1480,17 @@ t_stat kh_reset (DEVICE *dptr)
 kh_rstnode = 0;
 for (int i = 0; i < CI_MAX_NODES; i++) {
     if (kh_req[i] != 0) {                               /* pending request held */
-        kh_hm_return (kh_req[i]);                       /* give its hm lease back */
-        sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "reset: returned parked request hm %07o\n", kh_req[i]);
+        /* DROP the lease - do not return it.  kh_reset runs while the
+           firmware is halted or crashing: its queues are garbage, and
+           kg_send writes through the CURRENT SRR tail pointer, planting
+           kh pointers into whatever region the crash left there.  The
+           residue survives into the next boot (the loader does not
+           clear that CM region), and the firmware's chain walks then
+           find a link into the previous boot's crash-handler code -
+           the deterministic 007007 conviction (R0 = WADR[0] -> CM word
+           007250 = MOVB #300,@#177776, the handler's own post-IOT
+           instruction).  You do not return leases to the dead. */
+        sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "reset: dropped parked request hm %07o (firmware gone)\n", kh_req[i]);
         kh_req[i] = 0;
         }
     kh_vcf[i] = 0;
