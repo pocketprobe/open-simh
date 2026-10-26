@@ -632,12 +632,54 @@ kg_route_frb (&kh_unit, kh, frb, TRUE);
 return SCPE_OK;
 }
 
+/* Last in-band BMB stamp seen per buffer.  The FW loads HM$BMB raw
+   into a UDPA register (NXM from M.std, UDPA(4) = 051515, error reg
+   151500): only [140000,160000) maps to data memory.  When the kh
+   delivers M.DAT on a buffer whose current stamp is stale
+   (051515/000011/000007 completion metadata), it substitutes the
+   stamp the FW itself posted for that buffer.  Pure kh-side
+   bookkeeping - no FW writes. */
+
+#define KH_NSTAMP 8
+uint32 kh_stamp_hm[KH_NSTAMP];                          /* buffer CM address */
+uint32 kh_stamp_val[KH_NSTAMP];                         /* last in-band stamp */
+
+void kh_stamp_remember (uint32 hm, uint32 bmb)
+{
+int32 i;
+for (i = 0; i < KH_NSTAMP; i++) {
+    if (kh_stamp_hm[i] == hm) {
+        kh_stamp_val[i] = bmb;
+        return;
+        }
+    }
+for (i = 0; i < KH_NSTAMP; i++) {
+    if (kh_stamp_hm[i] == 0) {
+        kh_stamp_hm[i] = hm;
+        kh_stamp_val[i] = bmb;
+        return;
+        }
+    }
+kh_stamp_hm[0] = hm;                                    /* evict oldest slot */
+kh_stamp_val[0] = bmb;
+}
+
+uint32 kh_stamp_lookup (uint32 hm)
+{
+int32 i;
+for (i = 0; i < KH_NSTAMP; i++) {
+    if (kh_stamp_hm[i] == hm)
+        return kh_stamp_val[i];
+    }
+return 0;
+}
+
 /* Get a free message buffer */
 
 uint32 kh_get_srr (uint32 len)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, sz, cn;
+uint32 hm, bmb, sz, cn;
 int32 n, p;
 
 /* Bound the walk by the current queue depth.  The firmware mutates its
@@ -658,6 +700,9 @@ for (; n > 0; n--) {
         return 0;
     sim_debug (DBG_WRN, &kh_dev, "SRR walk: hm %07o LOF %06o CN %06o BMB %06o (need len %o)\n",
         hm, GETW (hm + HM_LOF), GETW (hm + HM_CN), GETW (hm + HM_BMB), len);
+    bmb = GETW (hm + HM_BMB);
+    if ((bmb >= 0140000) && (bmb < 0160000))            /* an in-band stamp: */
+        kh_stamp_remember (hm, bmb);                    /* remember it for M.DAT */
     sz = GETW (hm + HM_LOF) & 077;
     cn = GETW (hm + HM_CN);
     if (((sz == 077) && (len >= 077)) && (cn == 2))
@@ -748,7 +793,8 @@ return SCPE_OK;
 t_stat kh_receive_int (CI_PKT *pkt)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, dma, opc, lof, len, sb, node, cq;
+uint32 hm, dma, opc, lof, len, sb, node, cq, bmb, nb;
+int32 i;
 uint16 dg_type = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
 uint16 scs_type = CI_GETW (pkt->data, SCS_MTYPE);
 
@@ -811,17 +857,33 @@ if (((lof & 077) != 077) && (opc == OPC_MSG)) {
     }
 else {
     PUTW (hm + HM_BC, len);
-    dma = GETW (hm + HM_BMB);                           /* data mem addr */
-    dma = (dma << 6);
-
-    if (!ADDR_IS_DMEM (dma)) {
-        sim_printf ("Invalid data memory address %o in packet %o\n", dma, hm);
-        return SCPE_IERR;
+    bmb = GETW (hm + HM_BMB);                           /* UDPA DM descriptor */
+    if ((bmb != 0) && ((bmb < 0140000) || (bmb >= 0160000))) {
+        bmb = kh_stamp_lookup (hm);                     /* stale: use the FW's own */
+        if (bmb == 0) {                                 /* never posted in-band? */
+            PUTW (hm + HM_ERR, 004000);                 /* HME$VC - not deliverable */
+            kg_send (kh + KH_SRR, hm);                  /* return the lease */
+            return SCPE_OK;
+            }
+        PUTW (hm + HM_BMB, bmb);                        /* valid UDPA stamp */
         }
-    dma = dma & DMEMMASK;
-//    sim_printf ("Receive packet to data memory: %o\n", dma);
-
-    memcpy (&DM[dma >> 1], &pkt->data[CI_OPC], (pkt->length - CI_OPC));
+    /* HM$CN must equal the blocks the kh actually filled, and the BMB
+       stamp ARRAY (HM$BMB + 2*i) must list them in the FW's order:
+       descending [s, s-1, ...] (witnessed: the FW's own 2-block post =
+       dma 15517700 + p3 155176; delivered HM$BMB = 155177 155176).
+       Chunk i of the payload goes at (bmb0 - i) << 6.  A stale CN=3
+       with a 2-block payload bugchecks HOST at 020076 (007007); a
+       contiguous payload clobbers the FW's walk (NXM at M.std). */
+    nb = (len + 077) >> 6;
+    PUTW (hm + HM_CN, nb);
+    for (i = 0; i < nb; i++) {
+        int32 chunk = len - (i << 6);
+        if (chunk > 0100)
+            chunk = 0100;
+        dma = ((bmb - i) << 6) & DMEMMASK;
+        memcpy (&DM[dma >> 1], &pkt->data[CI_OPC + (i << 6)], chunk);
+        PUTW (hm + HM_BMB + (i << 1), bmb - i);
+        }
     kg_print_struct (NULL, &kh_unit, hm, hmd_stc);
     }
 
