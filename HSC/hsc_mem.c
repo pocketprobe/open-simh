@@ -35,6 +35,7 @@ const char *cycles[] = {
 };
 
 extern int32 PCSR;
+extern int32 PSW;                                       /* mode at trace time */
 extern int32 trap_req, ipl;
 extern int32 CPUERR;
 extern jmp_buf save_env;
@@ -107,6 +108,11 @@ if (ADDR_IS_CMEM (pa)) {
     return data;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
+    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+        data = (PCSR & PCSR_PBK)? RdxMemW (M, pa ^ 02000000): RdxMemW (M, pa);
+        fprintf (sim_log, "DBG(%.0f)> CTBL rd: %07o = %06o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
+        return data;
+        }
     if (PCSR & PCSR_PBK)                                /* bank swap? */
         return RdxMemW (M, pa ^ 02000000);              /* yes, invert A19 */
     else
@@ -166,6 +172,11 @@ if (ADDR_IS_CMEM (pa)) {
     return data;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
+    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+        data = (PCSR & PCSR_PBK)? RdxMemB (M, pa ^ 02000000): RdxMemB (M, pa);
+        fprintf (sim_log, "DBG(%.0f)> CTBL rdB: %07o = %03o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
+        return data;
+        }
     if (PCSR & PCSR_PBK)                                /* bank swap? */
         return RdxMemB (M, pa ^ 02000000);              /* yes, invert A19 */
     else
@@ -227,6 +238,14 @@ if (ADDR_IS_CMEM (pa)) {
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
+    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+        fprintf (sim_log, "DBG(%.0f)> CTBL wr: %07o = %06o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
+        if (PCSR & PCSR_PBK)
+            WrxMemW (M, pa ^ 02000000, data);           /* yes, invert A19 */
+        else
+            WrxMemW (M, pa, data);
+        return;
+        }
     if (PCSR & PCSR_PBK)                                /* bank swap? */
         WrxMemW (M, pa ^ 02000000, data);               /* yes, invert A19 */
     else
@@ -283,6 +302,14 @@ if (ADDR_IS_CMEM (pa)) {
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
+    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+        fprintf (sim_log, "DBG(%.0f)> CTBL wrB: %07o = %03o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
+        if (PCSR & PCSR_PBK)
+            WrxMemB (M, pa ^ 02000000, data);           /* yes, invert A19 */
+        else
+            WrxMemB (M, pa, data);
+        return;
+        }
     if (PCSR & PCSR_PBK)                                /* bank swap? */
         WrxMemB (M, pa ^ 02000000, data);               /* yes, invert A19 */
     else
