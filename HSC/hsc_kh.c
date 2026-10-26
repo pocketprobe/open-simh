@@ -441,8 +441,6 @@ static STDEF frb_stc[] = {
 extern int32 tmxr_poll;                                 /* calibrated delay */
 
 uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
-static uint32 kh_quar[CI_MAX_NODES];                    /* released leases awaiting the FW's
-                                                           resource audit - never re-delivered */
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
 uint8  kh_rstnode;
 t_bool kh_consume_item;                                 /* work item consumed with no completion */
@@ -696,19 +694,6 @@ for (; n > 0; n--) {
     hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
     if (hm == 0)
         return 0;                                       /* no buffers available */
-    {                                                   /* skip released leases in quarantine */
-        int32 q;
-        for (q = 0; q < CI_MAX_NODES; q++) {
-            if (kh_quar[q] == hm)
-                break;
-            }
-        if (q < CI_MAX_NODES) {                         /* quarantined: requeue at tail */
-            kg_send (kh + KH_SRR, hm);
-            if (n == 1)
-                return 0;                               /* walked all, nothing else available */
-            continue;
-            }
-        }
     sim_debug (DBG_WRN, &kh_dev, "SRR walk: hm %07o LOF %06o CN %06o BMB %06o (need len %o)\n",
         hm, GETW (hm + HM_LOF), GETW (hm + HM_CN), GETW (hm + HM_BMB), len);
     /* Classify by capability, not by the LOF size label: pool entries
@@ -1048,30 +1033,30 @@ switch (opc) {
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
         sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "  item as posted: LOF %06o CTX %06o CN %06o BMB %06o BC %06o\n",
             GETW (hm + HM_LOF), GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_BMB), GETW (hm + HM_BC));
-        if ((p1 == 0177776) || (p2 == 0) || (GETW (hm + HM_CN) == 0177776)) {  /* NODE DEATH MARKER (NACK)
-                                                           - the -2 sentinel appears in ANY
-                                                           field: type, dma, or the BMB count */
-            /* type -2 = the firmware's NACK for a dead node's circuit -    */
-            /* a notification, not a transaction.  Completing it in any     */
-            /* form (success ack or HME$VC error) makes the firmware run    */
-            /* its retrieve-with-marker-args path: 007020 "Failure to       */
-            /* retrieve SCS resources" with the marker's (type,dma) on the  */
-            /* stack - observed for BOTH completion styles.  Consume it:    */
-            /* no completion, shell back to the pool; the firmware tracks   */
-            /* ACKs/NAKs itself (KH$ABQ).                                   */
+        if ((p1 == 0177776) && (GETW (hm + HM_CN) == 0177776)) {  /* NODE DEATH MARKER (NACK):
+                                                           the marker's signature is type=-2
+                                                           AND HM$CN=-2 together (witnessed:
+                                                           shell CTX=073513 BC=3 CN=177776
+                                                           MSG= 3,-2,3,0).  The old blanket
+                                                           check (p1==-2 || p2==0 || CN==-2)
+                                                           also ate LEGITIMATE buffer posts
+                                                           once the upstream malformations
+                                                           were fixed - and removing the
+                                                           dropper entirely 007020s the FW
+                                                           ("Failure to retrieve SCS
+                                                           resources", IOT with the marker's
+                                                           args on the stack): the marker
+                                                           must NOT complete in any form -
+                                                           the FW's retrieve path treats a
+                                                           completed marker as a resource
+                                                           operation.  Narrow predicate: */
             kh_consume_item = TRUE;
             sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "node death marker (NACK) consumed (type %06o dma %08o)\n", p1, (p2 << 6));
             break;
             }
-        /* Buffer posts enqueue UNTOUCHED (the firmware posts them pool-ready
-           in its own format: LOF 060000, CN = BMB count, HM$BMB stamped).
-           Rewriting classification fields is forgery - the CN=2 write
-           raised 007007, and the LOF=040077 rewrite convicts the pool
-           walker too (gen 22, R0 shifted to 160240).  Matching by the
-           buffer's actual capability (kh_get_srr) replaces matching by
-           the LOF size label.  Only a type-2 post's p3 stamp fills an
-           empty HM$BMB, and only because the firmware passes it as an
-           argument for exactly that purpose. */
+        /* Buffer posts enqueue UNTOUCHED - no rewriting, no special
+           cases beyond the marker above.  The firmware sees them
+           whole. */
         if ((p3 != 0) && (GETW (hm + HM_BMB) == 0))
             PUTW (hm + HM_BMB, p3);
         break;
@@ -1188,11 +1173,28 @@ if (*cq == 0) {
             *cq = kh + KH_DRR;
         }
     else {
-        if (kh_req[node] != 0)                          /* previous request never completed? */
-            sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "Pending request %07o for node %d ORPHANED by %07o\n",
-                kh_req[node], node, hm);
-        kh_req[node] = hm;
-        sim_debug (DBG_TRC, &kh_dev, "Start pending request for %07o\n", hm);
+        /* HM$CTX != 0: the firmware's COMPLETION QUEUE stamp.  The FW
+           posts outbound SCS messages with CTX = the queue that must
+           receive the shell after transmission (witnessed: the dir
+           ACCREQ and a 20-byte SCS message, both CTX=073513, both
+           immediately re-posted cq-less by the FW when the kh parked
+           them - the FW was retrying its completion delivery).  The
+           old park (kh_req[node] = hm, waiting for the response to
+           reuse the buffer) withheld the completion - the sender's
+           continuation never fired, and the class connection's MSCP
+           server (whose connect path sends with a completion context)
+           stalled forever after its CONRSP.  Complete to the CTX
+           queue.  The response-reuse behavior that motivated the park
+           is the FW's own business: it re-posts cq-less when it wants
+           the buffer back, and the SRR return path handles that. */
+        uint32 cqctx = GETP (hm + HM_CTX);
+        if (cqctx != 0) {
+            sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "TX completion to CTX queue %06o (hm %07o)\n", cqctx, hm);
+            *cq = cqctx;
+            }
+        else {
+            *cq = kh + KH_SRR;
+            }
         }
     }
 }
@@ -1413,14 +1415,31 @@ else {
                    re-dress (the gate held the firmware's own CONNECT sends,
                    gen 35: zero re-dressings with the PPD handshake fully
                    bilateral). */
-                kh_quar[i] = rsc;                       /* quarantine: the released lease
-                                                           never re-enters kh_get_srr's reach -
-                                                           the FW's resource audit counts it as
-                                                           the port's custody, and re-delivering
-                                                           it as new traffic unbalanced the audit
-                                                           ("Resource lost to K.ci -- 1. HMBs")
-                                                           and stalled the disk server */
-                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o released, quarantined\n", i, rsc);
+                /* Return the lease to the SRR free pool: the FW's
+                   cq-less re-post is its "this buffer is done, hand it
+                   back" signal.  Holding it out (the old quarantine)
+                   left the FW's HMB ledger short one buffer - the FW
+                   audit ("Resource lost to K.ci -- 1 HMBs") fires and
+                   the pool drains cycle by cycle until allocations
+                   return degenerate addresses (CONRSP at 0526500, the
+                   ACCREQ built at CM 0) and the whole connect
+                   completion wedges in the CRMGR poll loop.
+                   The return must present a CLEAN buffer: zero LOF/CN/
+                   BMB (the FW's own fresh-pool format - witnessed: SRR
+                   walks find returned buffers as LOF 0 CN 0 BMB 0).
+                   Leaving the last message's classification behind made
+                   the FW reuse the buffer for an INLINE message while
+                   the stale LOF label 077 + stale CN/BMB sent the kh's
+                   TX down the M.DAT path reading STALE DM blocks - the
+                   class connection's malformed CONRSP (9-byte packet,
+                   garbage conn ids).  (The 007007 convictions were
+                   about NON-ZERO written stamps - error codes and
+                   misfit CN values - not about the zeroed clean form.) */
+                PUTW (rsc + HM_LOF, 0);
+                PUTW (rsc + HM_CN, 0);
+                PUTW (rsc + HM_BMB, 0);
+                kg_send (kh + KH_SRR, rsc);
+                sim_debug (DBG_WRN, &kh_dev, "cq-less re-post of parked request for node %d: lease %07o cleaned and returned to SRR\n", i, rsc);
                 break;
                 }
             }
