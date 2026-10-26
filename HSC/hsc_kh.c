@@ -1140,7 +1140,11 @@ while (bct) {
     memcpy (&pkt.data[CI_DATA], &DM[dma >> 1], len);    /* copy to packet buffer */
     r = ci_send (&kh_unit, &pkt);                       /* send to host */
     if (r != SCPE_OK) {
-        sim_printf ("K.ci stalled during SNDDAT operation\n");
+        /* Same contract as the DATREQ path: the FW's route machinery
+           needs the FRB's completion to make progress - a hung FRB
+           stalls the diagnostic phase. */
+        sim_debug (DBG_WRN, &kh_dev, "K.ci SNDDAT send failed - completing FRB %o\n", frb);
+        kg_route_frb (&kh_unit, kh, frb, TRUE);
         break;
         }
     soff += len;
@@ -1182,8 +1186,14 @@ CI_PUTL (pkt.data, CI_REQ_SBOFF, soff);                 /* send buffer offset */
 CI_PUTL (pkt.data, CI_REQ_RBNAM, frb);                  /* receive buffer name */
 CI_PUTL (pkt.data, CI_REQ_RBOFF, roff);                 /* receive buffer offset */
 r = ci_send (&kh_unit, &pkt);
-if (r != SCPE_OK)
-    sim_printf ("K.ci stalled during DATREQ operation\n");
+if (r != SCPE_OK) {
+    /* The send failed (the boot-time route probes run before the
+       transport is linked - no listener yet).  The FW's route test
+       needs the FRB's COMPLETION, not the data: route it back or the
+       probe hangs the diagnostic phase. */
+    sim_debug (DBG_WRN, &kh_dev, "K.ci DATREQ send failed - completing FRB %o\n", frb);
+    kg_route_frb (&kh_unit, kh, frb, TRUE);
+    }
 }
 
 /* Process a fragment request block */
