@@ -445,6 +445,9 @@ uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags
 uint8  kh_rstnode;
 static CI_PKT kh_hold_pkt;                             /* held incoming SCS message */
 static t_bool kh_hold_valid;                           /* a message is parked for re-delivery */
+static uint32 kh_n_donated;                            /* LCMD buffer posts accepted */
+static uint32 kh_n_held;                               /* packets parked for re-delivery */
+static uint32 kh_n_svc;                                /* kh_svc activations */
 
 t_stat kh_svc (UNIT *uptr);
 t_stat kh_reset (DEVICE *dptr);
@@ -695,6 +698,7 @@ if (hm == 0) {
        loses a dress/enumerate step forever.  Park it; kh_svc re-
        delivers when a buffer frees, ahead of newer arrivals. */
     kh_hold_pkt = *pkt;
+    kh_n_held++;
     kh_hold_valid = TRUE;
     sim_debug (DBG_WRN, &kh_dev, "holding incoming SCS message, SRR empty\n");
     return SCPE_OK;
@@ -764,7 +768,8 @@ if (hm == 0) {
                                                            park for re-delivery when a buffer
                                                            frees - a dropped STACK loses the
                                                            handshake leg */
-        kh_hold_valid = TRUE;
+        kh_n_held++;
+    kh_hold_valid = TRUE;
         sim_debug (DBG_WRN, &kh_dev, "holding incoming packet (opc %o mt %04x), buffer pool empty\n", opc, mt);
         return SCPE_OK;
         }
@@ -887,6 +892,7 @@ switch (opc) {
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
         sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "  item as posted: LOF %06o CTX %06o CN %06o BMB %06o BC %06o\n",
             GETW (hm + HM_LOF), GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_BMB), GETW (hm + HM_BC));
+        kh_n_donated++;
         PUTW (hm + HM_LOF, 060077);
         break;
     default:
@@ -1249,6 +1255,18 @@ for (int i = 0; i < 20; i++) {
     if (r != SCPE_OK)
         return r;
     };
+
+if ((++kh_n_svc & 0377) == 0) {                         /* pool health: chain depths */
+    int32 ns = 0, nd = 0;                               /* countable, no FW writes */
+    uint32 pp;                                          /* the second-boot diagnostic */
+    if (kh_dib.cma) {
+    for (pp = GETP (kh + KH_SRR + Q_HEAD); (pp != 0) && (ns < 02000); pp = GETP (pp))
+        ns++;
+    for (pp = GETP (kh + KH_DRR + Q_HEAD); (pp != 0) && (nd < 02000); pp = GETP (pp))
+        nd++;
+    sim_debug (DBG_WRN, &kh_dev, "pool: SRR free %d DRR free %d donated %u held %u svc %u\n", ns, nd, kh_n_donated, kh_n_held, kh_n_svc);
+    }
+    }
 
 kg_svc (uptr);
 return ci_port_svc (uptr);
