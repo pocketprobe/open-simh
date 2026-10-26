@@ -728,7 +728,11 @@ PUTW (cb + CB_RCC, rcc);
 PUTW (hm + HM_CTX, GETW (cb + CB_CTX));
 PUTP (hm + HM_CB, cb);                                  /* save connection block */
 PUTP (hm + HM_CQ, 0);
-PUTW (hm + HM_LOF, lof);
+/* Preserve the posted LOF's format/flag byte (V8.30 posts flags 020/030,
+   capacity in the low byte): zeroing it made the FW parse the delivered
+   message bytes as a DATA descriptor (BC/CN/BMB) - "Invalid data memory
+   address 5151500 in packet 40120".  The FW's parser follows these bits. */
+PUTW (hm + HM_LOF, (GETW (hm + HM_LOF) & 0177400) | (lof & 0377));
 
 memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
