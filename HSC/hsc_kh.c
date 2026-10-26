@@ -1196,8 +1196,16 @@ else if (opc == 4) {                                    /* just allocate buffers
         kg_route_frb (&kh_unit, kh, frb, TRUE);
         }
     }
-else
-    sim_printf ("Unknown route opcode for K.ci: %o\n", opc);
+else {
+    /* Diagnostic-phase route probes (blank FRBs, opcodes 7/15 seen in
+       the HEAD era; the gen-107 census swept 10/11/13/14/15 at ~20
+       retries each): the FW's CI self-test sends no-op routes to
+       verify the port's router.  Complete them - dropping one stalls
+       the diagnostic phase (and spammed the console once per probe
+       retry). */
+    sim_debug (DBG_WRN, &kh_dev, "K.ci route opcode %o (diagnostic): completing FRB %o\n", opc, frb);
+    kg_route_frb (&kh_unit, kh, frb, TRUE);
+    }
 }
 
 /* Process resources from a work queue */
