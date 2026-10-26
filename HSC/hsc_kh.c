@@ -614,26 +614,40 @@ return SCPE_OK;
 uint32 kh_get_srr (uint32 len)
 {
 uint32 kh = kh_dib.cma;
-uint32 hm, last, sz, cn;
+uint32 hm, sz, cn;
+int32 n, p;
 
-last = GETP (kh + KH_SRR + Q_TAIL);                     /* save last buffer address */
-for (;;) {
-    hm = kg_receive (kh + KH_SRR);                      /* get next buffer */
+/* Bound the walk by the current queue depth.  The firmware mutates its
+   queues concurrently, so a once-saved tail sentinel can go stale and
+   the old pop/repush/compare loop would rotate forever - a guest-
+   triggered simh hang.  The depth count itself is hard-capped: a
+   corrupted chain with a cycle (a buffer linked on two queues) would
+   otherwise spin the count loop endlessly. */
+
+for (n = 0, p = GETP (kh + KH_SRR + Q_HEAD); p != 0 && n < 02000; p = GETP (p))
+    n++;
+if (p != 0)
+    sim_printf ("KH: SRR free chain longer than %d or cyclic - queue corruption?\n", 02000);
+
+for (; n > 0; n--) {
+    hm = kg_receive (kh + KH_SRR);
     if (hm == 0)
-        break;                                          /* no buffers available */
-    sz = GETW (hm + HM_LOF) & 077;                      /* get buffer size */
-    cn = GETW (hm + HM_CN);                             /* FIXME */
+        return 0;
+    sim_debug (DBG_WRN, &kh_dev, "SRR walk: hm %07o LOF %06o CN %06o BMB %06o (need len %o)\n",
+        hm, GETW (hm + HM_LOF), GETW (hm + HM_CN), GETW (hm + HM_BMB), len);
+    sz = GETW (hm + HM_LOF) & 077;
+    cn = GETW (hm + HM_CN);
     if (((sz == 077) && (len >= 077)) && (cn == 2))
-        break;                                          /* found buffer for large packet */
+        return hm;
     if ((sz != 077) && (len < 077))
-        break;                                          /* found buffer for small packet */
-    if (hm == last) {                                   /* reached last buffer? */
-        hm = 0;
-        break;                                          /* no buffers available */
+        return hm;
+    if (n == 1) {
+        kg_send (kh + KH_SRR, hm);
+        return 0;
         }
-    kg_send (kh + KH_SRR, hm);                          /* put to back of queue */
+    kg_send (kh + KH_SRR, hm);
     }
-return hm;
+return 0;
 }
 
 /* Application sequenced message received */
@@ -644,14 +658,19 @@ uint32 srccon, dstcon;
 uint32 kh = kh_dib.cma;
 uint32 sb, cb, cq;
 uint32 hm, dma, lof, len, rcc;
+int32 n;
 
 sb = GETP (kh - (32 * 2) + (pkt->node * 2));            /* get system block for source node */
 if (sb == 0)
     return SCPE_OK;
 cb = GETP (sb + SB_NCB) - CB_TLK;                       /* get connection block */
-for (;;) {
+for (n = 0; n < 64; n++) {
     if (cb == 0)                                        /* end of list? */
         return SCPE_OK;                                 /* no valid connection */
+    if (n == 64) {                                      /* chain never ended: cyclic or corrupt */
+        sim_debug (DBG_WRN, &kh_dev, "CB chain exceeds 64 entries or is cyclic - corruption?\n");
+        return SCPE_OK;
+        }
     srccon = GETW (cb + CB_CID);
     srccon = srccon | (GETW (cb + CB_CID + 002) << 16);
     dstcon = GETW (cb + CB_VTI) | (GETW (cb + CB_INC) << 16);
@@ -684,7 +703,8 @@ PUTW (hm + HM_LOF, lof);
 memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
 
-kg_send (cq, hm);
+sim_debug (DBG_WRN, &kh_dev, "deliver appmsg hm %07o to server queue %06o (cb %06o)\n", hm, cq, cb);
+    kg_send (cq, hm);
 
 return SCPE_OK;
 }
@@ -857,6 +877,8 @@ switch (opc) {
     case 003:                                           /* enqueue message buffer (SRR) */
     case 004:                                           /* enqueue datagram buffer (DRR) */
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
+        sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "  item as posted: LOF %06o CTX %06o CN %06o BMB %06o BC %06o\n",
+            GETW (hm + HM_LOF), GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_BMB), GETW (hm + HM_BC));
         PUTW (hm + HM_LOF, 060077);
         break;
     default:
@@ -1119,6 +1141,12 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         default:
             sim_printf ("K.ci unknown opcode: %o\n", opc);
+            sim_debug (DBG_WRN, &kh_dev, "K.ci unknown opcode %o, wq %07o hm %07o LOF %06o CTX %06o CN %06o, cq %06o%s\n",
+                opc, wq, rsc, GETW (rsc + HM_LOF), GETW (rsc + HM_CTX), GETW (rsc + HM_CN), cq,
+                cq ? "" : " (no cq: HM leaked)");
+            sim_debug (DBG_WRN, &kh_dev, "  hm neighborhood: %06o %06o %06o %06o | %06o %06o %06o %06o\n",
+                GETW (rsc - 010), GETW (rsc - 006), GETW (rsc - 004), GETW (rsc - 002),
+                GETW (rsc), GETW (rsc + 002), GETW (rsc + 004), GETW (rsc + 006));
             break;
         }
 
@@ -1201,6 +1229,8 @@ return SCPE_OK;
 
 t_stat kh_show_cb (FILE *st, UNIT *uptr, int32 val, CONST void *desc)
 {
+int32 n;
+
 const char *cptr = (const char *) desc;
 uint32 kh = kh_dib.cma;
 uint32 sb, cb, node;
@@ -1227,7 +1257,7 @@ if (cb == 0) {
     return SCPE_OK;
     }
 
-while (cb != 0) {
+for (n = 0; (cb != 0) && (n < 64); n++) {
     cb = cb - CB_TLK;                                   /* offset to start of CB$ */
     kg_print_struct (st, uptr, cb, cb_stc);
     fprintf (st, "---\n");
