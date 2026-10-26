@@ -1153,6 +1153,22 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
     if (cq) {
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
+else {
+        int32 ni;
+        for (ni = 0; ni < CI_MAX_NODES; ni++) {
+            if (kh_req[ni] == rsc)
+                break;      /* the kh's OWN parked lease: it stays
+                               parked!  The park path (HM$CTX != 0)
+                               does not set *cq, so the just-parked
+                               shell lands here - pooling it would
+                               hand the lease to the free pool while
+                               kh_req still points at it (the
+                               007020 crash).  The response re-
+                               animates it via the reuse path. */
+            }
+        if (ni != CI_MAX_NODES) {
+            sim_debug (DBG_TRC, &kh_dev, "cq-less parked lease %07o stays parked (node %d)\n", rsc, ni);
+            }
 else if ((GETW (rsc + HM_MSG + 002) == 0177776) &&
          (GETW (rsc + HM_CN) == 0177776)) {
         /* The NODE-DEATH MARKER (type=-2 AND HM$CN=-2 together) - its
@@ -1185,6 +1201,7 @@ else {
            ledger); vanishing is the green behavior.  Count them. */
         sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o vanished (wq %07o, LOF %06o)\n",
             rsc, wq, GETW (rsc + HM_LOF));
+        }
         }
     }
 return SCPE_OK;
