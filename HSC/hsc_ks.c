@@ -738,11 +738,8 @@ return SCPE_OK;
 uint16 ks_online (UNIT *uptr, uint32 cmd, uint32 rsp)
 {
 sim_debug_unit (DBG_SDI, uptr, "ONLINE\n");
-if (uptr->flags & UNIT_ATT)
-    uptr->flags = uptr->flags | UNIT_ONL;
-/* unattached units stay offline - a phantom that onlines itself makes
-   the firmware's server treat a ghost as a working drive */
 PUTW (rsp, 0x7E);                                       /* response opcode - COMPLETED */
+uptr->flags = uptr->flags | UNIT_ONL;
 return 002;
 }
 
@@ -1034,15 +1031,8 @@ uint16 sts = 0;
 sim_debug_unit (DBG_SDI, uptr, "LINE STATUS\n");
 if (uptr->flags & UNIT_ONL)
     sts = RTDS_RWR;                                     /* READ/WRITE READY */
-else if (uptr->flags & UNIT_ATT)
-    sts = RTDS_AVL | RTDS_RR;                           /* AVAILABLE, RECEIVER READY - no
-                                                           ATTENTION: a real drive in the
-                                                           available state does not flag the
-                                                           controller; the old unconditional ATN
-                                                           made phantom units raise attention
-                                                           forever, and the firmware's disk server
-                                                           stalled servicing ghosts instead of
-                                                           posting its buffers */
+else
+    sts = RTDS_AVL | RTDS_ATN | RTDS_RR;                /* AVAILABLE, RECEIVER READY */
 PUTW (rsp, sts);
 }
 
