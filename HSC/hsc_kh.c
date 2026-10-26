@@ -704,6 +704,21 @@ for (; n > 0; n--) {
     bmb = GETW (hm + HM_BMB);
     if ((bmb >= 0140000) && (bmb < 0160000))            /* an in-band stamp: */
         kh_stamp_remember (hm, bmb);                    /* remember it for M.DAT */
+    /* A native FW donation (LCMD buffer-post, LOF class 060000) states
+       no capacity in LOF's low byte; its capability class is the CN:
+       2-BMB offers carry the big-message data area, 1-BMB offers the
+       small.  The old sz==077 test was written for the kh's own
+       060077-normalized grammar and rejected every native shell - each
+       incoming packet then rotated the entire queue, and the FW's sweep
+       re-posted what it found (918 donations, the enumeration-starving
+       livelock witnessed on the fix-1 boot). */
+    if ((GETW (hm + HM_LOF) & 074000) == 060000) {
+        cn = GETW (hm + HM_CN);
+        if (((len >= 077) && (cn == 2)) || ((len < 077) && (cn == 1)))
+            return hm;
+        kg_send (kh + KH_SRR, hm);                      /* wrong class: repush */
+        continue;
+        }
     sz = GETW (hm + HM_LOF) & 077;
     cn = GETW (hm + HM_CN);
     if (((sz == 077) && (len >= 077)) && (cn == 2))
@@ -774,11 +789,23 @@ PUTW (cb + CB_RCC, rcc);
 PUTW (hm + HM_CTX, GETW (cb + CB_CTX));
 PUTP (hm + HM_CB, cb);                                  /* save connection block */
 PUTP (hm + HM_CQ, 0);
-/* Preserve the posted LOF's format/flag byte (V8.30 posts flags 020/030,
-   capacity in the low byte): zeroing it made the FW parse the delivered
-   message bytes as a DATA descriptor (BC/CN/BMB) - "Invalid data memory
-   address 5151500 in packet 40120".  The FW's parser follows these bits. */
-PUTW (hm + HM_LOF, (GETW (hm + HM_LOF) & 0177400) | (lof & 0377));
+/* Delivery format by shell class.  A native FW donation (LOF class
+   060000) carries its buffer-descriptor overlay (BC/CN/BMB) exactly
+   where the MSG area lives: clear it and stamp the received-sequence-
+   message class (0, HM$L$RM) with the length.  The F1-era "Invalid
+   data memory address 5151500 in packet 40120" = the FW reading a
+   clobbered descriptor's BMB field (051515 - the message's own first
+   bytes) as a DM pointer.  For the 020/030-class posts, preserve the
+   posted format byte (F1) and set the length. */
+if ((GETW (hm + HM_LOF) & 074000) == 060000) {
+    PUTW (hm + HM_BC, 0);
+    PUTW (hm + HM_CN, 0);
+    PUTP (hm + HM_BMB, 0);
+    PUTW (hm + HM_LOF, len & 0377);
+    }
+else {
+    PUTW (hm + HM_LOF, (GETW (hm + HM_LOF) & 0177400) | (lof & 0377));
+    }
 
 memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
@@ -995,7 +1022,18 @@ switch (opc) {
             break;
             }
         kh_n_donated++;
-        PUTW (hm + HM_LOF, 060077);
+        /* The shell keeps the FW's posted identity UNTOUCHED.  The old
+           LOF=060077 rewrite forged a format onto FW-owned shells that
+           re-enter FW-visible queues: the FW's server free-path then
+           misfiled the shell and its attached BMB, the BMB window
+           (0140000-0160000) drained to zero (the pool-control word at
+           0140000 included - bit 01000 CLEAR at the crash), and the
+           first 2-BMB serializing allocation bugchecked 007020
+           (found=1, required=2 - the ledger row held one entry).
+           The donation's native grammar is self-describing: LOF 060000,
+           CN=1, BMB pointer, BC=4 (witnessed: the "item as posted" LCMD
+           traces).  F1's preservation downstream was faithfully
+           preserving THIS corruption. */
         /* THE DONATION ITSELF: the shell IS the buffer the FW just
            handed us (LCMD opc 3 = sequenced/SRR, opc 4 = datagram/DRR).
            Enqueue it into the port's own pool - completing it back to
