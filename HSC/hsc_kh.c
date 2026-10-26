@@ -1457,23 +1457,17 @@ for (int i = 0; i < 20; i++) {
         return r;
     };
 
-/* THE PORT'S STATUS-BYTE (the doorbell's source), published EVERY
-   service pass.  The FW's relay (PMEM 0o73104: clr @#11636; movb
-   @#150530,@#11636) copies this cell into its D-space doorbell
-   (phys 0135636) and the poller at pc 37242 waits to see it
-   non-zero.  The fix-4 boot (gen 119) placed the write in the
-   V_FB-return path, which never fires during the connection phase
-   (no data transfers complete yet) - the relay copied ZERO and the
-   poller starved.  Fix-4b (gen 120) targeted CM 0150530, but the
-   relay's @#150530 is a KERNEL-D-SPACE VA (per-process mapped):
-   VA 0150530 = APR6 -> KDPAR6 000240 -> phys 034530, outside the
-   CTBL window - the relay read its own D-space cell, found the kh's
-   CM write absent, and copied zero again.  The cell's home = PMEM
-   034530, written here through the port's own memory access.  The
-   value = the KG$FBU head's raw low byte: it changes with every
-   queue mutation and reads non-zero while the free pool lives. */
-if (kh_dib.cma && kh_n_krun)
-    WrxMemB (M, 034530, GETW (kh + KG_FBU) & 0377);
+/* The doorbell-heartbeat family (the port-status writes toward PMEM
+   034530 = the kernel-D VA 0150530) is RETIRED.  The cell = the FW's
+   OWN process state: the relay (PMEM 0o73104) reads its own mirror,
+   and the kh's memory writes poisoned the running kernel - the
+   ungated build BEL-stormed the loader (gen 121), the gated builds
+   stalled at INIPIO waiting for spawn-ready flags that never came
+   (the CM 0127300 pending-init pointer pairs, gens 122/124).  The
+   port feeds the FW through the event channels only: the LCMDs, the
+   queues, the custody plumbing.  The poller's doorbell grammar
+   (status codes 021 = all-clear / 023 = signal, decoded at PMEM
+   0o1032xx) = the count-drift thread's territory. */
 
 if ((++kh_n_svc & 0377) == 0) {                         /* pool health: chain depths */
     int32 ns = 0, nd = 0;                               /* countable, no FW writes */
