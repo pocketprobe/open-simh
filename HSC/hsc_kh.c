@@ -1150,8 +1150,17 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         }
 
-    if (cq)
+    if (cq) {
         kg_send (cq, rsc);                              /* put resource to completion queue */
+        }
+else {
+        /* No completion queue: the item vanishes.  In the green dialect
+           this is often the FW's own pre-write-off (the ABQ ledger) for
+           markers and managed artifacts - but it is also where HMBs
+           leak silently.  Make every vanish countable. */
+        sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o vanished (wq %07o, LOF %06o)\n",
+            rsc, wq, GETW (rsc + HM_LOF));
+        }
     }
 return SCPE_OK;
 }
