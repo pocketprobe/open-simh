@@ -971,7 +971,7 @@ kg_print_struct (NULL, &kh_unit, hm, hmct_stc);
 
 void kh_set_vc (uint32 hm)
 {
-uint32 node, vcf, mask, newv;
+uint32 node, vcf, mask;
 
 kg_print_struct (NULL, &kh_unit, hm, hmvc_stc);
 node = GETW (hm + HM_CN);                               /* node */
@@ -982,35 +982,22 @@ if (node >= CI_MAX_NODES) {                             /* invalid node - nothin
 vcf = GETW (hm + HM_VCF);                               /* new flags */
 mask = GETW (hm + HM_MK);                               /* mask */
 
-/* Set-ckt semantics - same as the VAXport ci_setckt: the mask/modify is   */
-/* always applied to the shadow, but the circuit opens/closes ONLY on a    */
-/* circuit-state bit transition. The FW uses set-vc with small masks to    */
-/* clear sequence numbers etc. during VC re-establishment; treating any    */
-/* clear as a close rejects the FW's very next send (HME$VC), which drives */
-/* the FW HOST process to its 007022 "Invalid BMB address" bugcheck.       */
-newv = (kh_vcf[node] & ~mask) | (vcf & mask);
-if ((newv ^ kh_vcf[node]) & KH_VCD_CST) {               /* circuit state changed */
-    if (newv & KH_VCD_CST) {                            /* opening VC */
-        ci_open_vc (&kh_unit, node);
-        }
-else {                                                  /* closing VC */
-        ci_close_vc (&kh_unit, node);
-        if (kh_req[node] != 0) {                        /* pending request lease outstanding? */
-            /* A real FW close kills the request: no response will ever    */
-            /* arrive. Return the hm lease or the FW's SRR waiter count    */
-            /* drifts (007021) and the parked hm points at a CB the FW has */
-            /* already torn down (007022-class on next use).               */
-            sim_debug (DBG_TRC | DBG_WRN, &kh_dev, "vc close: returning parked request hm %07o for node %d\n", kh_req[node], node);
-            kh_hm_return (kh_req[node]);
-            kh_req[node] = 0;
-            }
-        }
-    }
-kh_vcf[node] = newv;                                    /* update shadow */
+/* E5: restored the original open/close semantics.  The HSC firmware's
+   discovery protocol uses set-vc as its knock: polls with vcf&&mask
+   open the circuit, mask-only sequence-clears close it, and the next
+   poll reopens - the flapping feeds the FW's node-state machinery (the
+   SB table, 70K writes in the green dialect vs 800 with the gate) and
+   drives discovery to convergence.  The KH_VCD_CST transition-gate
+   starved that machinery: no VC opens, no SB formation, discovery
+   never converged, and the FW looped its port-init (8 K_RUNs) before
+   stranding itself in the discovery phase - the class wedge. */
+if (vcf && mask)                                        /* opening VC? */
+    ci_open_vc (&kh_unit, node);
+else if (mask)                                          /* closing VC? */
+    ci_close_vc (&kh_unit, node);
+kh_vcf[node] = (kh_vcf[node] & ~mask) | (vcf & mask);   /* update shadow */
 PUTW (hm + HM_VCF, kh_vcf[node]);                       /* return updated value */
 }
-
-/* Local K.ci commands */
 
 void kh_local_cmd (uint32 hm, uint32 *cq)
 {
