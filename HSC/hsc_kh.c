@@ -1153,11 +1153,26 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
     if (cq) {
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
+else if ((opc == 020000) || (opc == 040000) || (opc == 030000) ||
+         (opc == 034000) || (opc == 054000) || (opc == 074000) ||
+         (opc == 060000)) {
+        /* A valid-class shell re-posted cq-less: the FW's normal way
+           of handing a TX'd shell back (witnessed: LOF 030277/030224
+           CONRSP- and DISCON-family shells after TX).  Return it CLEAN
+           to the SRR pool (the FW's fresh-pool format: LOF/CN/BMB = 0)
+           - the FW's auditor counts vanished shells as "Resource lost
+           to K.ci".  FRB items (000000/004000) complete via
+           kg_route_frb, not the shell pool - they stay on the vanish
+           path. */
+        PUTW (rsc + HM_LOF, 0);
+        PUTW (rsc + HM_CN, 0);
+        PUTW (rsc + HM_BMB, 0);
+        kg_send (kh + KH_SRR, rsc);
+        sim_debug (DBG_WRN, &kh_dev, "cq-less shell %07o returned clean to SRR (class %06o)\n", rsc, opc);
+        }
 else {
-        /* No completion queue: the item vanishes.  In the green dialect
-           this is often the FW's own pre-write-off (the ABQ ledger) for
-           markers and managed artifacts - but it is also where HMBs
-           leak silently.  Make every vanish countable. */
+        /* Artifacts and FRBs: the FW pre-writes these off (the ABQ
+           ledger); vanishing is the green behavior.  Count them. */
         sim_debug (DBG_WRN, &kh_dev, "cq-less item %07o vanished (wq %07o, LOF %06o)\n",
             rsc, wq, GETW (rsc + HM_LOF));
         }
