@@ -543,13 +543,20 @@ if (act == K_RUN) {
     sim_debug (DBG_TRC, &kh_dev, "K.ci startup: KH = %06o at %o\n", kh_dib.cma, (uint16)inst_pc);
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
-    if (!run)
-        return SCPE_OK;
     ci_rx_enable (&kh_unit, (CI_PATH_A | CI_PATH_B));
     }
 else {
     sim_debug (DBG_TRC, &kh_dev, "K.ci halt at %o\n", (uint16)inst_pc);
-    ci_rx_enable (&kh_unit, 0);
+    /* Keep the receiver enabled: the physical K.ci's CI listener is
+       always on, independent of the FW driver's state.  Disabling
+       here deadlocks the cluster after any FW reboot: the FW's
+       crash handler halts K.ci (witnessed: halt 14700 on the
+       chaos-boot re-dress), INIPIO's re-run takes the diagnostic
+       path so kg_init never re-enables, and the kh stops reading
+       TCP/multicast - the VAX's port fills the socket buffer with
+       queued packets and its START/IDREQ handshake wedges forever
+       (the "HSC fell over" of the second-boot era). */
+    ci_rx_enable (&kh_unit, (CI_PATH_A | CI_PATH_B));
     kh_dib.cma = 0;
     }
 return SCPE_OK;
@@ -1238,6 +1245,13 @@ uint32 kh = kh_dib.cma;
 CI_PKT pkt;
 t_stat r;
 
+if (kh == 0) {                                          /* FW halted: drain the transport */
+    for (int i = 0; i < 20; i++) {                      /* drop inbound; the sender's port */
+        if (ci_receive (uptr, &pkt) != SCPE_OK)         /* retries; the next K_RUN resumes */
+            break;
+        }
+    return ci_port_svc (uptr);                          /* keep the transport alive */
+    }
 r = kh_process_queue (kh, kh + KH_0WK);                 /* process work queues */
 if (r != SCPE_OK)
     return r;
