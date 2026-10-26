@@ -529,6 +529,17 @@ uint8 node = ci_get_node (&kh_unit);
 t_bool run;
 if (act == K_RUN) {
     kh_dib.cma = kg_init (&run);
+    /* A K_RUN = the FW's K.ci driver restarted: every outstanding
+       request lease from the previous era is dead (its peer is gone
+       or the driver state was torn down).  kh_req[] is the kh's OWN
+       bookkeeping, so re-initializing it here is port-side state
+       hygiene, not firmware doctoring.  Witnessed: a VAX reboot
+       mid-dress left leases parked against dead connections - the
+       SRR drained to 0 (8009 packets held, none re-delivered) and
+       the FW 007020-family died grabbing a degraded buffer. */
+    for (int i = 0; i < CI_MAX_NODES; i++)
+        kh_req[i] = 0;
+    kh_hold_valid = FALSE;
     sim_debug (DBG_TRC, &kh_dev, "K.ci startup: KH = %06o at %o\n", kh_dib.cma, (uint16)inst_pc);
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
