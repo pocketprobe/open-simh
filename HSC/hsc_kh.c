@@ -1153,9 +1153,19 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
     if (cq) {
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
+else if ((GETW (rsc + HM_MSG + 002) == 0177776) &&
+         (GETW (rsc + HM_CN) == 0177776)) {
+        /* The NODE-DEATH MARKER (type=-2 AND HM$CN=-2 together) - its
+           LOF class is 060000 (local-command), but it must NEVER be
+           completed or pooled in any form: the FW's retrieve path
+           treats a completed marker as a resource operation = the
+           007020 "Failure to retrieve SCS resources" bugcheck
+           (witnessed: the first two-class-rule boot).  Vanish it.
+           The FW pre-writes the marker's shell off (ABQ ledger). */
+        sim_debug (DBG_WRN, &kh_dev, "node death marker (NACK) consumed (shell %07o)\n", rsc);
+        }
 else if ((opc == 020000) || (opc == 040000) || (opc == 030000) ||
-         (opc == 034000) || (opc == 054000) || (opc == 074000) ||
-         (opc == 060000)) {
+         (opc == 034000) || (opc == 054000) || (opc == 074000)) {
         /* A valid-class shell re-posted cq-less: the FW's normal way
            of handing a TX'd shell back (witnessed: LOF 030277/030224
            CONRSP- and DISCON-family shells after TX).  Return it CLEAN
