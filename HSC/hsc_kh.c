@@ -994,6 +994,7 @@ switch (opc) {
             sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "node death marker (NACK) consumed (type %06o dma %08o)\n", p1, (p2 << 6));
             break;
             }
+        kh_n_donated++;
         PUTW (hm + HM_LOF, 060077);
         /* THE DONATION ITSELF: the shell IS the buffer the FW just
            handed us (LCMD opc 3 = sequenced/SRR, opc 4 = datagram/DRR).
@@ -1003,7 +1004,14 @@ switch (opc) {
            config-era retrieve starved on a pool that never grew
            (007020, 'Failure to retrieve SCS resources').  The FW's own
            death-row trail: empty queue sweep -> the 013400 foreign-
-           class error item -> the wake -> the disable. */
+           class error item -> the wake -> the disable.
+           kh_consume_item = TRUE as well: the handler handled the item
+           completely (pooled) - a completion would ALSO queue the same
+           shell into the FW's collector, double-linking it; the FW's
+           re-post of a multiply-linked shell turned the SRR into a
+           ring (witnessed: 'SRR free 1024' = the walk's cap spinning
+           through the donation cycle, gen 111). */
+        kh_consume_item = TRUE;
         kg_send (kh + ((opc == 3) ? KH_SRR : KH_DRR), hm);
         break;
     default:
@@ -1295,14 +1303,16 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
         }
 
     if (kh_consume_item) {
-        /* Node-death marker consumed: vanish.  No completion (any
-           completion misreads as a resource operation on the marker's
-           arguments) and NO shell return - the firmware wrote the
-           shell off in its ABQ ledger when posting the marker, and
-           re-entering it into the free pool presents the pool walker
-           with a CN=-2 buffer (007007).  The buffer's absence is the
-           firmware's own accounting, not a kh-side leak. */
-        sim_debug (DBG_WRN, &kh_dev, "NACK shell %07o vanished\n", rsc);
+        /* The handler consumed the item completely: no completion, no
+           shell return.  Two species, both handler-owned:
+           - the node-death marker (the FW pre-wrote it off in its ABQ
+             ledger; any completion = a resource operation on the
+             marker's args = 007020; re-pooling = a CN=-2 buffer =
+             007007)
+           - an accepted buffer donation (the shell is now IN the
+             port's pool - a completion would double-link it)
+           The handlers log their own consumption; this branch is the
+           silent pass-through. */
         }
     else if (cq) {
         kg_send (cq, rsc);                              /* put resource to completion queue */
