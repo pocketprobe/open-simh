@@ -443,6 +443,7 @@ extern int32 tmxr_poll;                                 /* calibrated delay */
 uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
 uint8  kh_rstnode;
+t_bool kh_consume_item;                                 /* work item consumed with no completion */
 static CI_PKT kh_hold_pkt;                             /* held incoming SCS message */
 static t_bool kh_hold_valid;                           /* a message is parked for re-delivery */
 static uint32 kh_n_donated;                            /* LCMD buffer posts accepted */
@@ -976,7 +977,22 @@ switch (opc) {
         sim_debug (DBG_LCMD, &kh_dev, "opc = %d, type = %06o, dma = %08o, p3 = %06o, cq = %06o\n", opc, p1, (p2 << 6), p3, *cq);
         sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "  item as posted: LOF %06o CTX %06o CN %06o BMB %06o BC %06o\n",
             GETW (hm + HM_LOF), GETW (hm + HM_CTX), GETW (hm + HM_CN), GETW (hm + HM_BMB), GETW (hm + HM_BC));
-        kh_n_donated++;
+        if ((p1 == 0177776) && (GETW (hm + HM_CN) == 0177776)) {  /* NODE DEATH MARKER (NACK):
+                                                                    the marker's signature is type=-2
+                                                                    AND HM$CN=-2 together (witnessed:
+                                                                    shell CTX=073513 BC=3 CN=177776
+                                                                    MSG= 3,-2,3,0).  The marker must
+                                                                    NOT be normalized and pooled -
+                                                                    the FW's retrieve path treats a
+                                                                    completed marker as a resource
+                                                                    operation = the 007020 'Failure
+                                                                    to retrieve SCS resources'
+                                                                    bugcheck (witnessed: gen 108,
+                                                                    VMS configuring-devices phase). */
+            kh_consume_item = TRUE;
+            sim_debug (DBG_LCMD | DBG_WRN, &kh_dev, "node death marker (NACK) consumed (type %06o dma %08o)\n", p1, (p2 << 6));
+            break;
+            }
         PUTW (hm + HM_LOF, 060077);
         break;
     default:
@@ -1228,6 +1244,7 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
 
     rsc = kg_receive (wq);                              /* get resource from work queue */
     opc = GETW (rsc + HM_LOF) & 074000;
+    kh_consume_item = FALSE;
 
     switch (opc) {
         case 060000:                                    /* local command */
@@ -1256,7 +1273,17 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             break;
         }
 
-    if (cq) {
+    if (kh_consume_item) {
+        /* Node-death marker consumed: vanish.  No completion (any
+           completion misreads as a resource operation on the marker's
+           arguments) and NO shell return - the firmware wrote the
+           shell off in its ABQ ledger when posting the marker, and
+           re-entering it into the free pool presents the pool walker
+           with a CN=-2 buffer (007007).  The buffer's absence is the
+           firmware's own accounting, not a kh-side leak. */
+        sim_debug (DBG_WRN, &kh_dev, "NACK shell %07o vanished\n", rsc);
+        }
+    else if (cq) {
         kg_send (cq, rsc);                              /* put resource to completion queue */
         }
 else {
