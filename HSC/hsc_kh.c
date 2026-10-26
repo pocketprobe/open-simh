@@ -443,6 +443,8 @@ extern int32 tmxr_poll;                                 /* calibrated delay */
 uint32 kh_req[CI_MAX_NODES];                            /* pending request buffers */
 uint32 kh_vcf[CI_MAX_NODES];                            /* virtual circuit flags */
 uint8  kh_rstnode;
+static CI_PKT kh_hold_pkt;                             /* held incoming SCS message */
+static t_bool kh_hold_valid;                           /* a message is parked for re-delivery */
 
 t_stat kh_svc (UNIT *uptr);
 t_stat kh_reset (DEVICE *dptr);
@@ -688,7 +690,13 @@ hm = kh_get_srr (len);
 lof = 0 | len;
 
 if (hm == 0) {
-    sim_printf ("No buffer for incoming packet\n");
+    /* CIPA 2.1: when the sequenced free queue is empty the port HOLDS
+       the packet and delivers a MSGREC later - dropping an SCS message
+       loses a dress/enumerate step forever.  Park it; kh_svc re-
+       delivers when a buffer frees, ahead of newer arrivals. */
+    kh_hold_pkt = *pkt;
+    kh_hold_valid = TRUE;
+    sim_debug (DBG_WRN, &kh_dev, "holding incoming SCS message, SRR empty\n");
     return SCPE_OK;
     }
 
@@ -749,7 +757,18 @@ else {
     }
 
 if (hm == 0) {
-    sim_printf ("No buffer for incoming packet\n");
+    uint16 mt = CI_GETW (pkt->data, PPD_MTYPE) & PPD_M_MTYPE;
+    if ((opc == OPC_MSG) || (mt == PPD_START) || (mt == PPD_STACK)) {
+        kh_hold_pkt = *pkt;                             /* sequenced messages AND the revival
+                                                           handshake datagrams (START/STACK):
+                                                           park for re-delivery when a buffer
+                                                           frees - a dropped STACK loses the
+                                                           handshake leg */
+        kh_hold_valid = TRUE;
+        sim_debug (DBG_WRN, &kh_dev, "holding incoming packet (opc %o mt %04x), buffer pool empty\n", opc, mt);
+        return SCPE_OK;
+        }
+    sim_printf ("No buffer for incoming packet\n");    /* other datagrams: discard (CIPA 2.1) */
     return SCPE_OK;
     }
 
@@ -817,24 +836,13 @@ return kh_receive_int (pkt);
 void kh_counters (uint32 hm, uint8 node)
 {
 kg_print_struct (NULL, &kh_unit, hm, hmct_stc);
-PUTW (hm + HM_AKA + 000, 0);                            /* ACKs path A - low word */
-PUTW (hm + HM_AKA + 002, 0);                            /* ACKs path A - high word */
-PUTW (hm + HM_NKA + 000, 0);                            /* NAKs path A - low word */
-PUTW (hm + HM_NKA + 002, 0);                            /* NAKs path A - high word */
-PUTW (hm + HM_NRA + 000, 0);                            /* No response path A - low word */
-PUTW (hm + HM_NRA + 002, 0);                            /* No response path A - high word */
-
-PUTW (hm + HM_AKB + 000, 0);                            /* ACKs path B - low word */
-PUTW (hm + HM_AKB + 002, 0);                            /* ACKs path B - high word */
-PUTW (hm + HM_NKB + 000, 0);                            /* NAKs path B - low word */
-PUTW (hm + HM_NKB + 002, 0);                            /* NAKs path B - high word */
-PUTW (hm + HM_NRB + 000, 0);                            /* No response path B - low word */
-PUTW (hm + HM_NRB + 002, 0);                            /* No response path B - high word */
-
-PUTW (hm + HM_DGD + 000, 0);                            /* Discarded Datagrams - low word */
-PUTW (hm + HM_DGD + 002, 0);                            /* Discarded Datagrams - high word */
-PUTW (hm + HM_RDR + 000, 0);                            /* Discarded RTNDATs - low word */
-PUTW (hm + HM_RDR + 002, 0);                            /* Discarded RTNDATs - high word */
+/* No counter data is written into the hm.  HM_AKA aliases HM_BMB (+0020):
+   the FW's resource auditor counts stampless buffers as "Resource lost to
+   K.ci" (241 on every green boot), and the upstream zero-fill of
+   AKA/NKA/NRA/AKB/NKB/NRB/DGD/RDR (+0020..+0056) wiped the BMB stamp on
+   firmware-allocated SRR shells at every counters poll.  Counters stay
+   zero - the sim has no real counter source yet, so the readback is
+   unchanged. */
 }
 
 /* Local command to get/set virtual circuit flags */
@@ -1226,7 +1234,13 @@ r = kh_process_queue (kh, kh + KH_3WK);
 if (r != SCPE_OK)
     return r;
 
-for (int i = 0; i < 20; i++) {                          /* avoid endless loop */
+for (int i = 0; i < 20; i++) {
+    if (kh_hold_valid) {                                /* held SCS message pending? */
+        r = kh_receive_int (&kh_hold_pkt);              /* re-deliver it first (order) */
+        if (kh_hold_valid)
+            break;                                      /* still no buffer: stop consuming */
+        continue;                                       /* delivered: pull more */
+        }
     r = ci_receive (uptr, &pkt);                        /* get next packet */
     // TODO: handle errors from ci_receive
     if (r != SCPE_OK)
