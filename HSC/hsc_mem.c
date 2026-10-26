@@ -39,6 +39,7 @@ extern int32 trap_req, ipl;
 extern int32 CPUERR;
 extern jmp_buf save_env;
 extern FILE *sim_log;
+extern double sim_gtime (void);
 extern int16 inst_pc;
 
 extern int32 calc_ints (int32 nipl, int32 trq);
@@ -66,7 +67,7 @@ if (ADDR_IS_DMEM (pa)) {
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     data = RdxMemW (DM, pa);
     if (sim_log)
-        fprintf (sim_log, "DMEM rd: %07o = %06o at %o\n", pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> DMEM rd: %07o = %06o at %o\n", sim_gtime (), pa, data, (uint16)inst_pc);
     return data;
     }
 if (ADDR_IS_CMEM (pa)) {
@@ -102,7 +103,7 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
-        fprintf (sim_log, "CMEM rd (%s): %07o = %06o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> CMEM rd (%s): %07o = %06o at %o\n", sim_gtime (), cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
     return data;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
@@ -126,7 +127,7 @@ if (ADDR_IS_DMEM (pa)) {
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     data = RdxMemB (DM, pa);
     if (sim_log)
-        fprintf (sim_log, "DMEM rd: %07o = %03o at %o\n", pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> DMEM rd: %07o = %03o at %o\n", sim_gtime (), pa, data, (uint16)inst_pc);
     return data;
     }
 if (ADDR_IS_CMEM (pa)) {
@@ -161,7 +162,7 @@ if (ADDR_IS_CMEM (pa)) {
         }
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
-        fprintf (sim_log, "CMEM rd (%s): %07o = %03o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> CMEM rd (%s): %07o = %03o at %o\n", sim_gtime (), cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
     return data;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
@@ -188,7 +189,7 @@ if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
-        fprintf (sim_log, "DMEM wr: %07o = %06o at %o\n", pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> DMEM wr: %07o = %06o at %o\n", sim_gtime (), pa, data, (uint16)inst_pc);
     WrxMemW (DM, pa, data);
     return;
     }
@@ -221,7 +222,7 @@ if (ADDR_IS_CMEM (pa)) {
         WrxMemW (CM, pa, data);
         }
     if (sim_log)
-        fprintf (sim_log, "CMEM wr (%s): %07o = %06o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> CMEM wr (%s): %07o = %06o at %o\n", sim_gtime (), cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     return;
     }
@@ -244,7 +245,7 @@ if (ADDR_IS_DMEM (pa)) {
     DADR = pa;
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     if (sim_log)
-        fprintf (sim_log, "DMEM wr: %07o = %03o at %o\n", pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> DMEM wr: %07o = %03o at %o\n", sim_gtime (), pa, data, (uint16)inst_pc);
     WrxMemB (DM, pa, data);
     return;
     }
@@ -277,7 +278,7 @@ if (ADDR_IS_CMEM (pa)) {
         WrxMemB (CM, pa, data);
         }
     if (sim_log)
-        fprintf (sim_log, "CMEM wr (%s): %07o = %03o at %o\n", cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
+        fprintf (sim_log, "DBG(%.0f)> CMEM wr (%s): %07o = %03o at %o\n", sim_gtime (), cycles[CCYCLE >> 1], pa, data, (uint16)inst_pc);
     PCSR = PCSR & ~(PCSR_NMA | PCSR_CIE | PCSR_LCK);    /* reset special cycle */
     return;
     }

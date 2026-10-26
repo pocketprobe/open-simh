@@ -297,27 +297,27 @@ switch (rg) {                                           /* decode pa<2:1> */
         *data = WADR[WINDR][rg];
         *data = (*data & 0177) << 2;
         *data = *data | (rg << 9) | (016 << 12);
-        sim_debug (DBG_REG, &pio_dev, "WADR%d rd %o\n", rg, *data);
+        sim_debug (DBG_REG, &pio_dev, "WADR%d rd %o at pc %o\n", rg, *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 010:                                           /* WINDR */
         *data = WINDR;
-        sim_debug (DBG_REG, &pio_dev, "WINDR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "WINDR rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 011:                                           /* WBUSR */
         *data = (CADR >> 1);
-        sim_debug (DBG_REG, &pio_dev, "WBUSR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "WBUSR rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 012:                                           /* low error */
         *data = EADR & 0177777;
-        sim_debug (DBG_REG, &pio_dev, "low error rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "low error rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 013:                                           /* high error */
         *data = (EADR >> 16) & 077;
-        sim_debug (DBG_REG, &pio_dev, "high error rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "high error rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
@@ -328,7 +328,7 @@ switch (rg) {                                           /* decode pa<2:1> */
             *data = *data | PCSR_HSC60;
         if (CPUT (CPUT_HSC90))
             *data = *data | PCSR_HSC90;
-        sim_debug (DBG_REG, &pio_dev, "Pio CSR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "Pio CSR rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
@@ -337,12 +337,12 @@ switch (rg) {                                           /* decode pa<2:1> */
             *data = *data | SDR_SW3;                    /* fault switch pressed */
         if (pio_unit.flags & UNIT_ONL)                  /* HSC online? */
             *data = *data | SDR_SW2;                    /* online switch pressed */
-        sim_debug (DBG_REG, &pio_dev, "SDR rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "SDR rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
         *data = KINI;
-        sim_debug (DBG_REG, &pio_dev, "K init rd\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "K init rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
@@ -352,22 +352,22 @@ switch (rg) {                                           /* decode pa<2:1> */
             *data = dibp->sts;
             *data = *data | (parity (*data, 1) << 7);   /* odd parity bit */
             }
-        sim_debug (DBG_REG, &pio_dev, "K status rd\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "K status rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 024:                                           /* data mem low addr */
         *data = DADR & 0177777;
-        sim_debug (DBG_REG, &pio_dev, "data mem low rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "data mem low rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 025:                                           /* data mem high addr */
         *data = (DADR >> 16) & 07;
-        sim_debug (DBG_REG, &pio_dev, "data mem high rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "data mem high rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 026:                                           /* ctrl mem low addr */
         *data = (CCYCLE << 1) | (CADR & 1);
-        sim_debug (DBG_REG, &pio_dev, "ctrl mem low rd: %o\n", *data);
+        sim_debug (DBG_REG, &pio_dev, "ctrl mem low rd: %o at pc %o\n", *data, (uint16)inst_pc);
         return SCPE_OK;
 
     case 027:                                           /* serial number reg - NI */
@@ -397,28 +397,28 @@ switch (rg) {                                           /* decode pa<2:1> */
     case 005:                                           /* WADR5 */
     case 006:                                           /* WADR6 */
     case 007:                                           /* WADR7 */
-        sim_debug (DBG_REG, &pio_dev, "WADR%d wr: %o\n", rg, data);
+        sim_debug (DBG_REG, &pio_dev, "WADR%d wr: %o at pc %o\n", rg, data, (uint16)inst_pc);
         WADR[WINDR][rg] = data;
         return SCPE_OK;
 
     case 010:                                           /* WINDR */
-        sim_debug (DBG_REG, &pio_dev, "WINDR wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "WINDR wr: %o at pc %o\n", data, (uint16)inst_pc);
         WINDR = data & 0177;
         return SCPE_OK;
 
     case 020:                                           /* Pio CSR */
-        sim_debug (DBG_REG, &pio_dev, "Pio CSR wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "Pio CSR wr: %o at pc %o\n", data, (uint16)inst_pc);
         PCSR = data;
         return SCPE_OK;
 
     case 021:                                           /* switch/display reg */
-        sim_debug (DBG_REG, &pio_dev, "SDR wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "SDR wr: %o at pc %o\n", data, (uint16)inst_pc);
         pio_unit.flags &= ~UNIT_INIT;                   /* clear init flag */
         SDR = (SDR & ~0377) | (data & 0377);
         return SCPE_OK;
 
     case 022:                                           /* K init reg - NI */
-        sim_debug (DBG_REG, &pio_dev, "K init wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "K init wr: %o at pc %o\n", data, (uint16)inst_pc);
         for (int i = 6; i < 16; i++) {                  /* loop over K init bits */
             if (i < 8)                                  /* bits 6..7 = slots 8..9 */
                 slot = i + 2;
@@ -442,7 +442,7 @@ switch (rg) {                                           /* decode pa<2:1> */
         return SCPE_OK;
 
     case 023:                                           /* K status reg - NI */
-        sim_debug (DBG_REG, &pio_dev, "K status wr: %o\n", data);
+        sim_debug (DBG_REG, &pio_dev, "K status wr: %o at pc %o\n", data, (uint16)inst_pc);
         dibp = KSTS[0];
         dibp->sts = data;                               /* can only write to req 0 */
         return SCPE_OK;
