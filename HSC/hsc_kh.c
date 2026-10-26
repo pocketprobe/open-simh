@@ -1421,7 +1421,16 @@ if ((++kh_n_svc & 0377) == 0) {                         /* pool health: chain de
         ns++;
     for (pp = GETP (kh + KH_DRR + Q_HEAD); (pp != 0) && (nd < 02000); pp = GETP (pp))
         nd++;
-    sim_debug (DBG_WRN, &kh_dev, "pool: SRR free %d DRR free %d donated %u held %u svc %u\n", ns, nd, kh_n_donated, kh_n_held, kh_n_svc);
+    int32 nm = 0;                                       /* the DM free pool (KG$FBU): */
+    pp = GETP (kh + KG_FBU);                            /* the config-era 007020's economy - */
+    while ((pp != 0) && (nm < 02000)) {                 /* the CIMGR's 2-BMB serializing-HMB */
+        nm++;                                           /* allocation comes from HERE */
+        pp = GETP (pp);
+        }
+    if (pp != 0)
+        sim_printf ("KH: DM free chain longer than %d or cyclic\n", 02000);
+    sim_debug (DBG_WRN, &kh_dev, "pool: SRR free %d DRR free %d DM free %d donated %u held %u svc %u\n",
+        ns, nd, nm, kh_n_donated, kh_n_held, kh_n_svc);
     }
     }
 
