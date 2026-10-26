@@ -449,6 +449,7 @@ static t_bool kh_hold_valid;                           /* a message is parked fo
 static uint32 kh_n_donated;                            /* LCMD buffer posts accepted */
 static uint32 kh_n_held;                               /* packets parked for re-delivery */
 static uint32 kh_n_svc;                                /* kh_svc activations */
+static uint32 kh_n_krun;                               /* K_RUNs witnessed - the kernel-era gate */
 
 t_stat kh_svc (UNIT *uptr);
 t_stat kh_reset (DEVICE *dptr);
@@ -530,6 +531,11 @@ uint8 node = ci_get_node (&kh_unit);
 t_bool run;
 if (act == K_RUN) {
     kh_dib.cma = kg_init (&run);
+    kh_n_krun++;                                        /* the kernel-era gate: the port-status
+                                                           cell (PMEM 034530) is loader workspace
+                                                           until the first K_RUN - witnessed gen 121:
+                                                           the ungated heartbeat stomped the loader
+                                                           mid-boot and the FW BEL-spammed to death */
     /* A K_RUN = the FW's K.ci driver restarted: every outstanding
        request lease from the previous era is dead (its peer is gone
        or the driver state was torn down).  kh_req[] is the kh's OWN
@@ -1450,6 +1456,24 @@ for (int i = 0; i < 20; i++) {
     if (r != SCPE_OK)
         return r;
     };
+
+/* THE PORT'S STATUS-BYTE (the doorbell's source), published EVERY
+   service pass.  The FW's relay (PMEM 0o73104: clr @#11636; movb
+   @#150530,@#11636) copies this cell into its D-space doorbell
+   (phys 0135636) and the poller at pc 37242 waits to see it
+   non-zero.  The fix-4 boot (gen 119) placed the write in the
+   V_FB-return path, which never fires during the connection phase
+   (no data transfers complete yet) - the relay copied ZERO and the
+   poller starved.  Fix-4b (gen 120) targeted CM 0150530, but the
+   relay's @#150530 is a KERNEL-D-SPACE VA (per-process mapped):
+   VA 0150530 = APR6 -> KDPAR6 000240 -> phys 034530, outside the
+   CTBL window - the relay read its own D-space cell, found the kh's
+   CM write absent, and copied zero again.  The cell's home = PMEM
+   034530, written here through the port's own memory access.  The
+   value = the KG$FBU head's raw low byte: it changes with every
+   queue mutation and reads non-zero while the free pool lives. */
+if (kh_dib.cma && kh_n_krun)
+    WrxMemB (M, 034530, GETW (kh + KG_FBU) & 0377);
 
 if ((++kh_n_svc & 0377) == 0) {                         /* pool health: chain depths */
     int32 ns = 0, nd = 0;                               /* countable, no FW writes */

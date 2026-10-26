@@ -275,6 +275,18 @@ if (sts) {
                 break;
             kg_send (fq, bd);                           /* put to free buffer queue */
             }
+        /* THE PORT'S DOORBELL: the FW's own relay (PMEM 0o73104:
+           clr @#11636; movb @#150530,@#11636) copies THIS cell into
+           its D-space doorbell (phys 0135636), which the poller at
+           pc 37242 waits to see non-zero - witnessed polling the
+           zero word fifteen times, then reading the crash-dispatch
+           constants (the arena base, the PCB, the IOT site) and
+           bugchecking 007020.  CM 0150530 = the port's status-byte
+           cell, reserved arena space next to the KG$FBU head-cell;
+           the kh never wrote it and the FW starved on the silence.
+           The value's exact code gets refined by the poller's
+           post-wake behavior on the CTBL trace. */
+        PUTB (0150530, 1);
         }
     if (flg & V_DC)                                     /* decrement counter? */
         kg_dec_ctr (uptr, ctr);
