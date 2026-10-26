@@ -958,6 +958,7 @@ PUTW (hm + HM_VCF, kh_vcf[node]);                       /* return updated value 
 
 void kh_local_cmd (uint32 hm, uint32 *cq)
 {
+uint32 kh = kh_dib.cma;
 uint32 opc, p1, p2, p3;
 
 opc = GETB (hm + HM_MSG);
@@ -994,6 +995,16 @@ switch (opc) {
             break;
             }
         PUTW (hm + HM_LOF, 060077);
+        /* THE DONATION ITSELF: the shell IS the buffer the FW just
+           handed us (LCMD opc 3 = sequenced/SRR, opc 4 = datagram/DRR).
+           Enqueue it into the port's own pool - completing it back to
+           the FW instead LOST every donated buffer: the FW's auditor
+           counted them as 'Resource lost to K.ci -- 241. HMBs' and the
+           config-era retrieve starved on a pool that never grew
+           (007020, 'Failure to retrieve SCS resources').  The FW's own
+           death-row trail: empty queue sweep -> the 013400 foreign-
+           class error item -> the wake -> the disable. */
+        kg_send (kh + ((opc == 3) ? KH_SRR : KH_DRR), hm);
         break;
     default:
         sim_printf ("unknown local cmd\n");
