@@ -1097,13 +1097,24 @@ return kh_receive_int (pkt);
 void kh_counters (uint32 hm, uint8 node)
 {
 kg_print_struct (NULL, &kh_unit, hm, hmct_stc);
-/* No counter data is written into the hm.  HM_AKA aliases HM_BMB (+0020):
-   the FW's resource auditor counts stampless buffers as "Resource lost to
-   K.ci" (241 on every green boot), and the upstream zero-fill of
-   AKA/NKA/NRA/AKB/NKB/NRB/DGD/RDR (+0020..+0056) wiped the BMB stamp on
-   firmware-allocated SRR shells at every counters poll.  Counters stay
-   zero - the sim has no real counter source yet, so the readback is
-   unchanged. */
+PUTW (hm + HM_AKA + 000, 0);                            /* ACKs path A - low word */
+PUTW (hm + HM_AKA + 002, 0);                            /* ACKs path A - high word */
+PUTW (hm + HM_NKA + 000, 0);                            /* NAKs path A - low word */
+PUTW (hm + HM_NKA + 002, 0);                            /* NAKs path A - high word */
+PUTW (hm + HM_NRA + 000, 0);                            /* No response path A - low word */
+PUTW (hm + HM_NRA + 002, 0);                            /* No response path A - high word */
+
+PUTW (hm + HM_AKB + 000, 0);                            /* ACKs path B - low word */
+PUTW (hm + HM_AKB + 002, 0);                            /* ACKs path B - high word */
+PUTW (hm + HM_NKB + 000, 0);                            /* NAKs path B - low word */
+PUTW (hm + HM_NKB + 002, 0);                            /* NAKs path B - high word */
+PUTW (hm + HM_NRB + 000, 0);                            /* No response path B - low word */
+PUTW (hm + HM_NRB + 002, 0);                            /* No response path B - high word */
+
+PUTW (hm + HM_DGD + 000, 0);                            /* Discarded Datagrams - low word */
+PUTW (hm + HM_DGD + 002, 0);                            /* Discarded Datagrams - high word */
+PUTW (hm + HM_RDR + 000, 0);                            /* Discarded RTNDATs - low word */
+PUTW (hm + HM_RDR + 002, 0);                            /* Discarded RTNDATs - high word */
 }
 
 /* Local command to get/set virtual circuit flags */
@@ -1721,7 +1732,7 @@ if ((++kh_n_svc & 0377) == 0) {                         /* pool health: chain de
         }
     if (pp != 0)
         sim_printf ("KH: DM free chain longer than %d or cyclic\n", 02000);
-    sim_debug (DBG_WRN, &kh_dev, "pool: SRR free %d DRR free %d DM free %d donated %u held %u svc %u\n",
+    sim_debug (DBG_WRN, &kh_dev,  "pool: SRR free %d DRR free %d DM free %d donated %u held %u svc %u\n",
         ns, nd, nm, kh_n_donated, kh_n_held, kh_n_svc);
     }
     }
