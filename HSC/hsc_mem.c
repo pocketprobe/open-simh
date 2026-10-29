@@ -108,7 +108,8 @@ if (ADDR_IS_CMEM (pa)) {
     return data;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
-    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+    if ((((pa >= 0134000) && (pa < 0140000)) ||         /* the count-table ledger region */
+        ((pa >= 0144600) && (pa < 0145400))) && sim_log) { /* + the emt-10 credit block (0144722+) */
         data = (PCSR & PCSR_PBK)? RdxMemW (M, pa ^ 02000000): RdxMemW (M, pa);
         fprintf (sim_log, "DBG(%.0f)> CTBL rd: %07o = %06o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
         return data;
@@ -172,7 +173,8 @@ if (ADDR_IS_CMEM (pa)) {
     return data;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
-    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+    if ((((pa >= 0134000) && (pa < 0140000)) ||         /* the count-table ledger region */
+        ((pa >= 0144600) && (pa < 0145400))) && sim_log) { /* + the emt-10 credit block (0144722+) */
         data = (PCSR & PCSR_PBK)? RdxMemB (M, pa ^ 02000000): RdxMemB (M, pa);
         fprintf (sim_log, "DBG(%.0f)> CTBL rdB: %07o = %03o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
         return data;
@@ -238,7 +240,8 @@ if (ADDR_IS_CMEM (pa)) {
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
-    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+    if ((((pa >= 0134000) && (pa < 0140000)) ||         /* the count-table ledger region */
+        ((pa >= 0144600) && (pa < 0145400))) && sim_log) { /* + the emt-10 credit block (0144722+) */
         fprintf (sim_log, "DBG(%.0f)> CTBL wr: %07o = %06o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
         if (PCSR & PCSR_PBK)
             WrxMemW (M, pa ^ 02000000, data);           /* yes, invert A19 */
@@ -302,7 +305,8 @@ if (ADDR_IS_CMEM (pa)) {
     return;
     }
 if (ADDR_IS_PMEM (pa)) {                                /* program memory address? */
-    if ((pa >= 0134000) && (pa < 0140000) && sim_log) { /* the count-table ledger region */
+    if ((((pa >= 0134000) && (pa < 0140000)) ||         /* the count-table ledger region */
+        ((pa >= 0144600) && (pa < 0145400))) && sim_log) { /* + the emt-10 credit block (0144722+) */
         fprintf (sim_log, "DBG(%.0f)> CTBL wrB: %07o = %03o at %o psw %06o\n", sim_gtime (), pa, data, (uint16)inst_pc, PSW);
         if (PCSR & PCSR_PBK)
             WrxMemB (M, pa ^ 02000000, data);           /* yes, invert A19 */

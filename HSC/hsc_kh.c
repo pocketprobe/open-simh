@@ -551,6 +551,19 @@ if (act == K_RUN) {
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
     ci_rx_enable (&kh_unit, (CI_PATH_A | CI_PATH_B));
+    if (run) {
+        /* THE K_RUN DOORBELL - EXCISED (A146).  Cross-era evidence:
+           the green mid-flow CM dump reads CM[0150530] = 000 and the
+           green boot was HEALTHY - the era that never rang this cell.
+           Meanwhile the FW owns it: the cmem traces show its own
+           budget-lifecycle writes (146314 init, 031463 decrement,
+           000000 at re-dress) all boot long - the kh's 0223 was
+           counter-doctoring on the FW's books.  The poller's appetite
+           is fed by engine liveness, not by this cell (the 0o73104
+           relay that would copy it to the D-space mirror has never
+           executed in ANY era - zero VA-027xxx/PA-073xxx pcs in green
+           or since). */
+        }
     }
 else {
     sim_debug (DBG_TRC, &kh_dev, "K.ci halt at %o\n", (uint16)inst_pc);
@@ -681,11 +694,17 @@ for (i = 0; i < KH_NSTAMP; i++) {
 return 0;
 }
 
-/* Get a free message buffer */
+static uint32 kh_n_srr_borrows;                         /* DRR shells borrowed while SRR was dry */
+static uint32 kh_n_srr_floor;                           /* receives deferred at the SRR floor */
 
-uint32 kh_get_srr (uint32 len)
+#define KH_SRR_FLOOR    2                               /* never spend below this */
+
+
+/* Walk one receive-buffer ring for a usable shell (q = kh + KH_SRR or
+   kh + KH_DRR).  Returns the shell or 0.  All pops/repushes stay on q. */
+
+static uint32 kh_walk_ring (uint32 q, uint32 len)
 {
-uint32 kh = kh_dib.cma;
 uint32 hm, bmb, sz, cn;
 int32 n, p;
 
@@ -696,17 +715,35 @@ int32 n, p;
    corrupted chain with a cycle (a buffer linked on two queues) would
    otherwise spin the count loop endlessly. */
 
-for (n = 0, p = GETP (kh + KH_SRR + Q_HEAD); p != 0 && n < 02000; p = GETP (p))
+for (n = 0, p = GETP (q + Q_HEAD); p != 0 && n < 02000; p = GETP (p))
     n++;
 if (p != 0)
-    sim_printf ("KH: SRR free chain longer than %d or cyclic - queue corruption?\n", 02000);
+    sim_printf ("KH: free chain longer than %d or cyclic - queue corruption? (q %07o)\n", 02000, q);
+
+/* THE SRR FLOOR (A149): never spend the last shells.  The FW's own
+   audit walks .KHSRR (= this ring) - manual: "HMBs were expected in
+   the .KHSRR but none found"; it counts capacity-minus-depth as
+   "lost to K.ci", prints the report ~hourly, and DISABLES the port on
+   the second unbalanced report ("K.ci disabled" -> the engine death
+   of gens A140-A148 -> 007003).  Every generation's freeze has read
+   SRR ring = 0 at that point.  The economics invert: a deferred
+   receive (park) costs the audit NOTHING (no shell spent), an empty
+   ring costs it everything.  Hold the floor; the drain-recycle (VA
+   024236: LOF/CN/BMB remanufacture + table-driven deposit) refills
+   above the watermark. */
+if ((q == kh_dib.cma + KH_SRR) && (n <= KH_SRR_FLOOR)) {
+    kh_n_srr_floor++;
+    sim_debug (DBG_WRN, &kh_dev, "SRR floor held - deferring receive with only %d ringshells (%u so far)\n",
+        n, kh_n_srr_floor);
+    return 0;
+    }
 
 for (; n > 0; n--) {
-    hm = kg_receive (kh + KH_SRR);
+    hm = kg_receive (q);
     if (hm == 0)
         return 0;
-    sim_debug (DBG_WRN, &kh_dev, "SRR walk: hm %07o LOF %06o CN %06o BMB %06o (need len %o)\n",
-        hm, GETW (hm + HM_LOF), GETW (hm + HM_CN), GETW (hm + HM_BMB), len);
+    sim_debug (DBG_WRN, &kh_dev, "ring walk: q %07o hm %07o LOF %06o CN %06o BMB %06o (need len %o)\n",
+        q, hm, GETW (hm + HM_LOF), GETW (hm + HM_CN), GETW (hm + HM_BMB), len);
     bmb = GETW (hm + HM_BMB);
     if ((bmb >= 0140000) && (bmb < 0160000))            /* an in-band stamp: */
         kh_stamp_remember (hm, bmb);                    /* remember it for M.DAT */
@@ -719,10 +756,23 @@ for (; n > 0; n--) {
        re-posted what it found (918 donations, the enumeration-starving
        livelock witnessed on the fix-1 boot). */
     if ((GETW (hm + HM_LOF) & 074000) == 060000) {
-        cn = GETW (hm + HM_CN);
-        if (((len >= 077) && (cn == 2)) || ((len < 077) && (cn == 1)))
+        /* A143: bare shells are USABLE for small receives.  A146: THE
+           CAPABILITY CLASS RIDES THE BMB VALUE, NOT THE CN WORD - the
+           donations encode it in the buffer's DM arena themselves
+           (CN=1 small-class posts carry BMB 14xxxx, CN=2 big-message
+           posts carry BMB 15xxxx; 17 for 17 matched in the A146
+           walks).  The FW's drain-recycle (VA 024236) re-stamps LOF
+           only, so CN decays past every delivery (it MUST be 0 on a
+           received message - the 007007) while the FW-owned BMB
+           round-trips intact (fix #5) - gating big receives on CN==2
+           destroys every big shell's capability after its first
+           delivery (CN=2 donation postings collapse 12 -> 4 -> 4
+           across gens A142/A145/A146; the pools decay to all-small).
+           A len>=077 payload needs the big arena; small takes
+           anything. */
+        if (((len >= 077) && (bmb >= 0150000)) || (len < 077))
             return hm;
-        kg_send (kh + KH_SRR, hm);                      /* wrong class: repush */
+        kg_send (q, hm);                                /* wrong class: repush */
         continue;
         }
     sz = GETW (hm + HM_LOF) & 077;
@@ -732,11 +782,50 @@ for (; n > 0; n--) {
     if ((sz != 077) && (len < 077))
         return hm;
     if (n == 1) {
-        kg_send (kh + KH_SRR, hm);
+        kg_send (q, hm);
         return 0;
         }
-    kg_send (kh + KH_SRR, hm);
+    kg_send (q, hm);
     }
+return 0;
+}
+
+/* Get a free message buffer: the SRR ring first, then - A146 - borrow
+   from the DRR ring.
+
+   THE A145 POSTURE (the freeze dump): SRR ring EMPTY (0 items) while
+   the DRR ring idled 33/33 pristine, with 670 MSG-family packets held
+   in the park; the FW's consumers had eaten every queue to zero and
+   the poller filed 007003.  The FW's sweep stopped re-posting SRR
+   shells at t=40.9M (its audit counts delivered-unconsumed SRR items
+   as lost and rations the refill) while it kept posting DRR to t=92M.
+   ALL callers of kh_get_srr copy the payload into the shell's HM_MSG
+   area in CONTROL memory - the shell inventory is interchangeable for
+   these deliveries (no DM buffer touched, HM_CQ zeroed on delivery,
+   the FW's drain-recycle re-files by consumer queue at VA 024236).
+   The borrow only fires when the SRR walk truly returns 0, it is
+   WRN-logged and counted (kh_n_srr_borrows), and the shells keep
+   their posted identities otherwise. */
+
+uint32 kh_get_srr (uint32 len)
+{
+uint32 kh = kh_dib.cma;
+uint32 hm;
+
+hm = kh_walk_ring (kh + KH_SRR, len);
+if (hm)
+    return hm;
+    /* THE DRR LOAN - DISABLED (A150): the A149 crash = 007007/CIMGR
+       "inconsistent state" on an OUTBOUND FW shell (LOF 054012 TX
+       hello-class) carrying metadata stamped by a receive-era
+       delivery - recycled shells kept our stamps into the FW's
+       outbound build.  The DRR/FW-TX stock being shared inventory
+       made cross-contamination plausible, so the loan stands down for
+       the bisect: if the 007007 shape vanishes with the run reaching
+       past ~104M, re-enable (kh_n_srr_borrows stayed at 1 across
+       every generation so far - its benefit is measured, its risk
+       profile is 'steals FW stock'). */
+    (void) hm;
 return 0;
 }
 
@@ -785,7 +874,16 @@ if (hm == 0) {
     kh_hold_pkt = *pkt;
     kh_n_held++;
     kh_hold_valid = TRUE;
-    sim_debug (DBG_WRN, &kh_dev, "holding incoming SCS message, SRR empty\n");
+    /* DEC's grammar (hscma_sv, "K.ci exception detected"): KHF$NH =
+       "Sequenced message received while reserved-to-receive queue
+       was empty" - the K.ci REPORTS the empty-ring condition in
+       KH$FLG (KG+2 = the K.ci Control Area's exception word, the
+       adapter's own status) instead of swallowing it silently.
+       The FW's exception machinery watches this word; the FW's
+       K_RUN init writes it (040000 witnessed) = it owns the reset,
+       the kh owns the runtime exceptions.  Non-destructive OR. */
+    PUTW (kh + KH_FLG, GETW (kh + KH_FLG) | 0100);      /* KHF$NH */
+    sim_debug (DBG_WRN, &kh_dev, "holding incoming SCS message, SRR empty (KHF$NH set)\n");
     return SCPE_OK;
     }
 
@@ -803,15 +901,43 @@ PUTP (hm + HM_CQ, 0);
    clobbered descriptor's BMB field (051515 - the message's own first
    bytes) as a DM pointer.  For the 020/030-class posts, preserve the
    posted format byte (F1) and set the length. */
-if ((GETW (hm + HM_LOF) & 074000) == 060000) {
-    PUTW (hm + HM_BC, 0);
-    PUTW (hm + HM_CN, 0);
-    PUTP (hm + HM_BMB, 0);
-    PUTW (hm + HM_LOF, len & 0377);
-    }
-else {
-    PUTW (hm + HM_LOF, (GETW (hm + HM_LOF) & 0177400) | (lof & 0377));
-    }
+/* THE GREEN'S FULL-WORD LOF (2840f70b, restored A137+1): the
+   delivered shell's LOF OPCODE FIELD must read HML$RM = 0 ("received
+   sequence message over connection" - the manual's 012003: "The
+   Opcode specified in the HM$LOF field... not equal to HML$RM=000000";
+   and the MSCP server's 004005: "a non sequenced message from a
+   connection").  THE F1-ERA PRESERVE (e0acdf18: "(GETW & 0177400) |
+   (lof & 0377)") = THE 004005: a TX'd shell returns from the pool
+   with its TX class (LOF 020000-class = "send SCS message"!) still
+   in the high bits, our length stamp lands in the low byte, and the
+   delivered shell reads as a DATAGRAM-CLASS message at the MSCP
+   server = "non sequenced" = 004005 (A137: the offending shell at
+   CM 0o60620, LOF = 0o20044 = the TX class 0o20000 + our 0o44 stamp,
+   read live at the bugcheck; the green's full-word write = LOF =
+   0|len = the class CLEARED = HML$RM = 0 by construction).
+   THE STALE-REMNANTS CLEAR (the 92e3ad6d observation): the pooled
+   TX-remnant shell carries its own CN/BMB (witnessed: CN=2, BC=2
+   riding on the delivered 0o60620) - delivering with the stale
+   CN = the "wrong number of BMBs" 007007 (the DUP's check).  The
+   kh owns the shell it delivers into: clear the remnant cells, then
+   the full-word LOF.  The FW's serializing HMB = never delivered
+   into = its CN never touched by this path. */
+PUTW (hm + HM_CN, 0);
+/* A142: DO NOT CLEAR HM_BMB.  The FW's drain-recycle (VA 024236)
+   re-stamps LOF=060000 ONLY - it trusts CN/BMB to round-trip because
+   BY THE FW'S OWN BOOKS the BMB cell is FW property ("each side's own
+   books").  Zeroing it converted every appmsg-delivered shell into
+   buffer-less pool filler: the pooled shells decayed to CN=0/BMB=0
+   (witnessed: the t=267238M SRR walk, all four entries 060000/0/0),
+   the deliverer's len-test found no usable shell ("need len 44"),
+   kh hold-parked a live host message with SRR "empty" (KHF$NH), the
+   FW's consumer wedged INTERLOCKED waiting for that exact message
+   (the t=267241M DX$-SMQ freeze), and the poller filed 007003 twenty
+   mega-ticks later with 153 HMBs stranded.  The 92e3 remnant hazard
+   (007007, "wrong number of BMBs") is governed by CN ALONE - with
+   CN=0 the FW never enters the BMB-reading branch.  Keep the CN
+   clear, keep the FW's BMB. */
+PUTW (hm + HM_LOF, lof);
 
 memcpy (&CM[(hm + HM_MSG) >> 1], &pkt->data[SCS_APPL], len);
 kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
@@ -890,34 +1016,46 @@ if (((lof & 077) != 077) && (opc == OPC_MSG)) {
     kg_print_struct (NULL, &kh_unit, hm, hmm_stc);
     }
 else {
+    /* THE GREEN GRAMMAR RESTORED (2840f70b = A106, the last enumerating
+       era): the datagram delivery = BC = the length + ONE contiguous DM
+       write at the SHELL'S OWN HM$BMB (the FW's posted address).  THE
+       F2-ERA BLOCK (eea5af2a: the stamp-lookup rescue, CN = nb, the
+       descending BMB array, the 64-byte chunking) = WRITES THE GREEN
+       NEVER MADE - and the CN stamp = THE 007020: the FW builds its
+       VC-serializing HMB ONCE (witnessed live: LOF=030277-class, CN=2,
+       BC=104, the contiguous BMB pair 154377/154376), hands the shell
+       back through the port, and re-reads its own count at the next
+       data command (user VA 030142: CMP #2,16(R0), caught live A135) -
+       the kh's CN=nb (nb=1 for a 20-byte datagram!) CLOBBERED the FW's
+       count: found=1 required=2 (the A134/A135/A136 crash: the FW's CN
+       genealogy ends at its own build, the ONLY unlogged writer = the
+       kh's raw PUTW path).  THE GREEN: BC = len, the payload at the
+       shell's own BMB (contiguous across the pair), the FW's
+       CN/LOF/BMB cells UNTOUCHED.  The M.DAT dialect's multi-block
+       stamps (if ever needed) = a separate, DETECTED path - never a
+       blanket stamp over the FW's live serializing HMB. */
     PUTW (hm + HM_BC, len);
-    bmb = GETW (hm + HM_BMB);                           /* UDPA DM descriptor */
-    if ((bmb != 0) && ((bmb < 0140000) || (bmb >= 0160000))) {
-        bmb = kh_stamp_lookup (hm);                     /* stale: use the FW's own */
-        if (bmb == 0) {                                 /* never posted in-band? */
-            PUTW (hm + HM_ERR, 004000);                 /* HME$VC - not deliverable */
-            kg_send (kh + KH_SRR, hm);                  /* return the lease */
-            return SCPE_OK;
-            }
-        PUTW (hm + HM_BMB, bmb);                        /* valid UDPA stamp */
+    dma = GETW (hm + HM_BMB);                           /* data mem addr */
+    dma = (dma << 6);
+
+    if (!ADDR_IS_DMEM (dma)) {
+        /* A flooded or stale BMB must never down the simulator.  The
+           FW's dawn-boot CTBL re-init covers the K.ci control area
+           (KH_SRR/KH_DRR heads read as the flood values 146314/031463)
+           and an era-persistent datagram can arrive before donations
+           re-prime the pools (A140's post-crash reboot: pool head
+           031463 -> shell 0146314 with BMB 031463 -> dma 03146300 ->
+           SCPE_IERR out of kh_svc -> "unexpected internal error", sim
+           dead).  The real card raises its own exception word and
+           drops the delivery; the shell is abandoned UNLINKED (not
+           sent to the FW's queues with a live-stale BMB).  Never
+           SCPE_IERR out of an event handler. */
+        sim_debug (DBG_WRN, &kh_dev, "invalid data memory address %o in packet %o - delivery dropped (flooded or stale BMB)\n", dma, hm);
+        return SCPE_OK;
         }
-    /* HM$CN must equal the blocks the kh actually filled, and the BMB
-       stamp ARRAY (HM$BMB + 2*i) must list them in the FW's order:
-       descending [s, s-1, ...] (witnessed: the FW's own 2-block post =
-       dma 15517700 + p3 155176; delivered HM$BMB = 155177 155176).
-       Chunk i of the payload goes at (bmb0 - i) << 6.  A stale CN=3
-       with a 2-block payload bugchecks HOST at 020076 (007007); a
-       contiguous payload clobbers the FW's walk (NXM at M.std). */
-    nb = (len + 077) >> 6;
-    PUTW (hm + HM_CN, nb);
-    for (i = 0; i < nb; i++) {
-        int32 chunk = len - (i << 6);
-        if (chunk > 0100)
-            chunk = 0100;
-        dma = ((bmb - i) << 6) & DMEMMASK;
-        memcpy (&DM[dma >> 1], &pkt->data[CI_OPC + (i << 6)], chunk);
-        PUTW (hm + HM_BMB + (i << 1), bmb - i);
-        }
+    dma = dma & DMEMMASK;
+
+    memcpy (&DM[dma >> 1], &pkt->data[CI_OPC], (pkt->length - CI_OPC));
     kg_print_struct (NULL, &kh_unit, hm, hmd_stc);
     }
 
@@ -1056,7 +1194,63 @@ switch (opc) {
            ring (witnessed: 'SRR free 1024' = the walk's cap spinning
            through the donation cycle, gen 111). */
         kh_consume_item = TRUE;
-        kg_send (kh + ((opc == 3) ? KH_SRR : KH_DRR), hm);
+        /* THE SHELL'S HOME QUEUE: the donation's HM$CQ = where the FW
+           wants the shell back, and the FW SORTS ITS OWN INVENTORY -
+           witnessed in the LCMD traces: the CN=1 datagram shells post
+           with cq = 0144434 (the DRR) while the CN=2 serializing-
+           capable shells post with cq = 0144430 (the SRR).  The old
+           opcode-based routing (opc3 -> SRR, opc4 -> DRR) MISFILED
+           every CN=2 shell into the DRR: the FW posted 4 CN=2
+           donations, the SRR walks ever saw ONE (the crash-moment
+           delivery, DBG 50239501), and CIMGR's 2-BMB serializing
+           allocation at the first data command (SSSC$DIRECTORY, the
+           DMEM trace!) found=1 required=2 = 007020.  The latent bug
+           since the pooling era - unmasked by the first data command.
+           Honor the posted home; fall back to the opcode routing only
+           if the cq points outside the KG region. */
+        {
+        uint32 home = GETP (hm + HM_CQ);                /* the FW's pointers = x4 units (kg_init's kg<<2!); GETW read the raw 031126-class word and the sanity check fell back EVERY time - the A131 walks stayed 91x CN=1 + 1x CN=2 unchanged */
+        if ((GETW (hm + HM_CN) == 2) ||
+            ((GETW (hm + HM_BMB) >= 0150000) && (GETW (hm + HM_BMB) < 0160000)))
+            /* A151: UNION the CN==2 test with the durable big-arena
+               test (the BMB value itself), hoisted over both routing
+               branches.  The CIMGR retrieval gate (user VA 0o30614)
+               reads LOF's low 9 bits == 0o77 as THE big-capacity
+               marker, but the FW's drain-recycle (VA 024236) re-stamps
+               plain 060000 - washing the marker off every recycled
+               shell, so the pool's marking decays across each ~90s
+               maintenance ceremony until the second ceremony's check
+               comes up short ("no elements enqueued on .KHSRR" ->
+               forced crash -> 007003 at the 4-minute wall, EVERY
+               generation since A140).  CN decays past each delivery;
+               the FW-owned BMB round-trips intact (fix #5) - let the
+               marker follow the BMB, the property that never lies. */
+            PUTW (hm + HM_LOF, GETW (hm + HM_LOF) | 077);
+        if (((home - kh) & 0177000) == 0) {             /* a KG-region queue */
+            /* THE DOUBLE'S MARKER (Dana's push): the FW's serializing
+               allocation gate (the CIMGR helper at user VA 0o30614,
+               decoded 2026-10-28 from the live simh) checks the LOF's
+               low 9 bits == 0o77 - THE BIG-SHELL CAPACITY MARKER -
+               and ONLY the 0o77-marked HMBs get their BMBs registered
+               with the port (the TRAP-0o10 pushes: (6,0o30) then
+               (HM$BMB, 0o70)).  Without the registration the retrieval
+               comes up short: found=1 required=2 = 007020 at the
+               first data command.  Both grammars honor this marker:
+               the kh's own kh_get_srr tests sz == 077 for the big
+               class!  The posted donations carry LOF = 0o60000 (no
+               marker) - the OLD 060077 normalization KNEW this, but
+               stamped EVERY shell and corrupted the FW's free-path
+               (the 9e52352a scar).  THE SURGICAL VERSION: stamp 0o77
+               ONLY on the CN=2 shells (the doubles!) as they enter
+               the port's pool - the marker without the forgery.  The
+               FW retrieves the double, the gate reads 0o77, the BMB
+               registration runs, and the serializing allocation finds
+               its pair. */
+            kg_send (home, hm);
+            }
+        else
+            kg_send (kh + ((opc == 3) ? KH_SRR : KH_DRR), hm);
+        }
         break;
     default:
         sim_printf ("unknown local cmd\n");
@@ -1140,7 +1334,12 @@ if (opc == 020000)                                      /* FIXME: APPMSG always 
     *cq = kh + KH_SRR;
 if (opc == 040000) {
     dx = GETP (hm + HM_DX);                             /* get deallocation context */
-    kg_dec_ctr (&kh_unit, dx + DX_CTR);                 /* another operation complete */
+    if (dx)                                             /* A140: all 23 completions
+                                                           carried HM$DX = 0; dec(0)
+                                                           decrements CM word 2 and
+                                                           can queue CM cell 0 as a
+                                                           phantom counter item. */
+        kg_dec_ctr (&kh_unit, dx + DX_CTR);             /* another operation complete */
     *cq = kh + KH_SRR;
     }
 if (*cq == 0) {
@@ -1343,6 +1542,17 @@ for (i = 0; i < 20; i++) {                              /* process maximum of 20
             sim_debug (DBG_WRN, &kh_dev, "  hm neighborhood: %06o %06o %06o %06o | %06o %06o %06o %06o\n",
                 GETW (rsc - 010), GETW (rsc - 006), GETW (rsc - 004), GETW (rsc - 002),
                 GETW (rsc), GETW (rsc + 002), GETW (rsc + 004), GETW (rsc + 006));
+            kh_consume_item = TRUE;                     /* A141: class-confusion
+                                                           items (the dawn CTBL
+                                                           flood's debris - e.g. our
+                                                           own received-dgram stamp
+                                                           LOF 044077 bouncing back
+                                                           as a TX request) left at
+                                                           the queue head spin the
+                                                           service forever.  Warn
+                                                           above, then let the item
+                                                           go (the leaked-HM count is
+                                                           the honest accounting). */
             break;
         }
 
@@ -1398,11 +1608,38 @@ else if ((opc == 020000) || (opc == 040000) || (opc == 030000) ||
            to K.ci".  FRB items (000000/004000) complete via
            kg_route_frb, not the shell pool - they stay on the vanish
            path. */
-        PUTW (rsc + HM_LOF, 0);
-        PUTW (rsc + HM_CN, 0);
-        PUTW (rsc + HM_BMB, 0);
-        kg_send (kh + KH_SRR, rsc);
-        sim_debug (DBG_WRN, &kh_dev, "cq-less shell %07o returned clean to SRR (class %06o)\n", rsc, opc);
+        /* THE SERIALIZER EXCEPTION (A135, the live CMP catch): the FW
+           builds its VC-serializing HMB ONCE at connection-open
+           (witnessed: DBG 42.1M, LOF=030277, CN=2, BC=104, the BMB
+           pair) and KEEPS IT ACROSS TRANSACTIONS - the next data
+           command's allocation check (user VA 030142: CMP #2,16(R0))
+           re-reads THE SAME SHELL.  A TX'd shell coming back cq-less
+           STILL CARRIES THAT LIVE STATE: laundering it into the SRR
+           pool (LOF/CN/BMB[0]=0) lets the next small delivery
+           (kh_get_srr: sz!=077 && len<077 MATCHES a CLEANED shell!)
+           REUSE THE FW'S LIVE SERIALIZER and stamp BC/CN over the
+           build: CN 2->1 (nb=(20+63)>>6=1 for a 20-byte datagram,
+           the DM path), BC 104->24, BMB[0]=the stamp-lookup - and
+           the FW's check reads found=1 required=2 = 007020 (the
+           A134/A135 crash: the FW's CN genealogy ends at the 42.1M
+           build, the ONLY unlogged writer = this kh's raw PUTW).
+           THE CUT: a shell that comes back with a NONZERO CN = the
+           FW's own count of live BMBs = still-held FW state.  Do NOT
+           launder it - leave the cells as the FW wrote them and
+           leave the shell OFF the pool.  The FW re-posts it when it
+           is truly free.  (The clean path stays for the CN=0 class
+           shells - the FW's fresh-pool format - which carry no live
+           serializing state.) */
+        if (GETW (rsc + HM_CN) == 0) {
+            PUTW (rsc + HM_LOF, 0);
+            PUTW (rsc + HM_CN, 0);
+            PUTW (rsc + HM_BMB, 0);
+            kg_send (kh + KH_SRR, rsc);
+            sim_debug (DBG_WRN, &kh_dev, "cq-less shell %07o returned clean to SRR (class %06o)\n", rsc, opc);
+            }
+        else
+            sim_debug (DBG_WRN, &kh_dev, "cq-less shell %07o HELD (CN=%06o: the FW's live serializer - not laundered)\n",
+                rsc, GETW (rsc + HM_CN));
         }
 else {
         /* Artifacts and FRBs: the FW pre-writes these off (the ABQ
@@ -1468,7 +1705,6 @@ for (int i = 0; i < 20; i++) {
    queues, the custody plumbing.  The poller's doorbell grammar
    (status codes 021 = all-clear / 023 = signal, decoded at PMEM
    0o1032xx) = the count-drift thread's territory. */
-
 if ((++kh_n_svc & 0377) == 0) {                         /* pool health: chain depths */
     int32 ns = 0, nd = 0;                               /* countable, no FW writes */
     uint32 pp;                                          /* the second-boot diagnostic */

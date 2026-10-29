@@ -237,6 +237,19 @@ void kg_dec_ctr (UNIT *uptr, uint32 ctr)
 {
 uint32 val, cq;
 
+if (ctr == 0) {                                         /* A140/A141: 43+ calls/boot
+                                                           carry ctr=0 (kh_send's
+                                                           HM$DX=0 TX completions AND
+                                                           kg_route_frb's F_PCTR=0
+                                                           V_DC routes) - dec(0)
+                                                           decrements CM word 2 and can
+                                                           queue CM cell 0 as a phantom
+                                                           counter item.  A null
+                                                           counter context cannot be a
+                                                           real contract. */
+    sim_debug_unit (KG_DBG_TRC, uptr, "CTR dec with ctr=0 ignored\n");
+    return;
+    }
 kg_print_struct (NULL, uptr, ctr, c_stc);
 val = GETW (ctr + C_CNT);                               /* get counter value */
 sim_debug_unit (KG_DBG_TRC, uptr, "CTR %d -> %d\n", val, (val - 1));
@@ -275,18 +288,17 @@ if (sts) {
                 break;
             kg_send (fq, bd);                           /* put to free buffer queue */
             }
-        /* THE PORT'S DOORBELL: the FW's own relay (PMEM 0o73104:
-           clr @#11636; movb @#150530,@#11636) copies THIS cell into
-           its D-space doorbell (phys 0135636), which the poller at
-           pc 37242 waits to see non-zero - witnessed polling the
-           zero word fifteen times, then reading the crash-dispatch
-           constants (the arena base, the PCB, the IOT site) and
-           bugchecking 007020.  CM 0150530 = the port's status-byte
-           cell, reserved arena space next to the KG$FBU head-cell;
-           the kh never wrote it and the FW starved on the silence.
-           The value's exact code gets refined by the poller's
-           post-wake behavior on the CTBL trace. */
-        PUTB (0150530, 1);
+        /* THE PORT'S DOORBELL - EXCISED (A146): this write was
+           counter-doctoring on an FW-owned count cell (the cmem
+           traces show 146314/031463/000000 lifecycle writes here),
+           and the green era proved it unnecessary: the healthy
+           mid-flow dump reads CM[0150530] = 000 - no ring, no
+           watchdog.  The 0o73104 relay that supposedly copies this
+           cell to the poller's D-space mirror has NEVER executed in
+           ANY era (zero VA-027xxx pcs in green or since - the
+           2026-10-28 relay dig), so the grammar decoded below was
+           answering a signal that never travels this wire.  The
+           poller judges the engine's liveness, not the cell's. */
         }
     if (flg & V_DC)                                     /* decrement counter? */
         kg_dec_ctr (uptr, ctr);
