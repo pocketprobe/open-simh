@@ -288,17 +288,6 @@ if (sts) {
                 break;
             kg_send (fq, bd);                           /* put to free buffer queue */
             }
-        /* THE PORT'S DOORBELL - EXCISED (A146): this write was
-           counter-doctoring on an FW-owned count cell (the cmem
-           traces show 146314/031463/000000 lifecycle writes here),
-           and the green era proved it unnecessary: the healthy
-           mid-flow dump reads CM[0150530] = 000 - no ring, no
-           watchdog.  The 0o73104 relay that supposedly copies this
-           cell to the poller's D-space mirror has NEVER executed in
-           ANY era (zero VA-027xxx pcs in green or since - the
-           2026-10-28 relay dig), so the grammar decoded below was
-           answering a signal that never travels this wire.  The
-           poller judges the engine's liveness, not the cell's. */
         }
     if (flg & V_DC)                                     /* decrement counter? */
         kg_dec_ctr (uptr, ctr);

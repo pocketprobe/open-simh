@@ -551,19 +551,6 @@ if (act == K_RUN) {
     PUTW (kh_dib.cma + KH_NAD, node);                   /* KH$NAD - CI node address */
     PUTW (kh_dib.cma + KG_VRS, (3 << 8) | 73);          /* KG$VRS - version (DS = 3, MC = 73) */
     ci_rx_enable (&kh_unit, (CI_PATH_A | CI_PATH_B));
-    if (run) {
-        /* THE K_RUN DOORBELL - EXCISED (A146).  Cross-era evidence:
-           the green mid-flow CM dump reads CM[0150530] = 000 and the
-           green boot was HEALTHY - the era that never rang this cell.
-           Meanwhile the FW owns it: the cmem traces show its own
-           budget-lifecycle writes (146314 init, 031463 decrement,
-           000000 at re-dress) all boot long - the kh's 0223 was
-           counter-doctoring on the FW's books.  The poller's appetite
-           is fed by engine liveness, not by this cell (the 0o73104
-           relay that would copy it to the D-space mirror has never
-           executed in ANY era - zero VA-027xxx/PA-073xxx pcs in green
-           or since). */
-        }
     }
 else {
     sim_debug (DBG_TRC, &kh_dev, "K.ci halt at %o\n", (uint16)inst_pc);
